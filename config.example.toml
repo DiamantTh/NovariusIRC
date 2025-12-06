@@ -1,0 +1,60 @@
+[bot]
+profile = "default"
+prefix = "!"
+language = "en"
+
+[network]
+server = "irc.libera.chat"
+port = 6697
+tls = true
+nick = "NovariusBot"
+user = "novarius"
+realname = "Novarius IRC Bot"
+channels = ["#novariusirc"]
+
+[auth]
+sasl_enabled = true
+sasl_mechanism = "PLAIN"
+sasl_username = "NovariusBot"
+sasl_password_env = "NOVARIUSIRC_SASL_PASSWORD"
+
+nickserv_enabled = true
+nickserv_service = "NickServ"
+nickserv_username = "NovariusBot"
+nickserv_password_env = "NOVARIUSIRC_NICKSERV_PASSWORD"
+
+totp_env = "NOVARIUSIRC_TOTP_SECRET"
+
+[roles]
+owners = [{ nick = "owner_nick", require_totp = true }]
+admins = ["admin_nick"]
+
+[logging]
+level = "INFO"
+log_dir = "logs"
+channel_logging = [{ channel = "#novariusirc", enabled = true }]
+journald_enabled = false
+
+[feeds]
+enabled = true
+max_feeds = 32
+max_items_per_feed = 64
+refresh_interval = 300
+http_timeout = 10
+max_body_size = 262144
+feeds = [
+  { name = "Example", url = "https://example.com/feed.xml", channel = "#novariusirc", language = "en" }
+]
+
+[moderation]
+mode = "warn"
+flood_threshold = { messages = 5, per_seconds = 10 }
+warn_targets = ["owner_nick"]
+
+[workers]
+processes = 2
+long_lived_enabled = false
+
+[paths]
+log_root = "./logs"
+data_root = "./data"

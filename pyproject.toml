@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "novariusirc"
+version = "0.1.0"
+description = "Modular, multilingual IRC bot/daemon inspired by Eggdrop"
+authors = ["NovariusIRC Team <dev@novariusirc.local>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "novariusirc" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+aiohttp = "^3.9"
+feedparser = "^6.0"
+pydantic = "^2.6"
+pyotp = "^2.9"
+uvloop = { version = "^0.19", optional = true }
+systemd-python = { version = "^235", optional = true }
+aioprocessing = { version = "^2.0", optional = true }
+
+[tool.poetry.extras]
+journald = ["systemd-python"]
+uvloop = ["uvloop"]
+workers = ["aioprocessing"]
+
+[tool.poetry.scripts]
+novariusirc = "novariusirc.__main__:main"
+
+[build-system]
+requires = ["poetry-core>=1.7.0"]
+build-backend = "poetry.core.masonry.api"
