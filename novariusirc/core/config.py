@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -193,13 +193,39 @@ class Config(BaseModel):
     workers: WorkerConfig = Field(default_factory=WorkerConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
 
+    @staticmethod
+    def _merge(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+        merged = dict(base)
+        for key, value in extra.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = Config._merge(merged[key], value)
+            else:
+                merged[key] = value
+        return merged
+
     @classmethod
     def load(cls, path: str | Path) -> "Config":
         config_path = Path(path)
         if not config_path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
-        with config_path.open("rb") as fh:
-            raw = tomllib.load(fh)
+
+        base_file = config_path / "config.toml" if config_path.is_dir() else config_path
+        if not base_file.exists():
+            raise FileNotFoundError(f"Base config file not found: {base_file}")
+
+        with base_file.open("rb") as fh:
+            raw: Dict[str, Any] = tomllib.load(fh)
+
+        # Load optional fragments from the same directory
+        config_dir = base_file.parent
+        optional_files = ["feeds.toml", "moderation.toml", "workers.toml"]
+        for filename in optional_files:
+            extra_file = config_dir / filename
+            if extra_file.exists():
+                with extra_file.open("rb") as fh:
+                    extra_raw = tomllib.load(fh)
+                raw = cls._merge(raw, extra_raw)
+
         try:
             config = cls.model_validate(raw)
         except ValidationError as exc:

@@ -49,8 +49,7 @@ log_root_env = "NOVARIUSIRC_LOG_ROOT"
 data_root = "./data"
 data_root_env = "NOVARIUSIRC_DATA_ROOT"
 
-# Optional sections are now in config/*.example.toml:
-# - config/feeds.example.toml
-# - config/moderation.example.toml
-# - config/workers.example.toml
-# Copy the needed sections into your config.toml.
+# Optional sections are read automatically from the same directory if present:
+# - feeds.toml (see config/feeds.example.toml)
+# - moderation.toml (see config/moderation.example.toml)
+# - workers.toml (see config/workers.example.toml)

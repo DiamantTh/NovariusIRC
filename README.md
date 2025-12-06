@@ -11,7 +11,8 @@ This repository contains the first MVP skeleton: async IRC core with reconnect l
    poetry install
    ```
 2. Copy `config.example.toml` to `config.toml` and adjust values or environment variables.
-3. Run the bot:
+3. Optional features: create files next to `config.toml` named `feeds.toml`, `moderation.toml`, or `workers.toml` (samples in `config/*.example.toml`). They are loaded automatically if present.
+4. Run the bot:
    ```bash
    poetry run novariusirc --config ./config.toml --profile default
    ```
