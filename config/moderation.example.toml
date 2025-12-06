@@ -1,0 +1,5 @@
+# Moderation configuration (optional)
+[moderation]
+mode = "warn"  # off|warn|enforce (MVP supports warn)
+flood_threshold = { messages = 5, per_seconds = 10 }
+warn_targets = ["owner_nick"]

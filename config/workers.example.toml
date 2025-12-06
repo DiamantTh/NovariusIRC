@@ -1,0 +1,4 @@
+# Worker pool configuration (optional)
+[workers]
+processes = 2
+long_lived_enabled = false

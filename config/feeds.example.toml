@@ -1,0 +1,13 @@
+# Feeds configuration (optional)
+[feeds]
+enabled = true
+max_feeds = 32
+max_items_per_feed = 64
+refresh_interval = 300
+http_timeout = 10
+max_body_size = 262144
+
+# Register feeds: each entry has name, url, channel, optional language
+feeds = [
+  { name = "Example", url = "https://example.com/feed.xml", channel = "#novariusirc", language = "en" }
+]

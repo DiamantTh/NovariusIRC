@@ -21,6 +21,7 @@ This repository contains the first MVP skeleton: async IRC core with reconnect l
 - `novariusirc/modules`: built-in modules (moderation, rss_announcer)
 - `novariusirc/__main__.py`: CLI entry point
 - `config.example.toml`: starter configuration
+- `config/*.example.toml`: optional feature snippets (feeds, moderation, workers)
 - `licenses/Novara-Software-Freedom-License-EN.md`: project license text
 
 ## Notes

@@ -1,16 +1,25 @@
 [bot]
 profile = "default"
 prefix = "!"
+prefix_env = "NOVARIUSIRC_PREFIX"
 language = "en"
+language_env = "NOVARIUSIRC_LANG"
 
 [network]
 server = "irc.libera.chat"
+server_env = "NOVARIUSIRC_SERVER"
 port = 6697
+port_env = "NOVARIUSIRC_PORT"
 tls = true
+tls_env = "NOVARIUSIRC_TLS"
 nick = "NovariusBot"
+nick_env = "NOVARIUSIRC_NICK"
 user = "novarius"
+user_env = "NOVARIUSIRC_USER"
 realname = "Novarius IRC Bot"
+realname_env = "NOVARIUSIRC_REALNAME"
 channels = ["#novariusirc"]
+channels_env = "NOVARIUSIRC_CHANNELS"
 
 [auth]
 sasl_enabled = true
@@ -32,29 +41,16 @@ admins = ["admin_nick"]
 [logging]
 level = "INFO"
 log_dir = "logs"
-channel_logging = [{ channel = "#novariusirc", enabled = true }]
 journald_enabled = false
-
-[feeds]
-enabled = true
-max_feeds = 32
-max_items_per_feed = 64
-refresh_interval = 300
-http_timeout = 10
-max_body_size = 262144
-feeds = [
-  { name = "Example", url = "https://example.com/feed.xml", channel = "#novariusirc", language = "en" }
-]
-
-[moderation]
-mode = "warn"
-flood_threshold = { messages = 5, per_seconds = 10 }
-warn_targets = ["owner_nick"]
-
-[workers]
-processes = 2
-long_lived_enabled = false
 
 [paths]
 log_root = "./logs"
+log_root_env = "NOVARIUSIRC_LOG_ROOT"
 data_root = "./data"
+data_root_env = "NOVARIUSIRC_DATA_ROOT"
+
+# Optional sections are now in config/*.example.toml:
+# - config/feeds.example.toml
+# - config/moderation.example.toml
+# - config/workers.example.toml
+# Copy the needed sections into your config.toml.
