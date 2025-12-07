@@ -128,6 +128,7 @@ class FeedDefinition(BaseModel):
     url: str
     channel: str
     language: Optional[str] = None
+    template: Optional[str] = None
 
 
 class FeedsConfig(BaseModel):
@@ -137,6 +138,13 @@ class FeedsConfig(BaseModel):
     refresh_interval: int = 300
     http_timeout: int = 10
     max_body_size: int = 256 * 1024
+    user_agents: List[str] = Field(default_factory=list)
+    user_agent_rotate: str = "list"  # list|random|fixed
+    tls_allow_legacy: bool = False
+    tls_ca_file: Optional[str] = None
+    tls_ca_dir: Optional[str] = None
+    tls_cert_file: Optional[str] = None
+    tls_key_file: Optional[str] = None
     feeds: List[FeedDefinition] = Field(default_factory=list)
 
 

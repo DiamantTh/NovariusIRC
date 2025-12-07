@@ -19,12 +19,21 @@ class Plugin(Plugin):
     async def _announce(self, feed, entry) -> None:
         if not self.client:
             return
-        title = entry.get("title") or _("New item")
-        link = entry.get("link") or ""
-        summary = entry.get("summary") or ""
-        message = f"[{feed.name}] {title}"
-        if summary:
-            message = f"{message} – {summary}"
-        if link:
-            message = f"{message} {link}"
+        data = {
+            "feed": feed.name,
+            "title": entry.get("title") or _("New item"),
+            "summary": entry.get("summary") or "",
+            "link": entry.get("link") or "",
+            "published": entry.get("published") or entry.get("updated") or "",
+        }
+        template = feed.template or "[{feed}] {title} – {summary} {link}"
+        message = self._safe_format(template, data).strip()
         await self.client.send_privmsg(feed.channel, message)
+
+    @staticmethod
+    def _safe_format(template: str, data: dict) -> str:
+        class SafeDict(dict):
+            def __missing__(self, key: str) -> str:
+                return ""
+
+        return template.format_map(SafeDict(data))

@@ -1,4 +1,4 @@
-# Feeds configuration (optional)
+# Feeds configuration (optional; place next to config.toml as feeds.toml)
 [feeds]
 enabled = true
 max_feeds = 32
@@ -7,7 +7,33 @@ refresh_interval = 300
 http_timeout = 10
 max_body_size = 262144
 
-# Register feeds: each entry has name, url, channel, optional language
-feeds = [
-  { name = "Example", url = "https://example.com/feed.xml", channel = "#novariusirc", language = "en" }
+# User-Agent rotation (based on legacy Tcl defaults)
+user_agent_rotate = "list" # list|random|fixed
+user_agents = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5_0)",
+  "Mozilla/5.0 (X11; Linux x86_64)",
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)",
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro)",
 ]
+
+# TLS settings (optional)
+tls_allow_legacy = false
+tls_ca_file = ""
+tls_ca_dir = ""
+tls_cert_file = ""
+tls_key_file = ""
+
+# Feed definitions (array of tables)
+[[feeds.feeds]]
+name = "Example"
+url = "https://example.com/feed.xml"
+channel = "#novariusirc"
+language = "en"
+template = "[{feed}] {title} – {summary} {link}"
+
+[[feeds.feeds]]
+name = "MSBulletins"
+url = "https://technet.microsoft.com/en-us/security/rss/bulletin"
+channel = "#channel"
+template = "[MS Security bulletins] {title} - {link}"

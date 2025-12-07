@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import random
+import ssl
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Dict, List, Optional, Set
 
@@ -33,6 +35,12 @@ class FeedEngine:
         self.feed_definitions: Dict[str, FeedDefinition] = {}
         self._task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
+        self._user_agent_index = 0
+        self._user_agents = config.user_agents or [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5_0)",
+            "Mozilla/5.0 (X11; Linux x86_64)",
+        ]
 
     def add_feed(self, feed: FeedDefinition) -> None:
         if len(self.feed_definitions) >= self.config.max_feeds:
@@ -51,7 +59,8 @@ class FeedEngine:
             return
         if self.session is None:
             timeout = aiohttp.ClientTimeout(total=self.config.http_timeout)
-            self.session = aiohttp.ClientSession(timeout=timeout)
+            connector = aiohttp.TCPConnector(ssl=self._ssl_context())
+            self.session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run())
 
@@ -81,6 +90,7 @@ class FeedEngine:
             headers["If-None-Match"] = state.etag
         if state.last_modified:
             headers["If-Modified-Since"] = state.last_modified
+        headers["User-Agent"] = self._next_user_agent()
 
         if not self.session:
             return
@@ -129,3 +139,34 @@ class FeedEngine:
                 await subscriber(feed, entry)
             except Exception as exc:
                 self.logger.error("Subscriber error for feed %s: %s", feed.url, exc)
+
+    def _ssl_context(self) -> Optional[ssl.SSLContext]:
+        if not any(
+            [
+                self.config.tls_allow_legacy,
+                self.config.tls_ca_file,
+                self.config.tls_ca_dir,
+                self.config.tls_cert_file,
+                self.config.tls_key_file,
+            ]
+        ):
+            return None
+        context = ssl.create_default_context(cafile=self.config.tls_ca_file, capath=self.config.tls_ca_dir)
+        if self.config.tls_cert_file:
+            context.load_cert_chain(self.config.tls_cert_file, keyfile=self.config.tls_key_file)
+        if self.config.tls_allow_legacy:
+            context.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0)
+        return context
+
+    def _next_user_agent(self) -> str:
+        if not self._user_agents:
+            return "NovariusIRC/feeds"
+        mode = self.config.user_agent_rotate.lower()
+        if mode == "random":
+            return random.choice(self._user_agents)
+        if mode == "fixed":
+            return self._user_agents[0]
+        # default: rotate through list
+        ua = self._user_agents[self._user_agent_index % len(self._user_agents)]
+        self._user_agent_index += 1
+        return ua
