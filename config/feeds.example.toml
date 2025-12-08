@@ -25,15 +25,17 @@ tls_cert_file = ""
 tls_key_file = ""
 
 # Feed definitions (array of tables)
+# Set enabled = false to pause a feed without deleting its entry.
 [[feeds.feeds]]
 name = "Example"
 url = "https://example.com/feed.xml"
 channel = "#novariusirc"
-language = "en"
+enabled = true
 template = "[{feed}] {title} – {summary} {link}"
 
 [[feeds.feeds]]
 name = "MSBulletins"
 url = "https://technet.microsoft.com/en-us/security/rss/bulletin"
 channel = "#channel"
+enabled = true
 template = "[MS Security bulletins] {title} - {link}"

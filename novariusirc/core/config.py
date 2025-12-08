@@ -127,7 +127,7 @@ class FeedDefinition(BaseModel):
     name: str
     url: str
     channel: str
-    language: Optional[str] = None
+    enabled: bool = True
     template: Optional[str] = None
 
 

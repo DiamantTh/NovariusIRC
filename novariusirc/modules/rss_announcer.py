@@ -13,6 +13,9 @@ class Plugin(Plugin):
         if not self.config.feeds.enabled:
             return
         for feed in self.config.feeds.feeds:
+            if not feed.enabled:
+                self.logger.info("Skipping disabled feed %s", feed.name)
+                continue
             self.feeds.add_feed(feed)
         self.feeds.subscribe(self._announce)
 

@@ -43,6 +43,9 @@ class FeedEngine:
         ]
 
     def add_feed(self, feed: FeedDefinition) -> None:
+        if not feed.enabled:
+            self.logger.info("Feed %s is disabled; skipping registration", feed.name)
+            return
         if len(self.feed_definitions) >= self.config.max_feeds:
             self.logger.warning("Feed limit reached; cannot add feed %s", feed.url)
             return
