@@ -9,91 +9,104 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+ENV_BOT_PREFIX = "NOVARIUSIRC_PREFIX"
+ENV_BOT_LANGUAGE = "NOVARIUSIRC_LANG"
+
+ENV_NETWORK_SERVER = "NOVARIUSIRC_SERVER"
+ENV_NETWORK_PORT = "NOVARIUSIRC_PORT"
+ENV_NETWORK_TLS = "NOVARIUSIRC_TLS"
+ENV_NETWORK_NICK = "NOVARIUSIRC_NICK"
+ENV_NETWORK_USER = "NOVARIUSIRC_USER"
+ENV_NETWORK_REALNAME = "NOVARIUSIRC_REALNAME"
+ENV_NETWORK_CHANNELS = "NOVARIUSIRC_CHANNELS"
+
+ENV_AUTH_SASL_USERNAME = "NOVARIUSIRC_SASL_USERNAME"
+ENV_AUTH_SASL_PASSWORD = "NOVARIUSIRC_SASL_PASSWORD"
+ENV_AUTH_NICKSERV_USERNAME = "NOVARIUSIRC_NICKSERV_USERNAME"
+ENV_AUTH_NICKSERV_PASSWORD = "NOVARIUSIRC_NICKSERV_PASSWORD"
+ENV_AUTH_TOTP_SECRET = "NOVARIUSIRC_TOTP_SECRET"
+
+ENV_PATHS_LOG_ROOT = "NOVARIUSIRC_LOG_ROOT"
+ENV_PATHS_DATA_ROOT = "NOVARIUSIRC_DATA_ROOT"
+
 
 class BotConfig(BaseModel):
     profile: str = "default"
     prefix: str = "!"
-    prefix_env: Optional[str] = None
     language: str = "en"
-    language_env: Optional[str] = None
 
     def resolve_env(self) -> None:
-        if self.prefix_env:
-            env_val = os.getenv(self.prefix_env)
-            if env_val:
-                self.prefix = env_val
-        if self.language_env:
-            env_val = os.getenv(self.language_env)
-            if env_val:
-                self.language = env_val
+        env_val = os.getenv(ENV_BOT_PREFIX)
+        if env_val:
+            self.prefix = env_val
+        env_val = os.getenv(ENV_BOT_LANGUAGE)
+        if env_val:
+            self.language = env_val
 
 
 class NetworkConfig(BaseModel):
     server: str
-    server_env: Optional[str] = None
     port: int = 6667
-    port_env: Optional[str] = None
     tls: bool = False
-    tls_env: Optional[str] = None
     nick: str
-    nick_env: Optional[str] = None
     user: str
-    user_env: Optional[str] = None
     realname: str
-    realname_env: Optional[str] = None
     channels: List[str] = Field(default_factory=list)
-    channels_env: Optional[str] = None
     reconnect_delays: List[int] = Field(default_factory=lambda: [10, 20, 40, 80])
 
     def resolve_env(self) -> None:
-        def set_from_env(field: str, env_name: Optional[str]) -> None:
-            if not env_name:
-                return
-            env_val = os.getenv(env_name)
-            if env_val:
-                setattr(self, field, env_val)
-
-        set_from_env("server", self.server_env)
-        set_from_env("nick", self.nick_env)
-        set_from_env("user", self.user_env)
-        set_from_env("realname", self.realname_env)
-
-        if self.port_env:
-            env_val = os.getenv(self.port_env)
-            if env_val and env_val.isdigit():
-                self.port = int(env_val)
-
-        if self.tls_env:
-            env_val = os.getenv(self.tls_env)
-            if env_val:
-                self.tls = env_val.strip().lower() in {"1", "true", "yes", "on"}
-
-        if self.channels_env:
-            env_val = os.getenv(self.channels_env)
-            if env_val:
-                self.channels = [c.strip() for c in env_val.split(",") if c.strip()]
+        env_val = os.getenv(ENV_NETWORK_SERVER)
+        if env_val:
+            self.server = env_val
+        env_val = os.getenv(ENV_NETWORK_NICK)
+        if env_val:
+            self.nick = env_val
+        env_val = os.getenv(ENV_NETWORK_USER)
+        if env_val:
+            self.user = env_val
+        env_val = os.getenv(ENV_NETWORK_REALNAME)
+        if env_val:
+            self.realname = env_val
+        env_val = os.getenv(ENV_NETWORK_PORT)
+        if env_val and env_val.isdigit():
+            self.port = int(env_val)
+        env_val = os.getenv(ENV_NETWORK_TLS)
+        if env_val:
+            self.tls = env_val.strip().lower() in {"1", "true", "yes", "on"}
+        env_val = os.getenv(ENV_NETWORK_CHANNELS)
+        if env_val:
+            self.channels = [c.strip() for c in env_val.split(",") if c.strip()]
 
 
 class AuthConfig(BaseModel):
     sasl_enabled: bool = False
     sasl_mechanism: str = "PLAIN"
     sasl_username: Optional[str] = None
-    sasl_password_env: Optional[str] = None
     sasl_password: Optional[str] = None
 
     nickserv_enabled: bool = False
     nickserv_service: str = "NickServ"
     nickserv_username: Optional[str] = None
-    nickserv_password_env: Optional[str] = None
     nickserv_password: Optional[str] = None
 
-    totp_env: Optional[str] = None
+    totp_secret: Optional[str] = None
 
     def resolve_secrets(self) -> None:
-        if not self.sasl_password and self.sasl_password_env:
-            self.sasl_password = os.getenv(self.sasl_password_env)
-        if not self.nickserv_password and self.nickserv_password_env:
-            self.nickserv_password = os.getenv(self.nickserv_password_env)
+        env_val = os.getenv(ENV_AUTH_SASL_USERNAME)
+        if env_val:
+            self.sasl_username = env_val
+        env_val = os.getenv(ENV_AUTH_SASL_PASSWORD)
+        if env_val:
+            self.sasl_password = env_val
+        env_val = os.getenv(ENV_AUTH_NICKSERV_USERNAME)
+        if env_val:
+            self.nickserv_username = env_val
+        env_val = os.getenv(ENV_AUTH_NICKSERV_PASSWORD)
+        if env_val:
+            self.nickserv_password = env_val
+        env_val = os.getenv(ENV_AUTH_TOTP_SECRET)
+        if env_val:
+            self.totp_secret = env_val
 
 
 class RoleEntry(BaseModel):
@@ -175,19 +188,15 @@ class WorkerConfig(BaseModel):
 
 class PathsConfig(BaseModel):
     log_root: str = "./logs"
-    log_root_env: Optional[str] = None
     data_root: str = "./data"
-    data_root_env: Optional[str] = None
 
     def resolve_env(self) -> None:
-        if self.log_root_env:
-            env_val = os.getenv(self.log_root_env)
-            if env_val:
-                self.log_root = env_val
-        if self.data_root_env:
-            env_val = os.getenv(self.data_root_env)
-            if env_val:
-                self.data_root = env_val
+        env_val = os.getenv(ENV_PATHS_LOG_ROOT)
+        if env_val:
+            self.log_root = env_val
+        env_val = os.getenv(ENV_PATHS_DATA_ROOT)
+        if env_val:
+            self.data_root = env_val
 
 
 class Config(BaseModel):

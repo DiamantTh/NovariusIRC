@@ -43,6 +43,6 @@ podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
 
 ## Notes
 - Structured STDOUT logging plus rotating files under `logs/`; optional journald if installed.
-- Secrets can be read from environment variables referenced in the config.
+- IRC connection settings and secrets can be overridden via env vars (e.g. `NOVARIUSIRC_SERVER`, `NOVARIUSIRC_NICK`, `NOVARIUSIRC_SASL_PASSWORD`).
 - Feed engine caches ETag/Last-Modified, tracks seen item ids per feed, supports custom templates (`{feed}`, `{title}`, `{summary}`, `{link}`, `{published}`), per-feed enable/disable, and User-Agent rotation/TLS settings (see `config/feeds.example.toml`).
 - Moderation module operates in warn-only mode for the MVP.

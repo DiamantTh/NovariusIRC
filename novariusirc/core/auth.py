@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import logging
-import os
 import time
 from typing import Dict, Optional, Tuple
 
@@ -61,18 +60,12 @@ class AuthManager:
         return self.auth_config.nickserv_username, self.auth_config.nickserv_password
 
     def verify_totp(self, code: str) -> bool:
-        if not self.auth_config.totp_env:
-            return False
-        secret = self.auth_config.totp_env and self._load_totp_secret()
+        secret = self.auth_config.totp_secret
         if not secret:
             self.logger.warning("TOTP secret unavailable; cannot verify code")
             return False
         totp = pyotp.TOTP(secret)
         return totp.verify(code, valid_window=1)
-
-    def _load_totp_secret(self) -> Optional[str]:
-        # TOTP secrets are supplied via env var name stored in config
-        return self.auth_config.totp_env and os.getenv(self.auth_config.totp_env)  # type: ignore[name-defined]
 
     def start_totp_session(self, nick: str, code: str) -> bool:
         if not self.verify_totp(code):
