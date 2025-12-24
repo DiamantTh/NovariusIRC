@@ -1,0 +1,5 @@
+config.toml
+poetry.lock
+__pycache__/
+*.pyc
+*.pyo
