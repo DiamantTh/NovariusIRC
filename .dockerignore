@@ -1,0 +1,14 @@
+.git
+.gitignore
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+*.swp
+dist
+build
+logs
+config.toml

@@ -17,6 +17,22 @@ This repository contains the first MVP skeleton: async IRC core with reconnect l
    poetry run novariusirc --config ./config.toml --profile default
    ```
 
+## Container
+Build a local image:
+```bash
+docker build -t novariusirc:local .
+```
+
+Run the container (mount your config):
+```bash
+docker run --rm -v "$(pwd)/config.toml:/app/config.toml:ro" novariusirc:local
+```
+
+Podman with SELinux label:
+```bash
+podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
+```
+
 ## Project Layout
 - `novariusirc/core`: core services (client, config, auth, commands, logging, i18n, feeds, plugins, workers)
 - `novariusirc/modules`: built-in modules (moderation, rss_announcer)
