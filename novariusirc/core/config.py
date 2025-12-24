@@ -22,8 +22,12 @@ ENV_NETWORK_CHANNELS = "NOVARIUSIRC_CHANNELS"
 
 ENV_AUTH_SASL_USERNAME = "NOVARIUSIRC_SASL_USERNAME"
 ENV_AUTH_SASL_PASSWORD = "NOVARIUSIRC_SASL_PASSWORD"
+ENV_AUTH_SASL_ENABLED = "NOVARIUSIRC_SASL_ENABLED"
+ENV_AUTH_SASL_MECHANISM = "NOVARIUSIRC_SASL_MECHANISM"
 ENV_AUTH_NICKSERV_USERNAME = "NOVARIUSIRC_NICKSERV_USERNAME"
 ENV_AUTH_NICKSERV_PASSWORD = "NOVARIUSIRC_NICKSERV_PASSWORD"
+ENV_AUTH_NICKSERV_ENABLED = "NOVARIUSIRC_NICKSERV_ENABLED"
+ENV_AUTH_NICKSERV_SERVICE = "NOVARIUSIRC_NICKSERV_SERVICE"
 ENV_AUTH_TOTP_SECRET = "NOVARIUSIRC_TOTP_SECRET"
 
 ENV_PATHS_LOG_ROOT = "NOVARIUSIRC_LOG_ROOT"
@@ -92,12 +96,24 @@ class AuthConfig(BaseModel):
     totp_secret: Optional[str] = None
 
     def resolve_secrets(self) -> None:
+        env_val = os.getenv(ENV_AUTH_SASL_ENABLED)
+        if env_val:
+            self.sasl_enabled = env_val.strip().lower() in {"1", "true", "yes", "on"}
+        env_val = os.getenv(ENV_AUTH_SASL_MECHANISM)
+        if env_val:
+            self.sasl_mechanism = env_val
         env_val = os.getenv(ENV_AUTH_SASL_USERNAME)
         if env_val:
             self.sasl_username = env_val
         env_val = os.getenv(ENV_AUTH_SASL_PASSWORD)
         if env_val:
             self.sasl_password = env_val
+        env_val = os.getenv(ENV_AUTH_NICKSERV_ENABLED)
+        if env_val:
+            self.nickserv_enabled = env_val.strip().lower() in {"1", "true", "yes", "on"}
+        env_val = os.getenv(ENV_AUTH_NICKSERV_SERVICE)
+        if env_val:
+            self.nickserv_service = env_val
         env_val = os.getenv(ENV_AUTH_NICKSERV_USERNAME)
         if env_val:
             self.nickserv_username = env_val
@@ -221,14 +237,53 @@ class Config(BaseModel):
         return merged
 
     @classmethod
+    def load_from_env(cls) -> "Config":
+        server = os.getenv(ENV_NETWORK_SERVER)
+        nick = os.getenv(ENV_NETWORK_NICK)
+        missing = [name for name, value in ((ENV_NETWORK_SERVER, server), (ENV_NETWORK_NICK, nick)) if not value]
+        if missing:
+            raise ValueError(f"Missing required env vars for env-only config: {', '.join(missing)}")
+
+        user = os.getenv(ENV_NETWORK_USER) or nick
+        realname = os.getenv(ENV_NETWORK_REALNAME) or nick
+
+        raw: Dict[str, Any] = {
+            "bot": {},
+            "network": {
+                "server": server,
+                "nick": nick,
+                "user": user,
+                "realname": realname,
+            },
+        }
+
+        try:
+            config = cls.model_validate(raw)
+        except ValidationError as exc:
+            raise ValueError(f"Invalid configuration: {exc}") from exc
+        config.bot.resolve_env()
+        config.network.resolve_env()
+        config.paths.resolve_env()
+        config.auth.resolve_secrets()
+        if config.auth.sasl_enabled and not config.auth.sasl_username:
+            config.auth.sasl_username = config.network.nick
+        if config.auth.nickserv_enabled and not config.auth.nickserv_username:
+            config.auth.nickserv_username = config.network.nick
+        return config
+
+    @classmethod
     def load(cls, path: str | Path) -> "Config":
+        path_str = str(path)
+        if path_str.lower() in {"env", "environment", "-"}:
+            return cls.load_from_env()
+
         config_path = Path(path)
         if not config_path.exists():
-            raise FileNotFoundError(f"Config file not found: {config_path}")
+            return cls.load_from_env()
 
         base_file = config_path / "config.toml" if config_path.is_dir() else config_path
         if not base_file.exists():
-            raise FileNotFoundError(f"Base config file not found: {base_file}")
+            return cls.load_from_env()
 
         with base_file.open("rb") as fh:
             raw: Dict[str, Any] = tomllib.load(fh)
@@ -251,6 +306,10 @@ class Config(BaseModel):
         config.network.resolve_env()
         config.paths.resolve_env()
         config.auth.resolve_secrets()
+        if config.auth.sasl_enabled and not config.auth.sasl_username:
+            config.auth.sasl_username = config.network.nick
+        if config.auth.nickserv_enabled and not config.auth.nickserv_username:
+            config.auth.nickserv_username = config.network.nick
         return config
 
 

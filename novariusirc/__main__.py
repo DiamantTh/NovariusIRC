@@ -22,7 +22,7 @@ from novariusirc.core.workers import WorkerPool
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="NovariusIRC bot")
-    parser.add_argument("--config", type=Path, default=Path("./config.toml"), help="Path to config.toml")
+    parser.add_argument("--config", type=Path, default=Path("./config.toml"), help="Path to config.toml or 'env'")
     parser.add_argument("--profile", type=str, default="default", help="Profile name (reserved)")
     return parser.parse_args()
 
