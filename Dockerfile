@@ -41,4 +41,4 @@ RUN addgroup --system app && \
 USER app
 
 ENTRYPOINT ["novariusirc"]
-CMD ["--config", "/app/config.toml", "--profile", "default"]
+CMD ["--config", "/app/config.toml"]

@@ -1,5 +1,4 @@
 [bot]
-profile = "default"
 prefix = "!"
 prefix_env = "NOVARIUSIRC_PREFIX"
 language = "en"
