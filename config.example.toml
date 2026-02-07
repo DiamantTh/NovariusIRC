@@ -17,6 +17,7 @@ user = "novarius"
 user_env = "NOVARIUSIRC_USER"
 realname = "Novarius IRC Bot"
 realname_env = "NOVARIUSIRC_REALNAME"
+# name = "libera"  # Optional: Override für Netzwerknamen (auto-detect via 005 NETWORK=)
 channels = ["#novariusirc"]
 channels_env = "NOVARIUSIRC_CHANNELS"
 

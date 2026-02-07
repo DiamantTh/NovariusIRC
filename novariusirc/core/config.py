@@ -55,6 +55,7 @@ class NetworkConfig(BaseModel):
     user: str
     realname: str
     channels: List[str] = Field(default_factory=list)
+    name: Optional[str] = None  # Optional override für Netzwerknamen (auto-detect via 005 NETWORK=)
     reconnect_delays: List[int] = Field(default_factory=lambda: [10, 20, 40, 80])
 
     def resolve_env(self) -> None:
