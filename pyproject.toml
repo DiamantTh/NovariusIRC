@@ -9,9 +9,9 @@ packages = [{ include = "novariusirc" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
-aiohttp = "^3.9"
-feedparser = "^6.0"
-pydantic = "^2.6"
+aiohttp = "^3.9.5"
+feedparser = "^6.0.11"
+pydantic = "^2.6.4"
 pyotp = "^2.9"
 uvloop = { version = "^0.19", optional = true }
 systemd-python = { version = "^235", optional = true }
