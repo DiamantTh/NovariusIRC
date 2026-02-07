@@ -1088,4 +1088,4 @@ workers = ["aioprocessing"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "a87e5f67b4124ea16862a9af92ca8152108161d99ef07acaebd84c6e0c07f0bd"
+content-hash = "8ccf195219ff45c687964edc165ecdcae322cf99a83e485e05eb5d3f838ba2dc"
