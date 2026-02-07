@@ -1,5 +1,61 @@
-# Moderation configuration (optional)
+# Moderation configuration for NovariusIRC
+# All settings are optional - defaults are used if not specified
+
 [moderation]
-mode = "warn"  # off|warn|enforce (MVP supports warn)
-flood_threshold = { messages = 5, per_seconds = 10 }
-warn_targets = ["owner_nick"]
+# Global moderation on/off
+enabled = true
+
+# Log file for moderation actions
+log_file = "logs/moderation.log"
+
+# Rate limiting configuration
+[moderation.rate_limit]
+enabled = false
+messages_per_minute = 5
+# Action when rate limit exceeded: "warn", "mute", "kick"
+action = "warn"
+
+# Spam detection (same message repeated)
+[moderation.spam]
+enabled = false
+threshold = 3  # Number of repeated messages to trigger
+# Action: "warn", "mute", "kick", "ban"
+action = "mute"
+duration_seconds = 300  # 5 minutes
+
+# Excessive caps lock detection
+[moderation.caps]
+enabled = false
+threshold_percent = 80  # Trigger if >= 80% caps
+action = "warn"
+
+# Badword filtering
+[moderation.badwords]
+enabled = false
+action = "warn"
+# List of words or regex patterns to filter
+list = [
+    "badword1",
+    "badword2",
+    # Regex example:
+    # "(?i)spam.*",
+]
+
+# Warning system
+[moderation.warnings]
+enabled = true
+to_kick = 3    # Kick after 3 warnings
+to_ban = 5     # Ban after 5 warnings
+
+# Channel-specific overrides
+# Example: Different rules for #moderated vs #general
+[moderation.channels."#moderated"]
+rate_limit_enabled = true
+rate_limit_messages = 3
+badwords_enabled = true
+caps_enabled = true
+
+[moderation.channels."#general"]
+rate_limit_enabled = false
+badwords_enabled = false
+caps_enabled = false
