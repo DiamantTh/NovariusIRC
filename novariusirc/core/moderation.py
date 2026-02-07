@@ -135,10 +135,11 @@ class ModerationManager:
         Returns:
             Tuple of (action, reason) if violation found, else None
         """
-        if not self.config.enabled:
-            return None
-
+        # Get config for this channel (with overrides)
         channel_config = self._get_channel_config(channel)
+
+        if not channel_config.enabled:
+            return None
 
         # Check if user is muted
         if nick in self.muted_users:
@@ -160,20 +161,20 @@ class ModerationManager:
         status = self.user_status[channel][nick]
 
         # Rate limiting
-        if channel_config.get("rate_limit_enabled", self.config.rate_limit_enabled):
+        if channel_config.rate_limit_enabled:
             result = self._check_rate_limit(status, channel_config)
             if result:
                 return result
 
         # Badword filter
-        if channel_config.get("badwords_enabled", self.config.badwords_enabled):
+        if channel_config.badwords_enabled:
             result = self._check_badwords(message, channel_config)
             if result:
                 status.warnings += 1
                 return result
 
         # Caps lock detection
-        if channel_config.get("caps_enabled", self.config.caps_enabled):
+        if channel_config.caps_enabled:
             result = self._check_caps(message, channel_config)
             if result:
                 status.warnings += 1
@@ -186,34 +187,32 @@ class ModerationManager:
         return None
 
     def _check_rate_limit(
-        self, status: UserStatus, config: Dict
+        self, status: UserStatus, config: "ModerationConfig"
     ) -> Optional[tuple[str, str]]:
         """Check if user exceeds message rate limit."""
-        max_msgs = config.get("rate_limit_messages", self.config.rate_limit_messages)
+        max_msgs = config.rate_limit_messages
         now = datetime.now()
         minute_ago = now - timedelta(minutes=1)
 
         if status.last_message_time > minute_ago:
             status.message_count_minute += 1
             if status.message_count_minute > max_msgs:
-                action = config.get("rate_limit_action", self.config.rate_limit_action)
-                return (action, f"Rate limit exceeded ({max_msgs} msgs/min)")
+                return (config.rate_limit_action, f"Rate limit exceeded ({max_msgs} msgs/min)")
 
         else:
             status.message_count_minute = 1
 
         return None
 
-    def _check_badwords(self, message: str, config: Dict) -> Optional[tuple[str, str]]:
+    def _check_badwords(self, message: str, config: "ModerationConfig") -> Optional[tuple[str, str]]:
         """Check message for badwords."""
-        for pattern in self.badword_patterns:
+        for pattern in config.badword_patterns:
             if pattern.search(message):
-                action = config.get("badwords_action", self.config.badwords_action)
-                return (action, "Badword detected")
+                return (config.badwords_action, "Badword detected")
 
         return None
 
-    def _check_caps(self, message: str, config: Dict) -> Optional[tuple[str, str]]:
+    def _check_caps(self, message: str, config: "ModerationConfig") -> Optional[tuple[str, str]]:
         """Check for excessive caps lock."""
         if len(message) < 5:
             return None  # Ignore short messages
@@ -221,10 +220,8 @@ class ModerationManager:
         caps_count = sum(1 for c in message if c.isupper())
         caps_percent = (caps_count / len(message)) * 100
 
-        threshold = config.get("caps_threshold_percent", self.config.caps_threshold)
-        if caps_percent >= threshold:
-            action = config.get("caps_action", self.config.caps_action)
-            return (action, f"Excessive caps ({caps_percent:.0f}%)")
+        if caps_percent >= config.caps_threshold:
+            return (config.caps_action, f"Excessive caps ({caps_percent:.0f}%)")
 
         return None
 
@@ -288,9 +285,79 @@ class ModerationManager:
 
         return ""
 
-    def _get_channel_config(self, channel: str) -> Dict:
-        """Get moderation config for specific channel."""
-        return self.config.channel_overrides.get(channel, {})
+    def _get_channel_config(self, channel: str) -> "ModerationConfig":
+        """Get moderation config for specific channel.
+
+        Returns a ModerationConfig merged with channel-specific overrides.
+
+        Args:
+            channel: Channel name
+
+        Returns:
+            ModerationConfig with channel overrides applied
+        """
+        # Start with global config
+        channel_dict = self.config.channel_overrides.get(channel)
+
+        if not channel_dict:
+            # No overrides, use global
+            return self.config
+
+        # Create merged config with overrides
+        merged = ModerationConfig()
+
+        # Copy global settings
+        merged.enabled = channel_dict.get("enabled", self.config.enabled)
+        merged.log_file = Path(channel_dict.get("log_file", str(self.config.log_file)))
+
+        # Merge rate limit
+        if "rate_limit" in channel_dict:
+            override = channel_dict["rate_limit"]
+            merged.rate_limit_enabled = override.get("enabled", self.config.rate_limit_enabled)
+            merged.rate_limit_messages = override.get(
+                "messages_per_minute", self.config.rate_limit_messages
+            )
+            merged.rate_limit_action = override.get("action", self.config.rate_limit_action)
+
+        # Merge spam
+        if "spam" in channel_dict:
+            override = channel_dict["spam"]
+            merged.spam_enabled = override.get("enabled", self.config.spam_enabled)
+            merged.spam_threshold = override.get("threshold", self.config.spam_threshold)
+            merged.spam_action = override.get("action", self.config.spam_action)
+            merged.spam_duration = override.get("duration_seconds", self.config.spam_duration)
+
+        # Merge caps
+        if "caps" in channel_dict:
+            override = channel_dict["caps"]
+            merged.caps_enabled = override.get("enabled", self.config.caps_enabled)
+            merged.caps_threshold = override.get("threshold_percent", self.config.caps_threshold)
+            merged.caps_action = override.get("action", self.config.caps_action)
+
+        # Merge badwords
+        if "badwords" in channel_dict:
+            override = channel_dict["badwords"]
+            merged.badwords_enabled = override.get("enabled", self.config.badwords_enabled)
+            merged.badwords_list = override.get("list", self.config.badwords_list)
+            merged.badwords_action = override.get("action", self.config.badwords_action)
+
+            # Recompile badword patterns if overridden
+            merged.badword_patterns = []
+            for word in merged.badwords_list:
+                try:
+                    pattern = re.compile(word, re.IGNORECASE)
+                    merged.badword_patterns.append(pattern)
+                except re.error as e:
+                    logger.warning(f"Invalid badword regex '{word}' in {channel}: {e}")
+
+        # Merge warnings
+        if "warnings" in channel_dict:
+            override = channel_dict["warnings"]
+            merged.warnings_enabled = override.get("enabled", self.config.warnings_enabled)
+            merged.warnings_to_kick = override.get("to_kick", self.config.warnings_to_kick)
+            merged.warnings_to_ban = override.get("to_ban", self.config.warnings_to_ban)
+
+        return merged
 
     def get_user_warnings(self, nick: str, channel: str) -> int:
         """Get warning count for user in channel."""

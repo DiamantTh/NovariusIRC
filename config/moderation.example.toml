@@ -1,61 +1,122 @@
 # Moderation configuration for NovariusIRC
 # All settings are optional - defaults are used if not specified
 
+# GLOBAL DEFAULTS (applied to all channels unless overridden)
 [moderation]
-# Global moderation on/off
 enabled = true
-
-# Log file for moderation actions
 log_file = "logs/moderation.log"
 
-# Rate limiting configuration
+# Default rate limiting (can be overridden per channel)
 [moderation.rate_limit]
 enabled = false
 messages_per_minute = 5
-# Action when rate limit exceeded: "warn", "mute", "kick"
 action = "warn"
 
-# Spam detection (same message repeated)
+# Default spam detection
 [moderation.spam]
 enabled = false
-threshold = 3  # Number of repeated messages to trigger
-# Action: "warn", "mute", "kick", "ban"
+threshold = 3
 action = "mute"
-duration_seconds = 300  # 5 minutes
+duration_seconds = 300
 
-# Excessive caps lock detection
+# Default caps lock detection
 [moderation.caps]
 enabled = false
-threshold_percent = 80  # Trigger if >= 80% caps
+threshold_percent = 80
 action = "warn"
 
-# Badword filtering
+# Default badword filtering
 [moderation.badwords]
 enabled = false
 action = "warn"
-# List of words or regex patterns to filter
+list = []
+
+# Default warning system
+[moderation.warnings]
+enabled = true
+to_kick = 3
+to_ban = 5
+
+# ============================================================
+# CHANNEL-SPECIFIC OVERRIDES
+# Each channel can override any/all of the above settings
+# ============================================================
+
+# Strict moderation channel
+[moderation.channels."#strict"]
+enabled = true
+
+# Enable all checks in #strict
+[moderation.channels."#strict".rate_limit]
+enabled = true
+messages_per_minute = 3
+action = "mute"
+
+[moderation.channels."#strict".spam]
+enabled = true
+threshold = 2
+action = "kick"
+duration_seconds = 600
+
+[moderation.channels."#strict".caps]
+enabled = true
+threshold_percent = 70
+action = "warn"
+
+[moderation.channels."#strict".badwords]
+enabled = true
+action = "warn"
 list = [
     "badword1",
     "badword2",
-    # Regex example:
-    # "(?i)spam.*",
+    "(?i)spam.*",
 ]
 
-# Warning system
-[moderation.warnings]
+[moderation.channels."#strict".warnings]
 enabled = true
-to_kick = 3    # Kick after 3 warnings
-to_ban = 5     # Ban after 5 warnings
+to_kick = 2
+to_ban = 3
 
-# Channel-specific overrides
-# Example: Different rules for #moderated vs #general
-[moderation.channels."#moderated"]
-rate_limit_enabled = true
-rate_limit_messages = 3
-badwords_enabled = true
-caps_enabled = true
+# Chill/casual channel - minimal moderation
+[moderation.channels."#chill"]
+enabled = true
 
-[moderation.channels."#general"]
-rate_limit_enabled = false
-badwords_enabled = false
-caps_enabled = false
+[moderation.channels."#chill".rate_limit]
+enabled = false
+
+[moderation.channels."#chill".spam]
+enabled = false
+
+[moderation.channels."#chill".caps]
+enabled = false
+
+[moderation.channels."#chill".badwords]
+enabled = false
+
+[moderation.channels."#chill".warnings]
+enabled = false
+to_kick = 999  # Never auto-kick
+to_ban = 999   # Never auto-ban
+
+# Announcements channel - only anti-spam
+[moderation.channels."#announce"]
+enabled = true
+
+[moderation.channels."#announce".rate_limit]
+enabled = true
+messages_per_minute = 1
+action = "kick"
+
+[moderation.channels."#announce".spam]
+enabled = true
+threshold = 1
+action = "kick"
+
+[moderation.channels."#announce".caps]
+enabled = false
+
+[moderation.channels."#announce".badwords]
+enabled = false
+
+[moderation.channels."#announce".warnings]
+enabled = false
