@@ -93,6 +93,20 @@ class AuthConfig(BaseModel):
     nickserv_password: Optional[str] = None
 
     totp_secret: Optional[str] = None
+    session_timeout_seconds: int = 1800  # 30 Minuten default
+    
+    # TOTP-Parameter (RFC 6238)
+    totp_digest: str = "sha256"  # sha1, sha256, sha512
+    totp_digits: int = 8  # Code-Länge (6-12)
+    totp_interval: int = 30  # Zeitfenster in Sekunden
+    totp_valid_window: int = 4  # Toleranz-Fenster: max 2min (4 * 30s)
+
+    @field_validator("totp_digits")
+    @classmethod
+    def validate_totp_digits(cls, value: int) -> int:
+        if not 6 <= value <= 12:
+            raise ValueError("totp_digits must be between 6 and 12")
+        return value
 
     def resolve_secrets(self) -> None:
         env_val = os.getenv(ENV_AUTH_SASL_ENABLED)
@@ -125,13 +139,14 @@ class AuthConfig(BaseModel):
 
 
 class RoleEntry(BaseModel):
-    nick: str
+    hostmask: str  # Pattern: nick!user@host oder *!*@*.trusted.net
     require_totp: bool = False
+    totp_secret: Optional[str] = None  # Individuelles TOTP-Secret (überschreibt global)
 
 
 class RolesConfig(BaseModel):
     owners: List[RoleEntry] = Field(default_factory=list)
-    admins: List[str] = Field(default_factory=list)
+    admins: List[RoleEntry] = Field(default_factory=list)
 
 
 class ChannelLoggingConfig(BaseModel):
@@ -151,18 +166,44 @@ class LoggingConfig(BaseModel):
         return value.upper()
 
 
+class CommandsConfig(BaseModel):
+    rate_limit_seconds: float = 2.0
+
+
+class PluginsConfig(BaseModel):
+    enabled: bool = True
+    directory: str = "plugins"
+
+
 class FeedDefinition(BaseModel):
     name: str
     url: str
-    channel: str
+    channel: Optional[str] = None
+    channels: List[str] = Field(default_factory=list)
     enabled: bool = True
     template: Optional[str] = None
+    min_interval_seconds: Optional[int] = None
+    per_channel_interval: Dict[str, int] = Field(default_factory=dict)
+    max_items_per_poll: Optional[int] = None
+    max_items_per_manual: Optional[int] = None
+
+    @field_validator("channels", mode="after")
+    @classmethod
+    def ensure_channel_targets(cls, value: List[str], info) -> List[str]:
+        channel = info.data.get("channel")
+        if channel:
+            value = [channel] if channel not in value else value
+        if not value:
+            raise ValueError("feeds.feeds[].channel or feeds.feeds[].channels must be set")
+        return value
 
 
 class FeedsConfig(BaseModel):
     enabled: bool = True
     max_feeds: int = 32
     max_items_per_feed: int = 64
+    max_items_per_poll: int = 2
+    max_items_per_manual: int = 4
     refresh_interval: int = 300
     http_timeout: int = 10
     max_body_size: int = 256 * 1024
@@ -176,24 +217,46 @@ class FeedsConfig(BaseModel):
     feeds: List[FeedDefinition] = Field(default_factory=list)
 
 
-class FloodThreshold(BaseModel):
-    messages: int = 5
-    per_seconds: int = 10
+class ModerationRateLimitConfig(BaseModel):
+    enabled: bool = False
+    messages_per_minute: int = 5
+    action: str = "warn"
+
+
+class ModerationSpamConfig(BaseModel):
+    enabled: bool = False
+    threshold: int = 3
+    action: str = "mute"
+    duration_seconds: int = 300
+
+
+class ModerationCapsConfig(BaseModel):
+    enabled: bool = False
+    threshold_percent: int = 80
+    action: str = "warn"
+
+
+class ModerationBadwordsConfig(BaseModel):
+    enabled: bool = False
+    action: str = "warn"
+    list: List[str] = Field(default_factory=list)
+
+
+class ModerationWarningsConfig(BaseModel):
+    enabled: bool = True
+    to_kick: int = 3
+    to_ban: int = 5
 
 
 class ModerationConfig(BaseModel):
-    mode: str = "warn"  # off|warn|enforce (MVP supports warn)
-    flood_threshold: FloodThreshold = Field(default_factory=FloodThreshold)
-    warn_targets: List[str] = Field(default_factory=list)
-
-    @field_validator("mode")
-    @classmethod
-    def valid_mode(cls, value: str) -> str:
-        allowed = {"off", "warn", "enforce"}
-        mode = value.lower()
-        if mode not in allowed:
-            raise ValueError(f"moderation.mode must be one of {allowed}")
-        return mode
+    enabled: bool = True
+    log_file: str = "logs/moderation.log"
+    rate_limit: ModerationRateLimitConfig = Field(default_factory=ModerationRateLimitConfig)
+    spam: ModerationSpamConfig = Field(default_factory=ModerationSpamConfig)
+    caps: ModerationCapsConfig = Field(default_factory=ModerationCapsConfig)
+    badwords: ModerationBadwordsConfig = Field(default_factory=ModerationBadwordsConfig)
+    warnings: ModerationWarningsConfig = Field(default_factory=ModerationWarningsConfig)
+    channels: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
 
 
 class WorkerConfig(BaseModel):
@@ -219,6 +282,8 @@ class Config(BaseModel):
     network: NetworkConfig
     auth: AuthConfig = Field(default_factory=AuthConfig)
     roles: RolesConfig = Field(default_factory=RolesConfig)
+    commands: CommandsConfig = Field(default_factory=CommandsConfig)
+    plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     feeds: FeedsConfig = Field(default_factory=FeedsConfig)
     moderation: ModerationConfig = Field(default_factory=ModerationConfig)

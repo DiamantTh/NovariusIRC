@@ -3,6 +3,8 @@
 enabled = true
 max_feeds = 32
 max_items_per_feed = 64
+max_items_per_poll = 2
+max_items_per_manual = 4
 refresh_interval = 300
 http_timeout = 10
 max_body_size = 262144
@@ -29,13 +31,55 @@ tls_key_file = ""
 [[feeds.feeds]]
 name = "Example"
 url = "https://example.com/feed.xml"
-channel = "#novariusirc"
+channels = ["#novariusirc", "#news"]
 enabled = true
-template = "[{feed}] {title} – {summary} {link}"
+min_interval_seconds = 300
+per_channel_interval = { "#novariusirc" = 300, "#news" = 900 }
+max_items_per_poll = 2
+max_items_per_manual = 4
+# IRC formatting examples (kombinierbar):
+# - Fett: \x02Text\x02
+# - Kursiv: \x1DText\x1D
+# - Unterstrich: \x1FText\x1F
+# - Farbe: \x03<fg>[,<bg>]Text\x03  (z.B. \x0304 rot)
+# - Reset: \x0F
+# - Beispiel 01: \x02\x0300,04[Chip.de]\x03\x02 {title} {link}  (weiß auf rot, fett)
+# - Beispiel 02: \x1D\x0303,00[News]\x03\x1D {title}  (grün auf schwarz, kursiv)
+# - Beispiel 03: \x02\x1F\x0302[Important]\x03\x1F\x02 {title}  (blau, fett+unterstrich)
+# - Beispiel 04: \x02\x0304[Alert]\x03\x02 {title}  (rot, fett)
+# - Beispiel 05: \x1D\x0306[Dev]\x03\x1D {title}  (lila, kursiv)
+# - Beispiel 06: \x1F\x0307[Info]\x03\x1F {title}  (orange, unterstrich)
+# - Beispiel 07: \x02\x1D\x0309[Ops]\x03\x1D\x02 {title}  (hellgrün, fett+kursiv)
+# - Beispiel 08: \x02\x1F\x0310[Build]\x03\x1F\x02 {title}  (türkis, fett+unterstrich)
+# - Beispiel 09: \x02\x1D\x1F\x0311[Deploy]\x03\x1F\x1D\x02 {title}  (helltürkis, fett+kursiv+unterstrich)
+# - Beispiel 10: \x0301,08[Night]\x03 {title}  (schwarz auf gelb)
+# - Beispiel 11: \x0300,01[Inverse]\x03 {title}  (weiß auf schwarz)
+# - Beispiel 12: \x02\x0305,00[Pink]\x03\x02 {title}  (pink auf schwarz, fett)
+# - Beispiel 13: \x1D\x0313,00[Rose]\x03\x1D {title}  (rosa auf schwarz, kursiv)
+# - Beispiel 14: \x1F\x0312,00[Royal]\x03\x1F {title}  (blau auf schwarz, unterstrich)
+# - Beispiel 15: \x02\x0314,00[Gray]\x03\x02 {title}  (grau auf schwarz, fett)
+# - Beispiel 16: \x02\x0308,00[Yellow]\x03\x02 {title}  (gelb auf schwarz, fett)
+# - Beispiel 17: \x02\x0309,01[Green/Black]\x03\x02 {title}  (hellgrün auf schwarz, fett)
+# - Beispiel 18: \x02\x0302,01[Blue/Black]\x03\x02 {title}  (blau auf schwarz, fett)
+# - Beispiel 19: \x02\x0303,01[Green/Black]\x03\x02 {title}  (grün auf schwarz, fett)
+# - Beispiel 20: \x02\x0304,01[Red/Black]\x03\x02 {title}  (rot auf schwarz, fett)
+template = "\x02[{feed}]\x02 \x0304{title}\x03 – {summary} {link}"
 
 [[feeds.feeds]]
 name = "MSBulletins"
 url = "https://technet.microsoft.com/en-us/security/rss/bulletin"
-channel = "#channel"
+channel = "#security"
 enabled = true
-template = "[MS Security bulletins] {title} - {link}"
+min_interval_seconds = 600
+max_items_per_poll = 1
+max_items_per_manual = 3
+template = "\x02[MS Security]\x02 {title} - {link}"
+
+# ATOM example
+[[feeds.feeds]]
+name = "GitHub Releases"
+url = "https://github.com/ORG/REPO/releases.atom"
+channel = "#releases"
+enabled = true
+min_interval_seconds = 600
+template = "\x1F[{feed}]\x1F {title} {link}"

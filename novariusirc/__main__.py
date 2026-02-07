@@ -16,6 +16,7 @@ from novariusirc.core.config import Config, load_config
 from novariusirc.core.feeds import FeedEngine
 from novariusirc.core.i18n import init_i18n
 from novariusirc.core.logging import setup_logging
+from novariusirc.core.moderation import ModerationManager
 from novariusirc.core.plugins import PluginManager
 from novariusirc.core.workers import WorkerPool
 
@@ -56,21 +57,11 @@ def register_builtin_commands(commands: CommandRegistry, config: Config, auth: A
             lines.append(f"{cmd.name} - {cmd.help_text}")
         await ctx.reply(" | ".join(lines))
 
-    async def auth_cmd(ctx: CommandContext, args: list[str]) -> None:
-        if not args:
-            await ctx.reply("Usage: !auth <totp-code>")
-            return
-        code = args[0]
-        if auth.start_totp_session(ctx.nick, code):
-            await ctx.reply("Authentication accepted for elevated commands.")
-        else:
-            await ctx.reply("Authentication failed.")
 
     commands.register("ping", ping, help_text="Health check")
     commands.register("uptime", uptime, help_text="Show bot uptime")
     commands.register("version", version, help_text="Show bot version")
     commands.register("help", help_cmd, help_text="Show available commands")
-    commands.register("auth", auth_cmd, help_text="Authenticate with TOTP if required")
 
 
 async def async_main() -> None:
@@ -88,17 +79,20 @@ async def async_main() -> None:
         logger.info("Starting in foreground mode")
     
     auth = AuthManager(config.auth, config.roles, logger)
-    commands = CommandRegistry(prefix=config.bot.prefix)
+    commands = CommandRegistry(prefix=config.bot.prefix, rate_limit_seconds=config.commands.rate_limit_seconds)
     start_time = time.monotonic()
     register_builtin_commands(commands, config, auth, start_time)
 
-    feeds = FeedEngine(config.feeds, logger)
+    feeds = FeedEngine(config.feeds, logger, data_root=Path(config.paths.data_root))
     workers = WorkerPool(config.workers, logger)
     plugins = PluginManager(config, commands, feeds, auth, logger)
+    moderation = ModerationManager(config.moderation.model_dump())
 
-    client = IRCClient(config, commands, auth, plugins, logger)
+    client = IRCClient(config, commands, auth, plugins, moderation, logger)
     plugins.set_client(client)
     plugins.load_builtin()
+    if config.plugins.enabled:
+        await plugins.load_plugins(Path(config.plugins.directory))
     await plugins.start()
     await feeds.start()
 

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import json
 import logging
 import random
 import ssl
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Awaitable, Callable, Dict, List, Optional, Set
 
 import aiohttp
@@ -26,7 +29,7 @@ class FeedState:
 
 
 class FeedEngine:
-    def __init__(self, config: FeedsConfig, logger: logging.Logger):
+    def __init__(self, config: FeedsConfig, logger: logging.Logger, data_root: Optional[Path] = None):
         self.config = config
         self.logger = logger.getChild("feeds")
         self.session: Optional[aiohttp.ClientSession] = None
@@ -41,6 +44,9 @@ class FeedEngine:
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5_0)",
             "Mozilla/5.0 (X11; Linux x86_64)",
         ]
+        self._state_dir = data_root / "feeds" if data_root else None
+        if self._state_dir:
+            self._state_dir.mkdir(parents=True, exist_ok=True)
 
     def add_feed(self, feed: FeedDefinition) -> None:
         if not feed.enabled:
@@ -50,7 +56,7 @@ class FeedEngine:
             self.logger.warning("Feed limit reached; cannot add feed %s", feed.url)
             return
         self.feed_definitions[feed.url] = feed
-        self.feed_states.setdefault(feed.url, FeedState())
+        self.feed_states.setdefault(feed.url, self._load_state(feed.url) or FeedState())
         self.logger.info("Registered feed %s -> channel %s", feed.name, feed.channel)
 
     def subscribe(self, callback: Subscriber) -> None:
@@ -80,13 +86,42 @@ class FeedEngine:
 
     async def _run(self) -> None:
         while not self._stop_event.is_set():
-            await asyncio.gather(*(self._poll_feed(feed) for feed in self.feed_definitions.values()))
+            await asyncio.gather(
+                *(
+                    self._poll_feed(
+                        feed,
+                        max_items=feed.max_items_per_poll
+                        if feed.max_items_per_poll is not None
+                        else self.config.max_items_per_poll,
+                    )
+                    for feed in self.feed_definitions.values()
+                )
+            )
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.config.refresh_interval)
             except asyncio.TimeoutError:
                 continue
 
-    async def _poll_feed(self, feed: FeedDefinition) -> None:
+    async def poll_now(self, max_items: Optional[int] = None) -> None:
+        """Manually poll all feeds once.
+
+        Args:
+            max_items: Max items per feed to announce (defaults to config.max_items_per_manual)
+        """
+        limit = (
+            max_items
+            if max_items is not None
+            else (
+                feed.max_items_per_manual
+                if feed.max_items_per_manual is not None
+                else self.config.max_items_per_manual
+            )
+        )
+        await asyncio.gather(
+            *(self._poll_feed(feed, max_items=limit) for feed in self.feed_definitions.values())
+        )
+
+    async def _poll_feed(self, feed: FeedDefinition, max_items: Optional[int] = None) -> None:
         state = self.feed_states.setdefault(feed.url, FeedState())
         headers = {}
         if state.etag:
@@ -120,6 +155,8 @@ class FeedEngine:
 
         parsed = await asyncio.to_thread(feedparser.parse, content)
         entries = parsed.entries or []
+        announced = 0
+        limit = max_items if max_items is not None else self.config.max_items_per_poll
         for entry in entries:
             entry_id = entry.get("id") or entry.get("link") or entry.get("title")
             if not entry_id:
@@ -129,10 +166,51 @@ class FeedEngine:
             state.seen_ids.add(entry_id)
             self._trim_seen(state)
             await self._notify(feed, entry)
+            announced += 1
+            if limit and announced >= limit:
+                break
+        self._save_state(feed.url, state)
 
     def _trim_seen(self, state: FeedState) -> None:
         while len(state.seen_ids) > self.config.max_items_per_feed:
             state.seen_ids.pop()
+
+    def _state_file(self, url: str) -> Optional[Path]:
+        if not self._state_dir:
+            return None
+        digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        return self._state_dir / f"{digest}.json"
+
+    def _load_state(self, url: str) -> Optional[FeedState]:
+        state_file = self._state_file(url)
+        if not state_file or not state_file.exists():
+            return None
+        try:
+            with state_file.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return FeedState(
+                etag=data.get("etag"),
+                last_modified=data.get("last_modified"),
+                seen_ids=set(data.get("seen_ids", [])),
+            )
+        except Exception as exc:
+            self.logger.warning("Failed to load feed state for %s: %s", url, exc)
+            return None
+
+    def _save_state(self, url: str, state: FeedState) -> None:
+        state_file = self._state_file(url)
+        if not state_file:
+            return
+        try:
+            payload = {
+                "etag": state.etag,
+                "last_modified": state.last_modified,
+                "seen_ids": list(state.seen_ids),
+            }
+            with state_file.open("w", encoding="utf-8") as fh:
+                json.dump(payload, fh)
+        except Exception as exc:
+            self.logger.warning("Failed to save feed state for %s: %s", url, exc)
 
     async def _notify(self, feed: FeedDefinition, entry: dict) -> None:
         if not self.subscribers:

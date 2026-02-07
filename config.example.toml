@@ -31,16 +31,49 @@ nickserv_service = "NickServ"
 nickserv_username = "NovariusBot"
 nickserv_password_env = "NOVARIUSIRC_NICKSERV_PASSWORD"
 
+# Globales TOTP-Secret (nur relevant, wenn ein Setup/UX TOTP aktiv nutzt)
 totp_env = "NOVARIUSIRC_TOTP_SECRET"
+# Session timeout für TOTP Auth (in Sekunden, default: 1800 = 30 Minuten)
+session_timeout_seconds = 1800
+
+# TOTP-Parameter (RFC 6238) - Kompatibel mit AEGIS Authenticator
+# Digest-Algorithmus: "sha1" (veraltet), "sha256" (standard), "sha512" (max sicherheit)
+totp_digest = "sha256"
+# Code-Länge: 6-12 Stellen (8 = guter Kompromiss)
+totp_digits = 8
+# Zeitfenster in Sekunden (standard: 30)
+totp_interval = 30
+# Toleranz-Fenster: max 2 Minuten (4 * 30s Intervalle = 120s)
+totp_valid_window = 4
 
 [roles]
-owners = [{ nick = "owner_nick", require_totp = true }]
-admins = ["admin_nick"]
+# Owners haben volle Bot-Rechte (z.B. reload, shutdown)
+# Hostmask-Pattern: nick!user@host oder Wildcards (*!*@*.trusted.net)
+owners = [
+    { hostmask = "owner!*@*.trusted.net" },
+    { hostmask = "admin!~user@secure.host.tld" }
+]
+
+# Admins haben erweiterte Rechte (z.B. kick, ban, aber kein shutdown)
+# Admins können auch TOTP nutzen für zusätzliche Sicherheit
+admins = [
+    { hostmask = "moderator!*@*.staff.example.net" },
+    { hostmask = "*!*@vhost/staff/*" },
+    { hostmask = "secureadmin!*@*" }
+]
 
 [logging]
 level = "INFO"
 log_dir = "logs"
 journald_enabled = false
+
+[commands]
+# Simple anti-spam for command usage (seconds between same command per user)
+rate_limit_seconds = 2.0
+
+[plugins]
+enabled = true
+directory = "plugins"
 
 [paths]
 log_root = "./logs"
@@ -48,7 +81,11 @@ log_root_env = "NOVARIUSIRC_LOG_ROOT"
 data_root = "./data"
 data_root_env = "NOVARIUSIRC_DATA_ROOT"
 
+[workers]
+# Anzahl Prozesse im Worker-Pool (CPU-lastige Tasks)
+processes = 2
+
 # Optional sections are read automatically from the same directory if present:
 # - feeds.toml (see config/feeds.example.toml)
 # - moderation.toml (see config/moderation.example.toml)
-# - workers.toml (see config/workers.example.toml)
+# - workers.toml (see config/workers.example.toml) — überschreibt [workers]

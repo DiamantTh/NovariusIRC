@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 import ssl
+from pathlib import Path
 from itertools import cycle
 from typing import Optional, Tuple
 
@@ -13,6 +14,7 @@ from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
 from .config import Config
 from .logging import get_channel_logger
+from .moderation import ModerationManager
 from .plugins import PluginManager
 
 
@@ -23,12 +25,14 @@ class IRCClient:
         commands: CommandRegistry,
         auth: AuthManager,
         plugins: PluginManager,
+        moderation: ModerationManager,
         logger: logging.Logger,
     ):
         self.config = config
         self.commands = commands
         self.auth = auth
         self.plugins = plugins
+        self.moderation = moderation
         self.logger = logger.getChild("client")
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
@@ -99,21 +103,89 @@ class IRCClient:
         prefix, command, params, trailing = self._parse_message(line)
         if command == "001":
             self.logger.info("Connected and welcomed by server")
+        if command == "465":
+            await self._handle_kline(trailing)
+            return
+        if command in {"NOTICE", "ERROR"}:
+            await self._handle_quote_pong(trailing)
+        if command == "JOIN" and prefix:
+            nick = prefix.split("!", 1)[0]
+            channel = trailing or (params[0] if params else "")
+            if channel:
+                await self.plugins.on_join(nick, channel, hostmask=prefix)
+        if command == "PART" and prefix:
+            nick = prefix.split("!", 1)[0]
+            channel = params[0] if params else ""
+            if channel:
+                await self.plugins.on_part(nick, channel, trailing, hostmask=prefix)
+        if command == "QUIT" and prefix:
+            nick = prefix.split("!", 1)[0]
+            await self.plugins.on_quit(nick, trailing, hostmask=prefix)
+        if command == "NICK" and prefix:
+            old_nick = prefix.split("!", 1)[0]
+            new_nick = trailing or (params[0] if params else "")
+            if new_nick:
+                await self.plugins.on_nick_change(old_nick, new_nick)
         if command == "PRIVMSG" and prefix:
             nick = prefix.split("!", 1)[0]
             target = params[0] if params else trailing
             message = trailing
-            await self._handle_privmsg(nick, target, message)
+            await self._handle_privmsg(nick, target, message, prefix=prefix)
 
-    async def _handle_privmsg(self, nick: str, target: str, message: str) -> None:
+    async def _handle_quote_pong(self, message: str) -> None:
+        """Handle servers that request /QUOTE PONG :<cookie> in notices."""
+        if "PONG :" in message:
+            cookie = message.split("PONG :", 1)[1].strip()
+            if cookie:
+                await self.send_raw(f"PONG :{cookie}")
+                self.logger.info("Sent quote-pong cookie")
+        elif "PING :" in message:
+            cookie = message.split("PING :", 1)[1].strip()
+            if cookie:
+                await self.send_raw(f"PONG :{cookie}")
+                self.logger.info("Sent quote-pong cookie")
+
+    async def _handle_kline(self, reason: str) -> None:
+        """Handle K-line (ERR_YOUREBANNEDCREEP 465)."""
+        server = self.config.network.server
+        data_root = Path(self.config.paths.data_root)
+        data_root.mkdir(parents=True, exist_ok=True)
+        kline_file = data_root / "klines.txt"
+        entry = f"{server} | {reason}\n"
+        with kline_file.open("a", encoding="utf-8") as fh:
+            fh.write(entry)
+        self.logger.error("K-lined on %s: %s", server, reason)
+        await self.stop()
+
+    async def _handle_privmsg(self, nick: str, target: str, message: str, prefix: str = "") -> None:
+        """Handle PRIVMSG with hostmask-based role resolution.
+        
+        Args:
+            nick: Sender nickname
+            target: Message target (channel or bot nick)
+            message: Message content
+            prefix: IRC prefix (nick!user@host) for hostmask extraction
+        """
         channel = target if target.startswith("#") else None
         if channel and self._channel_logging_enabled(channel):
             channel_logger = get_channel_logger(self.config.network.server, channel, self.config.paths)
             channel_logger.info("<%s> %s", nick, message)
 
-        roles = self.auth.roles_for_nick(nick)
+        if channel and nick.lower() != self.config.network.nick.lower():
+            violation = await self.moderation.check_message(nick, channel, message)
+            if violation:
+                action, reason = violation
+                command = await self.moderation.apply_action(action, nick, channel, reason)
+                if command:
+                    await self.send_raw(command)
+                return
+
+        # Extract hostmask from prefix (nick!user@host) or fallback to nick
+        hostmask = prefix if "!" in prefix else f"{nick}!unknown@unknown"
+        roles = self.auth.roles_for_hostmask(nick, hostmask)
         ctx = CommandContext(
             nick=nick,
+            hostmask=hostmask,
             channel=channel,
             message=message,
             config=self.config,
@@ -123,7 +195,7 @@ class IRCClient:
         )
         handled = await self.commands.dispatch(ctx)
         if not handled:
-            await self.plugins.on_message(nick, channel or nick, message)
+            await self.plugins.on_message(nick, channel or nick, message, hostmask=hostmask)
 
     async def send_raw(self, message: str) -> None:
         if not self.writer:

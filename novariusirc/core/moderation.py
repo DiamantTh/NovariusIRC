@@ -101,13 +101,16 @@ class ModerationConfig:
 class ModerationManager:
     """Manages moderation for IRC bot."""
 
-    def __init__(self, config: Optional[ModerationConfig] = None):
+    def __init__(self, config: Optional[ModerationConfig | Dict] = None):
         """Initialize moderation manager.
 
         Args:
             config: ModerationConfig instance
         """
-        self.config = config or ModerationConfig()
+        if isinstance(config, dict):
+            self.config = ModerationConfig(config)
+        else:
+            self.config = config or ModerationConfig()
         self.user_status: Dict[str, Dict[str, UserStatus]] = {}  # channel -> nick -> status
         self.actions: List[ModerationAction] = []
         self.banned_users: Set[str] = set()

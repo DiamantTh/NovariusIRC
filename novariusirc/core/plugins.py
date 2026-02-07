@@ -209,31 +209,87 @@ class PluginManager:
         for plugin in self.plugins:
             await plugin.stop()
 
-    async def on_message(self, nick: str, channel: str, message: str) -> None:
-        """Trigger on_message hook for all plugins.
+    def _role_for_hostmask(self, nick: str, hostmask: str) -> str:
+        """Get highest role for user based on hostmask."""
+        roles = self.auth.roles_for_hostmask(nick, hostmask)
+        if "owner" in roles:
+            return "owner"
+        if "admin" in roles:
+            return "admin"
+        return "user"
 
+    async def on_message(self, nick: str, channel: str, message: str, hostmask: str = "") -> None:
+        """Trigger on_message hook for all plugins.
+        
         Args:
-            nick: User nick
-            channel: Channel name
-            message: Message text
+            nick: Sender nickname
+            channel: Target channel or nick (for PM)
+            message: Message content
+            hostmask: Full hostmask nick!user@host (if available)
         """
-        # Legacy plugins
         for plugin in self.plugins:
             try:
                 await plugin.on_message(nick, channel, message)
             except Exception as exc:
                 self.logger.error("Plugin %s failed while handling message: %s", plugin.name, exc)
 
-        # New BasePlugin plugins
         if self.loader:
+            hostmask = hostmask or f"{nick}!unknown@unknown"
             ctx = CommandContext(
                 nick=nick,
                 channel=channel,
                 message=message,
-                role="user",  # TODO: Get actual role from auth
+                role=self._role_for_hostmask(nick, hostmask),
                 irc=self.client,
             )
             await self.loader.trigger_hook("on_message", ctx)
+
+    async def on_join(self, nick: str, channel: str, hostmask: str = "") -> None:
+        if self.loader:
+            hostmask = hostmask or f"{nick}!unknown@unknown"
+            ctx = CommandContext(
+                nick=nick,
+                channel=channel,
+                message="",
+                role=self._role_for_hostmask(nick, hostmask),
+                irc=self.client,
+            )
+            await self.loader.trigger_hook("on_join", ctx)
+
+    async def on_part(self, nick: str, channel: str, message: str, hostmask: str = "") -> None:
+        if self.loader:
+            hostmask = hostmask or f"{nick}!unknown@unknown"
+            ctx = CommandContext(
+                nick=nick,
+                channel=channel,
+                message=message,
+                role=self._role_for_hostmask(nick, hostmask),
+                irc=self.client,
+            )
+            await self.loader.trigger_hook("on_part", ctx)
+
+    async def on_quit(self, nick: str, message: str, hostmask: str = "") -> None:
+        if self.loader:
+            hostmask = hostmask or f"{nick}!unknown@unknown"
+            ctx = CommandContext(
+                nick=nick,
+                channel="",
+                message=message,
+                role=self._role_for_hostmask(nick, hostmask),
+                irc=self.client,
+            )
+            await self.loader.trigger_hook("on_quit", ctx)
+
+    async def on_nick_change(self, old_nick: str, new_nick: str) -> None:
+        if self.loader:
+            ctx = CommandContext(
+                nick=new_nick,
+                channel="",
+                message=f"{old_nick}->{new_nick}",
+                role=self._role_for_nick(new_nick),
+                irc=self.client,
+            )
+            await self.loader.trigger_hook("on_nick_change", ctx)
 
 
 class PluginLoader:
@@ -252,6 +308,7 @@ class PluginLoader:
             "on_join": [],
             "on_part": [],
             "on_quit": [],
+            "on_nick_change": [],
         }
         self.commands: Dict[str, Dict[str, Any]] = {}
         self.logger = logging.getLogger("plugins.loader")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -30,6 +31,7 @@ def _roles_satisfy(user_roles: Iterable[str], required: Iterable[str]) -> bool:
 @dataclass
 class CommandContext:
     nick: str
+    hostmask: str  # nick!user@host
     channel: Optional[str]
     message: str
     config: object
@@ -57,9 +59,11 @@ class Command:
 
 
 class CommandRegistry:
-    def __init__(self, prefix: str = "!"):
+    def __init__(self, prefix: str = "!", rate_limit_seconds: float = 0.0):
         self.prefix = prefix
+        self.rate_limit_seconds = rate_limit_seconds
         self._commands: Dict[str, Command] = {}
+        self._last_exec: Dict[tuple[str, str], float] = {}
 
     def register(
         self,
@@ -94,6 +98,14 @@ class CommandRegistry:
         command = self.get(name)
         if not command:
             return False
+        if self.rate_limit_seconds > 0:
+            key = (ctx.nick.lower(), command.name)
+            now = time.monotonic()
+            last = self._last_exec.get(key, 0.0)
+            if now - last < self.rate_limit_seconds:
+                await ctx.reply("Please slow down.")
+                return True
+            self._last_exec[key] = now
         if not _roles_satisfy(ctx.roles, command.roles):
             await ctx.reply("You are not allowed to run this command.")
             return True
