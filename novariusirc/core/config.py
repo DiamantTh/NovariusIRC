@@ -35,7 +35,6 @@ ENV_PATHS_DATA_ROOT = "NOVARIUSIRC_DATA_ROOT"
 
 
 class BotConfig(BaseModel):
-    profile: str = "default"
     prefix: str = "!"
     language: str = "en"
 

@@ -22,8 +22,11 @@ from novariusirc.core.workers import WorkerPool
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="NovariusIRC bot")
-    parser.add_argument("--config", type=Path, default=Path("./config.toml"), help="Path to config.toml or 'env'")
-    parser.add_argument("--profile", type=str, default="default", help="Profile name (reserved)")
+    parser.add_argument("-c", "--config", type=Path, default=Path("./config.toml"), help="Path to config.toml or 'env'")
+    parser.add_argument("-s", "--channel-stats", action="store_true", help="Don't background; display channel stats every 10 seconds")
+    parser.add_argument("-t", "--terminal-dcc", action="store_true", help="Don't background; use terminal to simulate DCC chat")
+    parser.add_argument("-f", "--foreground", action="store_true", help="Don't background; stay in foreground")
+    parser.add_argument("-V", "--version", action="version", version=f"NovariusIRC {__version__}", help="Show version and exit")
     return parser.parse_args()
 
 
@@ -75,6 +78,15 @@ async def async_main() -> None:
     config = load_config(args.config)
     _ = init_i18n(config.bot.language)  # noqa: F841
     logger = setup_logging(config.logging, config.paths)
+    
+    # Log startup mode
+    if args.channel_stats:
+        logger.info("Starting in channel-stats mode (foreground)")
+    elif args.terminal_dcc:
+        logger.info("Starting in terminal-DCC mode (foreground)")
+    elif args.foreground:
+        logger.info("Starting in foreground mode")
+    
     auth = AuthManager(config.auth, config.roles, logger)
     commands = CommandRegistry(prefix=config.bot.prefix)
     start_time = time.monotonic()
