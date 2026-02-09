@@ -31,6 +31,6 @@ uninstall:
 	@read -p "Fortfahren? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		rm -rf "$(PREFIX)/lib" "$(PREFIX)/bin/novariusirc"; \
+		rm -rf "$(PREFIX)/venv" "$(PREFIX)/bin/novariusirc"; \
 		echo "✅ Deinstallation abgeschlossen (Instanzen in $(PREFIX)/instances bleiben erhalten)"; \
 	fi

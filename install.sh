@@ -6,22 +6,32 @@ set -euo pipefail
 
 # Konfiguration
 INSTALL_PREFIX="${NOVARIUSIRC_PREFIX:-$HOME/NovariusIRC}"
-PYTHON_VERSION=$(python3 --version | awk '{print $2}' | cut -d. -f1,2)
-LIB_DIR="$INSTALL_PREFIX/lib/python$PYTHON_VERSION/site-packages"
+VENV_DIR="$INSTALL_PREFIX/venv"
 BIN_DIR="$INSTALL_PREFIX/bin"
 INSTANCES_DIR="$INSTALL_PREFIX/instances"
 
 echo "🤖 NovariusIRC Installation"
 echo "============================"
 echo "Install-Prefix: $INSTALL_PREFIX"
-echo "Python Version: $PYTHON_VERSION"
+echo "Virtual Environment: $VENV_DIR"
 echo ""
 
 # Verzeichnisstruktur erstellen
 echo "📁 Erstelle Verzeichnisstruktur..."
-mkdir -p "$LIB_DIR"
+mkdir -p "$INSTALL_PREFIX"
 mkdir -p "$BIN_DIR"
 mkdir -p "$INSTANCES_DIR"
+
+# Virtual Environment erstellen (wenn nicht vorhanden)
+if [ ! -d "$VENV_DIR" ]; then
+    echo "🐍 Erstelle Virtual Environment..."
+    python3 -m venv "$VENV_DIR"
+else
+    echo "♻️  Nutze existierendes Virtual Environment..."
+fi
+
+# venv aktivieren
+source "$VENV_DIR/bin/activate"
 
 # Poetry Build
 echo "📦 Baue Wheel-Paket..."
@@ -31,20 +41,12 @@ poetry build -f wheel
 WHEEL=$(ls -t dist/*.whl | head -n1)
 echo "📥 Installiere $WHEEL..."
 
-# Installation mit pip
-pip install --quiet --upgrade --force-reinstall \
-    --target="$LIB_DIR" \
-    "$WHEEL"
+# Installation mit pip im venv
+pip install --quiet --upgrade --force-reinstall "$WHEEL"
 
-# Binary-Wrapper erstellen (damit PYTHONPATH korrekt gesetzt ist)
-echo "🔗 Erstelle Binary-Wrapper..."
-cat > "$BIN_DIR/novariusirc" << EOF
-#!/usr/bin/env bash
-# NovariusIRC Launcher
-export PYTHONPATH="$LIB_DIR:\$PYTHONPATH"
-exec python3 -m novariusirc "\$@"
-EOF
-chmod +x "$BIN_DIR/novariusirc"
+# Symlink zum Binary erstellen
+echo "🔗 Erstelle Binary-Symlink..."
+ln -sf "$VENV_DIR/bin/novariusirc" "$BIN_DIR/novariusirc"
 
 # Example-Instanz erstellen (wenn noch nicht vorhanden)
 EXAMPLE_INSTANCE="$INSTANCES_DIR/example"
@@ -91,6 +93,7 @@ echo ""
 echo "✅ Installation abgeschlossen!"
 echo ""
 echo "📍 Installation: $INSTALL_PREFIX"
+echo "� Virtual Environment: $VENV_DIR"
 echo "🔧 Binary: $BIN_DIR/novariusirc"
 echo "🤖 Instanzen: $INSTANCES_DIR"
 echo ""
@@ -99,3 +102,6 @@ echo "   export PATH=\"$BIN_DIR:\$PATH\""
 echo ""
 echo "🚀 Bot starten (Beispiel):"
 echo "   novariusirc $INSTANCES_DIR/example/config.toml"
+echo ""
+echo "🔍 Oder aktiviere das venv direkt:"
+echo "   source $VENV_DIR/bin/activate"
