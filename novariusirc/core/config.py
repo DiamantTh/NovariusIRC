@@ -355,7 +355,7 @@ class Config(BaseModel):
 
         # Load optional fragments from the same directory
         config_dir = base_file.parent
-        optional_files = ["feeds.toml", "moderation.toml", "workers.toml"]
+        optional_files = ["secrets.toml", "feeds.toml", "moderation.toml", "workers.toml"]
         for filename in optional_files:
             extra_file = config_dir / filename
             if extra_file.exists():

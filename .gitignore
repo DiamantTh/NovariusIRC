@@ -1,4 +1,5 @@
 config.toml
+secrets.toml
 __pycache__/
 *.pyc
 *.pyo
