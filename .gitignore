@@ -3,5 +3,9 @@ secrets.toml
 __pycache__/
 *.pyc
 *.pyo
+build/
+dist/
+*.egg-info/
+*.tar.gz
 logs/
 .copilot/
