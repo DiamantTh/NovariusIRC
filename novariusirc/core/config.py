@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+DEFAULT_INCLUDE_FILES = ["secrets.toml"]
+
 ENV_BOT_PREFIX = "NOVARIUSIRC_PREFIX"
 ENV_BOT_LANGUAGE = "NOVARIUSIRC_LANG"
 
@@ -19,6 +21,8 @@ ENV_NETWORK_NICK = "NOVARIUSIRC_NICK"
 ENV_NETWORK_USER = "NOVARIUSIRC_USER"
 ENV_NETWORK_REALNAME = "NOVARIUSIRC_REALNAME"
 ENV_NETWORK_CHANNELS = "NOVARIUSIRC_CHANNELS"
+ENV_NETWORK_BIND_IP = "NOVARIUSIRC_BIND_IP"
+ENV_NETWORK_BIND_HOSTNAME = "NOVARIUSIRC_BIND_HOSTNAME"
 
 ENV_AUTH_SASL_USERNAME = "NOVARIUSIRC_SASL_USERNAME"
 ENV_AUTH_SASL_PASSWORD = "NOVARIUSIRC_SASL_PASSWORD"
@@ -29,6 +33,9 @@ ENV_AUTH_NICKSERV_PASSWORD = "NOVARIUSIRC_NICKSERV_PASSWORD"
 ENV_AUTH_NICKSERV_ENABLED = "NOVARIUSIRC_NICKSERV_ENABLED"
 ENV_AUTH_NICKSERV_SERVICE = "NOVARIUSIRC_NICKSERV_SERVICE"
 ENV_AUTH_TOTP_SECRET = "NOVARIUSIRC_TOTP_SECRET"
+ENV_AUTH_CERTFP_ENABLED = "NOVARIUSIRC_CERTFP_ENABLED"
+ENV_AUTH_CERTFP_CERT_FILE = "NOVARIUSIRC_CERTFP_CERT_FILE"
+ENV_AUTH_CERTFP_KEY_FILE = "NOVARIUSIRC_CERTFP_KEY_FILE"
 
 ENV_PATHS_LOG_ROOT = "NOVARIUSIRC_LOG_ROOT"
 ENV_PATHS_DATA_ROOT = "NOVARIUSIRC_DATA_ROOT"
@@ -51,6 +58,8 @@ class NetworkConfig(BaseModel):
     server: str
     port: int = 6667
     tls: bool = False
+    bind_ip: Optional[str] = None
+    bind_hostname: Optional[str] = None
     nick: str
     user: str
     realname: str
@@ -80,6 +89,12 @@ class NetworkConfig(BaseModel):
         env_val = os.getenv(ENV_NETWORK_CHANNELS)
         if env_val:
             self.channels = [c.strip() for c in env_val.split(",") if c.strip()]
+        env_val = os.getenv(ENV_NETWORK_BIND_IP)
+        if env_val:
+            self.bind_ip = env_val.strip()
+        env_val = os.getenv(ENV_NETWORK_BIND_HOSTNAME)
+        if env_val:
+            self.bind_hostname = env_val.strip()
 
 
 class AuthConfig(BaseModel):
@@ -92,6 +107,10 @@ class AuthConfig(BaseModel):
     nickserv_service: str = "NickServ"
     nickserv_username: Optional[str] = None
     nickserv_password: Optional[str] = None
+
+    certfp_enabled: bool = False
+    certfp_cert_file: Optional[str] = None
+    certfp_key_file: Optional[str] = None
 
     totp_secret: Optional[str] = None
     session_timeout_seconds: int = 1800  # 30 Minuten default
@@ -137,6 +156,15 @@ class AuthConfig(BaseModel):
         env_val = os.getenv(ENV_AUTH_TOTP_SECRET)
         if env_val:
             self.totp_secret = env_val
+        env_val = os.getenv(ENV_AUTH_CERTFP_ENABLED)
+        if env_val:
+            self.certfp_enabled = env_val.strip().lower() in {"1", "true", "yes", "on"}
+        env_val = os.getenv(ENV_AUTH_CERTFP_CERT_FILE)
+        if env_val:
+            self.certfp_cert_file = env_val
+        env_val = os.getenv(ENV_AUTH_CERTFP_KEY_FILE)
+        if env_val:
+            self.certfp_key_file = env_val
 
 
 class RoleEntry(BaseModel):
@@ -278,9 +306,19 @@ class PathsConfig(BaseModel):
             self.data_root = env_val
 
 
+class IncludesConfig(BaseModel):
+    files: List[str] = Field(default_factory=lambda: list(DEFAULT_INCLUDE_FILES))
+
+
+class ModulesConfig(BaseModel):
+    enabled: List[str] = Field(default_factory=lambda: ["moderation", "rss_announcer"])
+
+
 class Config(BaseModel):
     bot: BotConfig
     network: NetworkConfig
+    includes: IncludesConfig = Field(default_factory=IncludesConfig)
+    modules: ModulesConfig = Field(default_factory=ModulesConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     roles: RolesConfig = Field(default_factory=RolesConfig)
     commands: CommandsConfig = Field(default_factory=CommandsConfig)
@@ -300,6 +338,34 @@ class Config(BaseModel):
             else:
                 merged[key] = value
         return merged
+
+    @staticmethod
+    def _normalize_include_files(raw: Dict[str, Any]) -> List[str]:
+        include_files: List[str] = []
+
+        include_value = raw.get("include")
+        if isinstance(include_value, str):
+            include_files.append(include_value)
+        elif isinstance(include_value, list):
+            include_files.extend(str(item) for item in include_value if isinstance(item, str))
+
+        includes_section = raw.get("includes")
+        if isinstance(includes_section, dict):
+            files_value = includes_section.get("files")
+            if isinstance(files_value, str):
+                include_files.append(files_value)
+            elif isinstance(files_value, list):
+                include_files.extend(str(item) for item in files_value if isinstance(item, str))
+
+        if not include_files:
+            include_files = list(DEFAULT_INCLUDE_FILES)
+
+        deduped: List[str] = []
+        for filename in include_files:
+            filename = filename.strip()
+            if filename and filename not in deduped:
+                deduped.append(filename)
+        return deduped
 
     @classmethod
     def load_from_env(cls) -> "Config":
@@ -353,10 +419,10 @@ class Config(BaseModel):
         with base_file.open("rb") as fh:
             raw: Dict[str, Any] = tomllib.load(fh)
 
-        # Load optional fragments from the same directory
+        # Load configured fragments from the same directory
         config_dir = base_file.parent
-        optional_files = ["secrets.toml", "feeds.toml", "moderation.toml", "workers.toml"]
-        for filename in optional_files:
+        include_files = cls._normalize_include_files(raw)
+        for filename in include_files:
             extra_file = config_dir / filename
             if extra_file.exists():
                 with extra_file.open("rb") as fh:

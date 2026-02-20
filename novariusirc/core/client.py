@@ -66,11 +66,24 @@ class IRCClient:
     async def _connect_once(self) -> None:
         host = self.config.network.server
         port = self.config.network.port
+        bind_host = self.config.network.bind_ip or self.config.network.bind_hostname
+        local_addr: Optional[Tuple[str, int]] = (bind_host, 0) if bind_host else None
         ssl_context = None
         if self.config.network.tls:
             ssl_context = ssl.create_default_context()
-        self.logger.info("Connecting to %s:%s", host, port)
-        self.reader, self.writer = await asyncio.open_connection(host, port, ssl=ssl_context)
+            if self.auth.certfp_ready():
+                cert_file = self.config.auth.certfp_cert_file
+                key_file = self.config.auth.certfp_key_file
+                try:
+                    ssl_context.load_cert_chain(cert_file=cert_file, keyfile=key_file)
+                    self.logger.info("CertFP certificate loaded")
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to load CertFP certificate: {exc}") from exc
+        if bind_host:
+            self.logger.info("Connecting to %s:%s (local bind: %s)", host, port, bind_host)
+        else:
+            self.logger.info("Connecting to %s:%s", host, port)
+        self.reader, self.writer = await asyncio.open_connection(host, port, ssl=ssl_context, local_addr=local_addr)
         await self._register()
         await self._listen()
 
@@ -356,10 +369,19 @@ class IRCClient:
             await self.send_raw(f"JOIN {channel}")
 
     async def _perform_sasl(self) -> None:
+        mechanism = self.auth.sasl_mechanism()
+        await self.send_raw("CAP REQ :sasl")
+        if mechanism == "EXTERNAL":
+            await self.send_raw("AUTHENTICATE EXTERNAL")
+            await self.send_raw("AUTHENTICATE +")
+            await self.send_raw("CAP END")
+            return
+
         payload = self.auth.sasl_plain_payload()
         if not payload:
+            await self.send_raw("CAP END")
             return
-        await self.send_raw("CAP REQ :sasl")
+
         await self.send_raw("AUTHENTICATE PLAIN")
         await self.send_raw(f"AUTHENTICATE {payload}")
         await self.send_raw("CAP END")

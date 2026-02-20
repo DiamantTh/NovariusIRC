@@ -30,6 +30,12 @@ class Plugin(Plugin):
             roles=("admin",),
             help_text="Fetch RSS/ATOM feeds now (optional limit).",
         )
+        self.commands.register(
+            "feed",
+            self._cmd_feed,
+            roles=("user",),
+            help_text="Show feed overview. Usage: !feed list [query]",
+        )
 
     async def _cmd_rssfetch(self, ctx, args) -> None:
         limit = None
@@ -37,10 +43,67 @@ class Plugin(Plugin):
             try:
                 limit = max(1, int(args[0]))
             except ValueError:
-                await ctx.reply("Usage: !rssfetch [limit]")
+                await ctx.reply(_("Usage: !rssfetch [limit]"))
                 return
         await self.feeds.poll_now(limit)
-        await ctx.reply("RSS/ATOM fetch triggered.")
+        await ctx.reply(_("RSS/ATOM fetch triggered."))
+
+    async def _cmd_feed(self, ctx, args) -> None:
+        if not self.config.feeds.enabled:
+            await ctx.reply(_("Feeds are disabled."))
+            return
+
+        if not args or args[0].lower() not in {"list", "ls"}:
+            await ctx.reply(_("Usage: !feed list [query]"))
+            return
+
+        query = " ".join(args[1:]).strip().lower()
+        feeds = list(self.feeds.feed_definitions.values())
+        if query:
+            def _matches(feed) -> bool:
+                channels = feed.channels or ([feed.channel] if feed.channel else [])
+                haystack = " ".join([feed.name, feed.url, " ".join(channels)]).lower()
+                return query in haystack
+
+            feeds = [feed for feed in feeds if _matches(feed)]
+
+        if not feeds:
+            await ctx.reply(_("No feeds matched your query."))
+            return
+
+        await ctx.reply(
+            _("Feeds: {count} active. Query: {query}").format(
+                count=len(feeds), query=query or "*"
+            )
+        )
+
+        for feed in feeds:
+            channels = feed.channels or ([feed.channel] if feed.channel else [])
+            channels_text = ",".join(channels) if channels else "-"
+            min_interval = feed.min_interval_seconds if feed.min_interval_seconds is not None else "-"
+            poll_limit = (
+                feed.max_items_per_poll
+                if feed.max_items_per_poll is not None
+                else self.config.feeds.max_items_per_poll
+            )
+            manual_limit = (
+                feed.max_items_per_manual
+                if feed.max_items_per_manual is not None
+                else self.config.feeds.max_items_per_manual
+            )
+            mode = "on" if feed.enabled else "off"
+            msg = (
+                "{name} [{mode}] ch={channels} poll={poll} manual={manual} min={min_interval}s url={url}"
+            ).format(
+                name=feed.name,
+                mode=mode,
+                channels=channels_text,
+                poll=poll_limit,
+                manual=manual_limit,
+                min_interval=min_interval,
+                url=feed.url,
+            )
+            await ctx.reply(msg)
 
     async def _announce(self, feed, entry) -> None:
         if not self.client:

@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
+from .i18n import gettext_lazy as _
+
 ROLE_ORDER = ("user", "admin", "owner")
 
 
@@ -103,11 +105,11 @@ class CommandRegistry:
             now = time.monotonic()
             last = self._last_exec.get(key, 0.0)
             if now - last < self.rate_limit_seconds:
-                await ctx.reply("Please slow down.")
+                await ctx.reply(_("Please slow down."))
                 return True
             self._last_exec[key] = now
         if not _roles_satisfy(ctx.roles, command.roles):
-            await ctx.reply("You are not allowed to run this command.")
+            await ctx.reply(_("You are not allowed to run this command."))
             return True
         try:
             if asyncio.iscoroutinefunction(command.handler):
@@ -116,7 +118,7 @@ class CommandRegistry:
                 command.handler(ctx, args)
         except Exception as exc:
             ctx.logger.error("Command %s failed: %s", name, exc)
-            await ctx.reply("Command failed.")
+            await ctx.reply(_("Command failed."))
         return True
 
 

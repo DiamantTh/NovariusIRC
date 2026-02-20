@@ -6,16 +6,33 @@ NovariusIRC is a modular, multilingual IRC bot/daemon in the classic Eggdrop sty
 This repository contains the first MVP skeleton: async IRC core with reconnect logic, config loading and validation, structured logging, i18n hooks, a command registry with role checks, a feed engine, and sample modules for moderation (warn-only) and RSS announcements. Worker pools use `ProcessPoolExecutor` with an optional `aioprocessing` extra for long-lived workers.
 
 ## Quickstart
-1. Install dependencies (optionally enable extras `uvloop`, `journald`, `workers`):
+1. Recommended installation path:
    ```bash
-   poetry install
+   make install
    ```
 2. Copy `config.example.toml` to `config.toml` and adjust values or environment variables.
-3. Optional features: create files next to `config.toml` named `feeds.toml`, `moderation.toml`, or `workers.toml` (samples in `config/*.example.toml`). They are loaded automatically if present.
-4. Run the bot:
+3. Optional feature files are configured explicitly via `[includes]` in `config.toml`; entries are relative to `config.toml` (or absolute). Templates are in `config/*.example.toml`. `workers` stays in the main config by default.
+4. Add the installed binary location to your shell `PATH`:
    ```bash
-   poetry run novariusirc --config ./config.toml
+   export PATH="$HOME/NovariusIRC/bin:$PATH"
    ```
+5. Run the example instance:
+   ```bash
+   novariusirc ~/NovariusIRC/instances/example/config.toml
+   ```
+
+### Development workflow (optional)
+For local development in the project workspace, use Poetry:
+
+```bash
+poetry install
+```
+
+Then run the bot:
+
+```bash
+poetry run novariusirc --config ./config.toml
+```
 
 ## Container
 Build a local image:
@@ -46,4 +63,7 @@ podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
 - IRC connection settings and secrets can be overridden via env vars (e.g. `NOVARIUSIRC_SERVER`, `NOVARIUSIRC_NICK`, `NOVARIUSIRC_SASL_PASSWORD`).
 - Env-only startup is supported; set `NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK` (others optional) or pass `--config env`.
 - Feed engine caches ETag/Last-Modified, tracks seen item ids per feed, supports custom templates (`{feed}`, `{title}`, `{summary}`, `{link}`, `{published}`), per-feed enable/disable, and User-Agent rotation/TLS settings (see `config/feeds.example.toml`).
+- Feed overview command is available when `rss_announcer` is enabled: `!feed list [query]` (shows channels and active limits/options).
+- Built-in modules are configurable via `[modules].enabled` (e.g. `moderation`, `rss_announcer`).
+- Multi-bot IRC environments should use different prefixes per bot (recommended) to avoid command collisions.
 - Moderation module operates in warn-only mode for the MVP.

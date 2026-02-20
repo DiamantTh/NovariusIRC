@@ -15,6 +15,7 @@ from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config, load_config
 from novariusirc.core.feeds import FeedEngine
 from novariusirc.core.i18n import init_i18n
+from novariusirc.core.i18n import gettext_lazy as _
 from novariusirc.core.logging import setup_logging
 from novariusirc.core.moderation import ModerationManager
 from novariusirc.core.plugins import PluginManager
@@ -42,17 +43,17 @@ def configure_event_loop() -> None:
 
 def register_builtin_commands(commands: CommandRegistry, config: Config, auth: AuthManager, start_time: float) -> None:
     async def ping(ctx: CommandContext, args: list[str]) -> None:
-        await ctx.reply("pong")
+        await ctx.reply(_("pong"))
 
     async def uptime(ctx: CommandContext, args: list[str]) -> None:
         seconds = int(time.monotonic() - start_time)
-        await ctx.reply(f"uptime: {seconds}s")
+        await ctx.reply(_("uptime: {seconds}s").format(seconds=seconds))
 
     async def version(ctx: CommandContext, args: list[str]) -> None:
         await ctx.reply(f"NovariusIRC {__version__}")
 
     async def help_cmd(ctx: CommandContext, args: list[str]) -> None:
-        lines = [f"Commands ({config.bot.prefix}):"]
+        lines = [_("Commands ({prefix}):").format(prefix=config.bot.prefix)]
         for cmd in commands.list_commands():
             lines.append(f"{cmd.name} - {cmd.help_text}")
         await ctx.reply(" | ".join(lines))

@@ -60,6 +60,13 @@ class AuthManager:
             return None
         return self.auth_config.sasl_username, self.auth_config.sasl_password
 
+    def sasl_mechanism(self) -> str:
+        mechanism = (self.auth_config.sasl_mechanism or "PLAIN").strip().upper()
+        return mechanism or "PLAIN"
+
+    def certfp_ready(self) -> bool:
+        return bool(self.auth_config.certfp_enabled and self.auth_config.certfp_cert_file)
+
     def sasl_plain_payload(self) -> Optional[str]:
         creds = self.sasl_credentials()
         if not creds:

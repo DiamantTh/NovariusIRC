@@ -1,11 +1,23 @@
 [bot]
 prefix = "!"
+# Sprache: en (default), de, ja
 language = "en"
+
+# Include-Dateien relativ zu diesem config.toml (oder absoluter Pfad)
+# Unterstützt auch top-level: include = ["secrets.toml", "feeds.toml"]
+# Vorlagen liegen unter config/*.example.toml und können an beliebigen Ort kopiert werden.
+[includes]
+files = ["secrets.toml", "feeds.toml", "moderation.toml"]
+# workers.toml nur eintragen, wenn [workers] ausgelagert werden soll
+# files = ["secrets.toml", "feeds.toml", "moderation.toml", "workers.toml"]
 
 [network]
 server = "irc.libera.chat"
 port = 6697
 tls = true
+# Optional: lokale Quelladresse beim Verbindungsaufbau (eine Option nutzen)
+# bind_ip = "192.0.2.10"
+# bind_hostname = "bot-host.example.net"
 nick = "NovariusBot"
 user = "novarius"
 realname = "Novarius IRC Bot"
@@ -23,20 +35,12 @@ nickserv_service = "NickServ"
 nickserv_username = "NovariusBot"
 # nickserv_password wird in secrets.toml gesetzt (siehe secrets.example.toml)
 
-# # Globales TOTP-Secret (nur relevant, wenn ein Setup/UX TOTP aktiv nutzt)
-# # totp_secret wird in secrets.toml gesetzt (siehe secrets.example.toml)
-# # Session timeout für TOTP Auth (in Sekunden, default: 1800 = 30 Minuten)
-# session_timeout_seconds = 1800
-#
-# # TOTP-Parameter (RFC 6238) - Kompatibel mit AEGIS Authenticator
-# # Digest-Algorithmus: "sha1" (veraltet), "sha256" (standard), "sha512" (max sicherheit)
-# totp_digest = "sha256"
-# # Code-Länge: 6-12 Stellen (8 = guter Kompromiss)
-# totp_digits = 8
-# # Zeitfenster in Sekunden (standard: 30)
-# totp_interval = 30
-# # Toleranz-Fenster: max 2 Minuten (4 * 30s Intervalle = 120s)
-# totp_valid_window = 4
+# Optional: CertFP (TLS-Clientzertifikat)
+# Bei aktivem CertFP wird das Zertifikat beim TLS-Connect geladen.
+# Für SASL EXTERNAL: sasl_enabled = true und sasl_mechanism = "EXTERNAL"
+certfp_enabled = false
+# certfp_cert_file = "./certs/irc-client.pem"
+# certfp_key_file = "./certs/irc-client.key"
 
 [roles]
 # Owners haben volle Bot-Rechte (z.B. reload, shutdown)
@@ -47,7 +51,6 @@ owners = [
 ]
 
 # Admins haben erweiterte Rechte (z.B. kick, ban, aber kein shutdown)
-# Admins können auch TOTP nutzen für zusätzliche Sicherheit
 admins = [
     { hostmask = "moderator!*@*.staff.example.net" },
     { hostmask = "*!*@vhost/staff/*" },
@@ -67,6 +70,10 @@ rate_limit_seconds = 2.0
 enabled = true
 directory = "plugins"
 
+[modules]
+# Builtin-Module explizit aktivieren/deaktivieren
+enabled = ["moderation", "rss_announcer"]
+
 [paths]
 log_root = "./logs"
 data_root = "./data"
@@ -74,9 +81,3 @@ data_root = "./data"
 [workers]
 # Anzahl Prozesse im Worker-Pool (CPU-lastige Tasks)
 processes = 2
-
-# Optional sections are read automatically from the same directory if present:
-# - secrets.toml (see secrets.example.toml) — für Passwörter und Secrets
-# - feeds.toml (see config/feeds.example.toml)
-# - moderation.toml (see config/moderation.example.toml)
-# - workers.toml (see config/workers.example.toml) — überschreibt [workers]

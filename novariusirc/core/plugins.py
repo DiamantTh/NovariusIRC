@@ -175,7 +175,7 @@ class PluginManager:
 
     def load_builtin(self) -> None:
         """Load built-in plugins from novariusirc.modules."""
-        builtin = ["moderation", "rss_announcer"]
+        builtin = self.config.modules.enabled
         for name in builtin:
             try:
                 module = importlib.import_module(f"novariusirc.modules.{name}")

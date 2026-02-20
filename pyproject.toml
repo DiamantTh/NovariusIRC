@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "novariusirc"
-version = "0.1.4"
+version = "0.1.5"
 description = "Modular, multilingual IRC bot/daemon inspired by Eggdrop"
 authors = ["NovariusIRC Team <dev@novariusirc.local>"]
 license = "MIT"
