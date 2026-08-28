@@ -17,30 +17,25 @@ class GreetingPlugin(BasePlugin):
 
     async def on_load(self) -> None:
         """Called when plugin loads."""
-        print(f"[{self.name}] Loaded!")
+        self.logger.info("Example greeting plugin loaded")
 
     async def on_join(self, ctx: CommandContext) -> None:
         """Greet user when they join the channel."""
-        # Example: Send greeting
-        # await ctx.irc.send_message(ctx.channel, f"Welcome {ctx.nick}!")
-        pass
+        if ctx.channel:
+            await ctx.reply(f"Welcome {ctx.nick}!")
 
     @command(role="user")
-    async def cmd_hello(self, ctx: CommandContext) -> None:
+    async def cmd_hello(self, ctx: CommandContext, args: list[str]) -> None:
         """Say hello to the user.
 
         Usage: !hello
         """
-        # Example: Reply to command
-        # await ctx.irc.send_message(ctx.channel, f"Hello {ctx.nick}!")
-        pass
+        await ctx.reply(f"Hello {ctx.nick}!")
 
     @command(role="admin", aliases=["greet"])
-    async def cmd_welcome(self, ctx: CommandContext) -> None:
+    async def cmd_welcome(self, ctx: CommandContext, args: list[str]) -> None:
         """Welcome everyone in the channel.
 
         Usage: !welcome or !greet
         """
-        # Example: Admin-only command
-        # await ctx.irc.send_message(ctx.channel, "Welcome everyone!")
-        pass
+        await ctx.reply("Welcome everyone!")

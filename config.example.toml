@@ -69,10 +69,14 @@ rate_limit_seconds = 2.0
 [plugins]
 enabled = true
 directory = "plugins"
+# Externe Plugins werden nur geladen, wenn sie hier explizit aufgefuehrt sind.
+# Der Name verweist auf plugins/<name>.py oder plugins/<name>/__init__.py.
+load = []
+# Beispiel: load = ["example_greetings"]
 
 [modules]
 # Builtin-Module explizit aktivieren/deaktivieren
-enabled = ["moderation", "rss_announcer"]
+enabled = ["rss_announcer"]
 
 [paths]
 log_root = "./logs"

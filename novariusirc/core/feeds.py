@@ -9,9 +9,9 @@ import json
 import logging
 import random
 import ssl
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, List, Optional, Set
 
 import aiohttp
 import feedparser
@@ -23,21 +23,27 @@ Subscriber = Callable[[FeedDefinition, dict], Awaitable[None]]
 
 @dataclass
 class FeedState:
-    etag: Optional[str] = None
-    last_modified: Optional[str] = None
-    seen_ids: Set[str] = field(default_factory=set)
+    etag: str | None = None
+    last_modified: str | None = None
+    seen_ids: list[str] = field(default_factory=list)
 
 
 class FeedEngine:
-    def __init__(self, config: FeedsConfig, logger: logging.Logger, data_root: Optional[Path] = None):
+    def __init__(
+        self,
+        config: FeedsConfig,
+        logger: logging.Logger,
+        data_root: Path | None = None,
+    ):
         self.config = config
         self.logger = logger.getChild("feeds")
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.subscribers: List[Subscriber] = []
-        self.feed_states: Dict[str, FeedState] = {}
-        self.feed_definitions: Dict[str, FeedDefinition] = {}
-        self._task: Optional[asyncio.Task] = None
+        self.session: aiohttp.ClientSession | None = None
+        self.subscribers: list[Subscriber] = []
+        self.feed_states: dict[str, FeedState] = {}
+        self.feed_definitions: dict[str, FeedDefinition] = {}
+        self._task: asyncio.Task | None = None
         self._stop_event = asyncio.Event()
+        self._poll_lock = asyncio.Lock()
         self._user_agent_index = 0
         self._user_agents = config.user_agents or [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -60,7 +66,12 @@ class FeedEngine:
         self.logger.info("Registered feed %s -> channel %s", feed.name, feed.channel)
 
     def subscribe(self, callback: Subscriber) -> None:
-        self.subscribers.append(callback)
+        if callback not in self.subscribers:
+            self.subscribers.append(callback)
+
+    def unsubscribe(self, callback: Subscriber) -> None:
+        with contextlib.suppress(ValueError):
+            self.subscribers.remove(callback)
 
     async def start(self) -> None:
         if not self.config.enabled:
@@ -86,42 +97,53 @@ class FeedEngine:
 
     async def _run(self) -> None:
         while not self._stop_event.is_set():
+            async with self._poll_lock:
+                await asyncio.gather(
+                    *(
+                        self._poll_feed(
+                            feed,
+                            max_items=feed.max_items_per_poll
+                            if feed.max_items_per_poll is not None
+                            else self.config.max_items_per_poll,
+                        )
+                        for feed in self.feed_definitions.values()
+                    )
+                )
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(), timeout=self.config.refresh_interval
+                )
+            except TimeoutError:
+                continue
+
+    async def poll_now(self, max_items: int | None = None) -> None:
+        """Manually poll all feeds once.
+
+        Args:
+            max_items: Maximum items per feed; defaults to the manual limit.
+        """
+        async with self._poll_lock:
             await asyncio.gather(
                 *(
                     self._poll_feed(
                         feed,
-                        max_items=feed.max_items_per_poll
-                        if feed.max_items_per_poll is not None
-                        else self.config.max_items_per_poll,
+                        max_items=(
+                            max_items
+                            if max_items is not None
+                            else (
+                                feed.max_items_per_manual
+                                if feed.max_items_per_manual is not None
+                                else self.config.max_items_per_manual
+                            )
+                        ),
                     )
                     for feed in self.feed_definitions.values()
                 )
             )
-            try:
-                await asyncio.wait_for(self._stop_event.wait(), timeout=self.config.refresh_interval)
-            except asyncio.TimeoutError:
-                continue
 
-    async def poll_now(self, max_items: Optional[int] = None) -> None:
-        """Manually poll all feeds once.
-
-        Args:
-            max_items: Max items per feed to announce (defaults to config.max_items_per_manual)
-        """
-        limit = (
-            max_items
-            if max_items is not None
-            else (
-                feed.max_items_per_manual
-                if feed.max_items_per_manual is not None
-                else self.config.max_items_per_manual
-            )
-        )
-        await asyncio.gather(
-            *(self._poll_feed(feed, max_items=limit) for feed in self.feed_definitions.values())
-        )
-
-    async def _poll_feed(self, feed: FeedDefinition, max_items: Optional[int] = None) -> None:
+    async def _poll_feed(
+        self, feed: FeedDefinition, max_items: int | None = None
+    ) -> None:
         state = self.feed_states.setdefault(feed.url, FeedState())
         headers = {}
         if state.etag:
@@ -138,50 +160,61 @@ class FeedEngine:
                 if resp.status == 304:
                     return
                 if resp.status >= 400:
-                    self.logger.warning("Feed %s returned HTTP %s", feed.url, resp.status)
+                    self.logger.warning(
+                        "Feed %s returned HTTP %s", feed.url, resp.status
+                    )
                     return
-                content = await resp.read()
+                content = await resp.content.read(self.config.max_body_size + 1)
                 if len(content) > self.config.max_body_size:
-                    self.logger.warning("Feed %s exceeded max body size (%s bytes)", feed.url, len(content))
+                    self.logger.warning(
+                        "Feed %s exceeded max body size (%s bytes)",
+                        feed.url,
+                        len(content),
+                    )
                     return
                 state.etag = resp.headers.get("ETag") or state.etag
-                state.last_modified = resp.headers.get("Last-Modified") or state.last_modified
-        except asyncio.TimeoutError:
+                state.last_modified = (
+                    resp.headers.get("Last-Modified") or state.last_modified
+                )
+        except TimeoutError:
             self.logger.warning("Timeout fetching feed %s", feed.url)
             return
-        except Exception as exc:
+        except (aiohttp.ClientError, OSError) as exc:
             self.logger.warning("Failed to fetch feed %s: %s", feed.url, exc)
             return
 
         parsed = await asyncio.to_thread(feedparser.parse, content)
         entries = parsed.entries or []
-        announced = 0
+        unseen_entries = self._select_unseen(state, entries)
         limit = max_items if max_items is not None else self.config.max_items_per_poll
+        for entry in unseen_entries[:limit]:
+            await self._notify(feed, entry)
+        self._save_state(feed.url, state)
+
+    def _select_unseen(self, state: FeedState, entries: list[dict]) -> list[dict]:
+        known_ids = set(state.seen_ids)
+        current_ids: list[str] = []
+        unseen_entries: list[dict] = []
         for entry in entries:
             entry_id = entry.get("id") or entry.get("link") or entry.get("title")
             if not entry_id:
                 continue
-            if entry_id in state.seen_ids:
-                continue
-            state.seen_ids.add(entry_id)
-            self._trim_seen(state)
-            await self._notify(feed, entry)
-            announced += 1
-            if limit and announced >= limit:
-                break
-        self._save_state(feed.url, state)
+            current_ids.append(entry_id)
+            if entry_id not in known_ids:
+                unseen_entries.append(entry)
 
-    def _trim_seen(self, state: FeedState) -> None:
-        while len(state.seen_ids) > self.config.max_items_per_feed:
-            state.seen_ids.pop()
+        state.seen_ids = list(dict.fromkeys([*current_ids, *state.seen_ids]))[
+            : self.config.max_items_per_feed
+        ]
+        return unseen_entries
 
-    def _state_file(self, url: str) -> Optional[Path]:
+    def _state_file(self, url: str) -> Path | None:
         if not self._state_dir:
             return None
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()
         return self._state_dir / f"{digest}.json"
 
-    def _load_state(self, url: str) -> Optional[FeedState]:
+    def _load_state(self, url: str) -> FeedState | None:
         state_file = self._state_file(url)
         if not state_file or not state_file.exists():
             return None
@@ -191,9 +224,15 @@ class FeedEngine:
             return FeedState(
                 etag=data.get("etag"),
                 last_modified=data.get("last_modified"),
-                seen_ids=set(data.get("seen_ids", [])),
+                seen_ids=list(dict.fromkeys(data.get("seen_ids", []))),
             )
-        except Exception as exc:
+        except (
+            OSError,
+            json.JSONDecodeError,
+            AttributeError,
+            TypeError,
+            ValueError,
+        ) as exc:
             self.logger.warning("Failed to load feed state for %s: %s", url, exc)
             return None
 
@@ -209,7 +248,7 @@ class FeedEngine:
             }
             with state_file.open("w", encoding="utf-8") as fh:
                 json.dump(payload, fh)
-        except Exception as exc:
+        except (OSError, TypeError, ValueError) as exc:
             self.logger.warning("Failed to save feed state for %s: %s", url, exc)
 
     async def _notify(self, feed: FeedDefinition, entry: dict) -> None:
@@ -218,10 +257,10 @@ class FeedEngine:
         for subscriber in self.subscribers:
             try:
                 await subscriber(feed, entry)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - isolate third-party callbacks
                 self.logger.error("Subscriber error for feed %s: %s", feed.url, exc)
 
-    def _ssl_context(self) -> Optional[ssl.SSLContext]:
+    def _ssl_context(self) -> ssl.SSLContext | None:
         if not any(
             [
                 self.config.tls_allow_legacy,
@@ -232,9 +271,13 @@ class FeedEngine:
             ]
         ):
             return None
-        context = ssl.create_default_context(cafile=self.config.tls_ca_file, capath=self.config.tls_ca_dir)
+        context = ssl.create_default_context(
+            cafile=self.config.tls_ca_file, capath=self.config.tls_ca_dir
+        )
         if self.config.tls_cert_file:
-            context.load_cert_chain(self.config.tls_cert_file, keyfile=self.config.tls_key_file)
+            context.load_cert_chain(
+                self.config.tls_cert_file, keyfile=self.config.tls_key_file
+            )
         if self.config.tls_allow_legacy:
             context.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0)
         return context

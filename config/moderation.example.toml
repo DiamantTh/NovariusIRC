@@ -109,7 +109,7 @@ action = "kick"
 
 [moderation.channels."#announce".spam]
 enabled = true
-threshold = 1
+threshold = 2
 action = "kick"
 
 [moderation.channels."#announce".caps]

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import builtins
 import os
+import re
 import tomllib
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 DEFAULT_INCLUDE_FILES = ["secrets.toml"]
 
@@ -41,7 +43,11 @@ ENV_PATHS_LOG_ROOT = "NOVARIUSIRC_LOG_ROOT"
 ENV_PATHS_DATA_ROOT = "NOVARIUSIRC_DATA_ROOT"
 
 
-class BotConfig(BaseModel):
+class ConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class BotConfig(ConfigModel):
     prefix: str = "!"
     language: str = "en"
 
@@ -54,18 +60,37 @@ class BotConfig(BaseModel):
             self.language = env_val
 
 
-class NetworkConfig(BaseModel):
+class NetworkConfig(ConfigModel):
     server: str
-    port: int = 6667
+    port: int = Field(default=6667, ge=1, le=65535)
     tls: bool = False
-    bind_ip: Optional[str] = None
-    bind_hostname: Optional[str] = None
+    bind_ip: str | None = None
+    bind_hostname: str | None = None
     nick: str
     user: str
     realname: str
-    channels: List[str] = Field(default_factory=list)
-    name: Optional[str] = None  # Optional override für Netzwerknamen (auto-detect via 005 NETWORK=)
-    reconnect_delays: List[int] = Field(default_factory=lambda: [10, 20, 40, 80])
+    channels: list[str] = Field(default_factory=list)
+    name: str | None = (
+        None  # Optional override für Netzwerknamen (auto-detect via 005 NETWORK=)
+    )
+    reconnect_delays: list[int] = Field(default_factory=lambda: [10, 20, 40, 80])
+
+    @field_validator("reconnect_delays")
+    @classmethod
+    def validate_reconnect_delays(cls, value: list[int]) -> list[int]:
+        if any(delay < 1 for delay in value):
+            raise ValueError("reconnect delays must be positive")
+        return value
+
+    @field_validator("nick", "user", "realname", "channels")
+    @classmethod
+    def reject_irc_control_characters(cls, value: Any) -> Any:
+        values = value if isinstance(value, list) else [value]
+        if any(any(char in item for char in "\r\n\0") for item in values):
+            raise ValueError(
+                "IRC identity and channel values must not contain CR, LF, or NUL"
+            )
+        return value
 
     def resolve_env(self) -> None:
         env_val = os.getenv(ENV_NETWORK_SERVER)
@@ -97,29 +122,29 @@ class NetworkConfig(BaseModel):
             self.bind_hostname = env_val.strip()
 
 
-class AuthConfig(BaseModel):
+class AuthConfig(ConfigModel):
     sasl_enabled: bool = False
     sasl_mechanism: str = "PLAIN"
-    sasl_username: Optional[str] = None
-    sasl_password: Optional[str] = None
+    sasl_username: str | None = None
+    sasl_password: str | None = None
 
     nickserv_enabled: bool = False
     nickserv_service: str = "NickServ"
-    nickserv_username: Optional[str] = None
-    nickserv_password: Optional[str] = None
+    nickserv_username: str | None = None
+    nickserv_password: str | None = None
 
     certfp_enabled: bool = False
-    certfp_cert_file: Optional[str] = None
-    certfp_key_file: Optional[str] = None
+    certfp_cert_file: str | None = None
+    certfp_key_file: str | None = None
 
-    totp_secret: Optional[str] = None
+    totp_secret: str | None = None
     session_timeout_seconds: int = 1800  # 30 Minuten default
-    
+
     # TOTP-Parameter (RFC 6238)
-    totp_digest: str = "sha256"  # sha1, sha256, sha512
+    totp_digest: Literal["sha1", "sha256", "sha512"] = "sha256"
     totp_digits: int = 8  # Code-Länge (6-12)
-    totp_interval: int = 30  # Zeitfenster in Sekunden
-    totp_valid_window: int = 4  # Toleranz-Fenster: max 2min (4 * 30s)
+    totp_interval: int = Field(default=30, ge=1)
+    totp_valid_window: int = Field(default=4, ge=0)
 
     @field_validator("totp_digits")
     @classmethod
@@ -143,7 +168,12 @@ class AuthConfig(BaseModel):
             self.sasl_password = env_val
         env_val = os.getenv(ENV_AUTH_NICKSERV_ENABLED)
         if env_val:
-            self.nickserv_enabled = env_val.strip().lower() in {"1", "true", "yes", "on"}
+            self.nickserv_enabled = env_val.strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
         env_val = os.getenv(ENV_AUTH_NICKSERV_SERVICE)
         if env_val:
             self.nickserv_service = env_val
@@ -167,26 +197,26 @@ class AuthConfig(BaseModel):
             self.certfp_key_file = env_val
 
 
-class RoleEntry(BaseModel):
+class RoleEntry(ConfigModel):
     hostmask: str  # Pattern: nick!user@host oder *!*@*.trusted.net
     require_totp: bool = False
-    totp_secret: Optional[str] = None  # Individuelles TOTP-Secret (überschreibt global)
+    totp_secret: str | None = None  # Individuelles TOTP-Secret (überschreibt global)
 
 
-class RolesConfig(BaseModel):
-    owners: List[RoleEntry] = Field(default_factory=list)
-    admins: List[RoleEntry] = Field(default_factory=list)
+class RolesConfig(ConfigModel):
+    owners: list[RoleEntry] = Field(default_factory=list)
+    admins: list[RoleEntry] = Field(default_factory=list)
 
 
-class ChannelLoggingConfig(BaseModel):
+class ChannelLoggingConfig(ConfigModel):
     channel: str
     enabled: bool = True
 
 
-class LoggingConfig(BaseModel):
+class LoggingConfig(ConfigModel):
     level: str = "INFO"
     log_dir: str = "logs"
-    channel_logging: List[ChannelLoggingConfig] = Field(default_factory=list)
+    channel_logging: list[ChannelLoggingConfig] = Field(default_factory=list)
     journald_enabled: bool = False
 
     @field_validator("level")
@@ -195,105 +225,139 @@ class LoggingConfig(BaseModel):
         return value.upper()
 
 
-class CommandsConfig(BaseModel):
-    rate_limit_seconds: float = 2.0
+class CommandsConfig(ConfigModel):
+    rate_limit_seconds: float = Field(default=2.0, ge=0)
 
 
-class PluginsConfig(BaseModel):
+class PluginsConfig(ConfigModel):
     enabled: bool = True
     directory: str = "plugins"
+    load: list[str] = Field(default_factory=list)
+    settings: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+    @field_validator("load")
+    @classmethod
+    def validate_plugin_names(cls, value: list[str]) -> list[str]:
+        invalid = [name for name in value if not re.fullmatch(r"[A-Za-z0-9_-]+", name)]
+        if invalid:
+            raise ValueError(f"invalid plugin names: {', '.join(invalid)}")
+        return list(dict.fromkeys(value))
 
 
-class FeedDefinition(BaseModel):
+class FeedDefinition(ConfigModel):
     name: str
     url: str
-    channel: Optional[str] = None
-    channels: List[str] = Field(default_factory=list)
+    channel: str | None = None
+    channels: list[str] = Field(default_factory=list)
     enabled: bool = True
-    template: Optional[str] = None
-    min_interval_seconds: Optional[int] = None
-    per_channel_interval: Dict[str, int] = Field(default_factory=dict)
-    max_items_per_poll: Optional[int] = None
-    max_items_per_manual: Optional[int] = None
+    template: str | None = None
+    min_interval_seconds: int | None = Field(default=None, ge=0)
+    per_channel_interval: dict[str, int] = Field(default_factory=dict)
+    max_items_per_poll: int | None = Field(default=None, ge=1)
+    max_items_per_manual: int | None = Field(default=None, ge=1)
 
     @field_validator("channels", mode="after")
     @classmethod
-    def ensure_channel_targets(cls, value: List[str], info) -> List[str]:
+    def ensure_channel_targets(cls, value: list[str], info) -> list[str]:
         channel = info.data.get("channel")
         if channel:
             value = [channel] if channel not in value else value
         if not value:
-            raise ValueError("feeds.feeds[].channel or feeds.feeds[].channels must be set")
+            raise ValueError(
+                "feeds.feeds[].channel or feeds.feeds[].channels must be set"
+            )
+        return value
+
+    @field_validator("per_channel_interval")
+    @classmethod
+    def validate_channel_intervals(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(interval < 0 for interval in value.values()):
+            raise ValueError("per-channel feed intervals must not be negative")
         return value
 
 
-class FeedsConfig(BaseModel):
+class FeedsConfig(ConfigModel):
     enabled: bool = True
-    max_feeds: int = 32
-    max_items_per_feed: int = 64
-    max_items_per_poll: int = 2
-    max_items_per_manual: int = 4
-    refresh_interval: int = 300
-    http_timeout: int = 10
-    max_body_size: int = 256 * 1024
-    user_agents: List[str] = Field(default_factory=list)
-    user_agent_rotate: str = "list"  # list|random|fixed
+    max_feeds: int = Field(default=32, ge=1)
+    max_items_per_feed: int = Field(default=64, ge=1)
+    max_items_per_poll: int = Field(default=2, ge=1)
+    max_items_per_manual: int = Field(default=4, ge=1)
+    refresh_interval: int = Field(default=300, ge=1)
+    http_timeout: int = Field(default=10, ge=1)
+    max_body_size: int = Field(default=256 * 1024, ge=1024)
+    user_agents: list[str] = Field(default_factory=list)
+    user_agent_rotate: Literal["list", "random", "fixed"] = "list"
     tls_allow_legacy: bool = False
-    tls_ca_file: Optional[str] = None
-    tls_ca_dir: Optional[str] = None
-    tls_cert_file: Optional[str] = None
-    tls_key_file: Optional[str] = None
-    feeds: List[FeedDefinition] = Field(default_factory=list)
+    tls_ca_file: str | None = None
+    tls_ca_dir: str | None = None
+    tls_cert_file: str | None = None
+    tls_key_file: str | None = None
+    feeds: list[FeedDefinition] = Field(default_factory=list)
+
+    @field_validator(
+        "tls_ca_file", "tls_ca_dir", "tls_cert_file", "tls_key_file", mode="before"
+    )
+    @classmethod
+    def empty_path_is_none(cls, value: Any) -> Any:
+        return None if isinstance(value, str) and not value.strip() else value
 
 
-class ModerationRateLimitConfig(BaseModel):
+class ModerationRateLimitConfig(ConfigModel):
     enabled: bool = False
-    messages_per_minute: int = 5
-    action: str = "warn"
+    messages_per_minute: int = Field(default=5, ge=1)
+    action: Literal["warn", "mute", "kick", "ban"] = "warn"
 
 
-class ModerationSpamConfig(BaseModel):
+class ModerationSpamConfig(ConfigModel):
     enabled: bool = False
-    threshold: int = 3
-    action: str = "mute"
-    duration_seconds: int = 300
+    threshold: int = Field(default=3, ge=2)
+    action: Literal["warn", "mute", "kick", "ban"] = "mute"
+    duration_seconds: int = Field(default=300, ge=1)
 
 
-class ModerationCapsConfig(BaseModel):
+class ModerationCapsConfig(ConfigModel):
     enabled: bool = False
-    threshold_percent: int = 80
-    action: str = "warn"
+    threshold_percent: int = Field(default=80, ge=1, le=100)
+    action: Literal["warn", "mute", "kick", "ban"] = "warn"
 
 
-class ModerationBadwordsConfig(BaseModel):
+class ModerationBadwordsConfig(ConfigModel):
     enabled: bool = False
-    action: str = "warn"
-    list: List[str] = Field(default_factory=list)
+    action: Literal["warn", "mute", "kick", "ban"] = "warn"
+    list: builtins.list[str] = Field(default_factory=list)
 
 
-class ModerationWarningsConfig(BaseModel):
+class ModerationWarningsConfig(ConfigModel):
     enabled: bool = True
-    to_kick: int = 3
-    to_ban: int = 5
+    to_kick: int = Field(default=3, ge=1)
+    to_ban: int = Field(default=5, ge=1)
+
+    @field_validator("to_ban")
+    @classmethod
+    def ban_after_kick(cls, value: int, info) -> int:
+        if value < info.data.get("to_kick", 3):
+            raise ValueError("to_ban must be greater than or equal to to_kick")
+        return value
 
 
-class ModerationConfig(BaseModel):
+class ModerationConfig(ConfigModel):
     enabled: bool = True
     log_file: str = "logs/moderation.log"
-    rate_limit: ModerationRateLimitConfig = Field(default_factory=ModerationRateLimitConfig)
+    rate_limit: ModerationRateLimitConfig = Field(
+        default_factory=ModerationRateLimitConfig
+    )
     spam: ModerationSpamConfig = Field(default_factory=ModerationSpamConfig)
     caps: ModerationCapsConfig = Field(default_factory=ModerationCapsConfig)
     badwords: ModerationBadwordsConfig = Field(default_factory=ModerationBadwordsConfig)
     warnings: ModerationWarningsConfig = Field(default_factory=ModerationWarningsConfig)
-    channels: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    channels: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
-class WorkerConfig(BaseModel):
-    processes: int = 2
-    long_lived_enabled: bool = False
+class WorkerConfig(ConfigModel):
+    processes: int = Field(default=2, ge=1)
 
 
-class PathsConfig(BaseModel):
+class PathsConfig(ConfigModel):
     log_root: str = "./logs"
     data_root: str = "./data"
 
@@ -306,15 +370,23 @@ class PathsConfig(BaseModel):
             self.data_root = env_val
 
 
-class IncludesConfig(BaseModel):
-    files: List[str] = Field(default_factory=lambda: list(DEFAULT_INCLUDE_FILES))
+class IncludesConfig(ConfigModel):
+    files: list[str] = Field(default_factory=lambda: list(DEFAULT_INCLUDE_FILES))
 
 
-class ModulesConfig(BaseModel):
-    enabled: List[str] = Field(default_factory=lambda: ["moderation", "rss_announcer"])
+class ModulesConfig(ConfigModel):
+    enabled: list[str] = Field(default_factory=lambda: ["rss_announcer"])
+
+    @field_validator("enabled")
+    @classmethod
+    def validate_module_names(cls, value: list[str]) -> list[str]:
+        invalid = [name for name in value if not re.fullmatch(r"[A-Za-z0-9_]+", name)]
+        if invalid:
+            raise ValueError(f"invalid module names: {', '.join(invalid)}")
+        return list(dict.fromkeys(value))
 
 
-class Config(BaseModel):
+class Config(ConfigModel):
     bot: BotConfig
     network: NetworkConfig
     includes: IncludesConfig = Field(default_factory=IncludesConfig)
@@ -330,7 +402,7 @@ class Config(BaseModel):
     paths: PathsConfig = Field(default_factory=PathsConfig)
 
     @staticmethod
-    def _merge(base: Dict[str, Any], extra: Dict[str, Any]) -> Dict[str, Any]:
+    def _merge(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
         merged = dict(base)
         for key, value in extra.items():
             if isinstance(value, dict) and isinstance(merged.get(key), dict):
@@ -339,15 +411,57 @@ class Config(BaseModel):
                 merged[key] = value
         return merged
 
+    def validate_runtime_secrets(self) -> None:
+        mechanism = self.auth.sasl_mechanism.strip().upper()
+        if mechanism not in {"PLAIN", "EXTERNAL"}:
+            raise ValueError(f"Unsupported SASL mechanism: {mechanism}")
+        self.auth.sasl_mechanism = mechanism
+        if (
+            self.auth.sasl_enabled
+            and mechanism == "PLAIN"
+            and (not self.auth.sasl_username or not self.auth.sasl_password)
+        ):
+            raise ValueError("SASL PLAIN requires sasl_username and sasl_password")
+        if (
+            self.auth.sasl_enabled
+            and mechanism == "EXTERNAL"
+            and (not self.auth.certfp_enabled or not self.auth.certfp_cert_file)
+        ):
+            raise ValueError("SASL EXTERNAL requires CertFP and certfp_cert_file")
+
+    def resolve_relative_paths(self, base_dir: Path) -> None:
+        def resolve(value: str) -> str:
+            path = Path(value).expanduser()
+            return str(path if path.is_absolute() else base_dir / path)
+
+        self.plugins.directory = resolve(self.plugins.directory)
+        log_root = self.paths.log_root
+        if log_root == "./logs" and self.logging.log_dir != "logs":
+            log_root = self.logging.log_dir
+        self.paths.log_root = resolve(log_root)
+        self.logging.log_dir = self.paths.log_root
+        self.paths.data_root = resolve(self.paths.data_root)
+        self.moderation.log_file = resolve(self.moderation.log_file)
+        for attribute in ("certfp_cert_file", "certfp_key_file"):
+            value = getattr(self.auth, attribute)
+            if value:
+                setattr(self.auth, attribute, resolve(value))
+        for attribute in ("tls_ca_file", "tls_ca_dir", "tls_cert_file", "tls_key_file"):
+            value = getattr(self.feeds, attribute)
+            if value:
+                setattr(self.feeds, attribute, resolve(value))
+
     @staticmethod
-    def _normalize_include_files(raw: Dict[str, Any]) -> List[str]:
-        include_files: List[str] = []
+    def _normalize_include_files(raw: dict[str, Any]) -> list[str]:
+        include_files: list[str] = []
 
         include_value = raw.get("include")
         if isinstance(include_value, str):
             include_files.append(include_value)
         elif isinstance(include_value, list):
-            include_files.extend(str(item) for item in include_value if isinstance(item, str))
+            include_files.extend(
+                str(item) for item in include_value if isinstance(item, str)
+            )
 
         includes_section = raw.get("includes")
         if isinstance(includes_section, dict):
@@ -355,12 +469,14 @@ class Config(BaseModel):
             if isinstance(files_value, str):
                 include_files.append(files_value)
             elif isinstance(files_value, list):
-                include_files.extend(str(item) for item in files_value if isinstance(item, str))
+                include_files.extend(
+                    str(item) for item in files_value if isinstance(item, str)
+                )
 
         if not include_files:
             include_files = list(DEFAULT_INCLUDE_FILES)
 
-        deduped: List[str] = []
+        deduped: list[str] = []
         for filename in include_files:
             filename = filename.strip()
             if filename and filename not in deduped:
@@ -368,17 +484,23 @@ class Config(BaseModel):
         return deduped
 
     @classmethod
-    def load_from_env(cls) -> "Config":
+    def load_from_env(cls) -> Config:
         server = os.getenv(ENV_NETWORK_SERVER)
         nick = os.getenv(ENV_NETWORK_NICK)
-        missing = [name for name, value in ((ENV_NETWORK_SERVER, server), (ENV_NETWORK_NICK, nick)) if not value]
+        missing = [
+            name
+            for name, value in ((ENV_NETWORK_SERVER, server), (ENV_NETWORK_NICK, nick))
+            if not value
+        ]
         if missing:
-            raise ValueError(f"Missing required env vars for env-only config: {', '.join(missing)}")
+            raise ValueError(
+                f"Missing required env vars for env-only config: {', '.join(missing)}"
+            )
 
         user = os.getenv(ENV_NETWORK_USER) or nick
         realname = os.getenv(ENV_NETWORK_REALNAME) or nick
 
-        raw: Dict[str, Any] = {
+        raw: dict[str, Any] = {
             "bot": {},
             "network": {
                 "server": server,
@@ -400,28 +522,31 @@ class Config(BaseModel):
             config.auth.sasl_username = config.network.nick
         if config.auth.nickserv_enabled and not config.auth.nickserv_username:
             config.auth.nickserv_username = config.network.nick
+        config.validate_runtime_secrets()
+        config.resolve_relative_paths(Path.cwd())
         return config
 
     @classmethod
-    def load(cls, path: str | Path) -> "Config":
+    def load(cls, path: str | Path) -> Config:
         path_str = str(path)
         if path_str.lower() in {"env", "environment", "-"}:
             return cls.load_from_env()
 
         config_path = Path(path)
         if not config_path.exists():
-            return cls.load_from_env()
+            raise FileNotFoundError(f"Configuration path not found: {config_path}")
 
         base_file = config_path / "config.toml" if config_path.is_dir() else config_path
         if not base_file.exists():
-            return cls.load_from_env()
+            raise FileNotFoundError(f"Configuration file not found: {base_file}")
 
         with base_file.open("rb") as fh:
-            raw: Dict[str, Any] = tomllib.load(fh)
+            raw: dict[str, Any] = tomllib.load(fh)
 
         # Load configured fragments from the same directory
         config_dir = base_file.parent
         include_files = cls._normalize_include_files(raw)
+        raw.pop("include", None)
         for filename in include_files:
             extra_file = config_dir / filename
             if extra_file.exists():
@@ -441,6 +566,8 @@ class Config(BaseModel):
             config.auth.sasl_username = config.network.nick
         if config.auth.nickserv_enabled and not config.auth.nickserv_username:
             config.auth.nickserv_username = config.network.nick
+        config.validate_runtime_secrets()
+        config.resolve_relative_paths(config_dir)
         return config
 
 

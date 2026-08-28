@@ -63,7 +63,7 @@ max_items_per_manual = 4
 # - Beispiel 18: \x02\x0302,01[Blue/Black]\x03\x02 {title}  (blau auf schwarz, fett)
 # - Beispiel 19: \x02\x0303,01[Green/Black]\x03\x02 {title}  (grün auf schwarz, fett)
 # - Beispiel 20: \x02\x0304,01[Red/Black]\x03\x02 {title}  (rot auf schwarz, fett)
-template = "\x02[{feed}]\x02 \x0304{title}\x03 – {summary} {link}"
+template = "\u0002[{feed}]\u0002 \u000304{title}\u0003 – {summary} {link}"
 
 [[feeds.feeds]]
 name = "MSBulletins"
@@ -73,7 +73,7 @@ enabled = true
 min_interval_seconds = 600
 max_items_per_poll = 1
 max_items_per_manual = 3
-template = "\x02[MS Security]\x02 {title} - {link}"
+template = "\u0002[MS Security]\u0002 {title} - {link}"
 
 # ATOM example
 [[feeds.feeds]]
@@ -82,4 +82,4 @@ url = "https://github.com/ORG/REPO/releases.atom"
 channel = "#releases"
 enabled = true
 min_interval_seconds = 600
-template = "\x1F[{feed}]\x1F {title} {link}"
+template = "\u001F[{feed}]\u001F {title} {link}"

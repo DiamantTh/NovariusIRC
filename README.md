@@ -3,7 +3,7 @@
 NovariusIRC is a modular, multilingual IRC bot/daemon in the classic Eggdrop style. One process connects to exactly one IRC network; multi-network setups run multiple instances (or containers). The project targets Python 3.12+, ships a Poetry configuration, and exposes a CLI entry point `novariusirc`.
 
 ## Status
-This repository contains the first MVP skeleton: async IRC core with reconnect logic, config loading and validation, structured logging, i18n hooks, a command registry with role checks, a feed engine, and sample modules for moderation (warn-only) and RSS announcements. Worker pools use `ProcessPoolExecutor` with an optional `aioprocessing` extra for long-lived workers.
+This repository contains the first MVP skeleton: async IRC core with reconnect logic, config loading and validation, structured logging, i18n hooks, a shared command registry with role checks, a feed engine, core moderation, and RSS announcements. CPU-heavy jobs can use the standard-library `ProcessPoolExecutor` worker pool.
 
 ## Quickstart
 1. Recommended installation path:
@@ -52,11 +52,14 @@ podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
 
 ## Project Layout
 - `novariusirc/core`: core services (client, config, auth, commands, logging, i18n, feeds, plugins, workers)
-- `novariusirc/modules`: built-in modules (moderation, rss_announcer)
+- `novariusirc/modules`: built-in modules (currently `rss_announcer`)
 - `novariusirc/__main__.py`: CLI entry point
 - `config.example.toml`: starter configuration
 - `config/*.example.toml`: optional feature snippets (feeds, moderation, workers)
-- `licenses/Novara-Software-Freedom-License-EN.md`: project license text
+- `LICENSE`: GNU AGPLv3 license text
+- `VALUES.md`: non-binding project values and public-code position
+- `docs/LICENSING.md`: license history and reason for the change
+- `docs/PLUGINS.md`: external plugin loading, lifecycle, commands, and safety
 
 ## Notes
 - Structured STDOUT logging plus rotating files under `logs/`; optional journald if installed.
@@ -64,6 +67,13 @@ podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
 - Env-only startup is supported; set `NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK` (others optional) or pass `--config env`.
 - Feed engine caches ETag/Last-Modified, tracks seen item ids per feed, supports custom templates (`{feed}`, `{title}`, `{summary}`, `{link}`, `{published}`), per-feed enable/disable, and User-Agent rotation/TLS settings (see `config/feeds.example.toml`).
 - Feed overview command is available when `rss_announcer` is enabled: `!feed list [query]` (shows channels and active limits/options).
-- Built-in modules are configurable via `[modules].enabled` (e.g. `moderation`, `rss_announcer`).
+- Built-in modules are configurable via `[modules].enabled` (e.g. `rss_announcer`).
+- External plugins live in `plugins/`, but are loaded only when named in `[plugins].load`. Their commands use the same aliases, role checks, help listing, and rate limiting as built-in commands.
 - Multi-bot IRC environments should use different prefixes per bot (recommended) to avoid command collisions.
-- Moderation module operates in warn-only mode for the MVP.
+- Moderation is a core service configured through `[moderation]`; it must not also be loaded as a module.
+
+## License
+
+NovariusIRC is licensed under the GNU Affero General Public License, version 3
+or any later version (`AGPL-3.0-or-later`). See [LICENSE](LICENSE), the
+non-binding [project values](VALUES.md), and the [licensing history](docs/LICENSING.md).

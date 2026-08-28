@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
-from typing import Any, Callable
+from typing import Any
 
 from .config import WorkerConfig
 
@@ -22,4 +23,4 @@ class WorkerPool:
 
     async def shutdown(self) -> None:
         self.logger.info("Shutting down worker pool")
-        self.executor.shutdown(wait=False)
+        await asyncio.to_thread(self.executor.shutdown, wait=True, cancel_futures=True)

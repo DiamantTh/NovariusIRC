@@ -6,4 +6,3 @@
 - pyotp: MIT License (PyPI metadata)
 - uvloop: Apache-2.0 or MIT (dual-licensed; PyPI metadata)
 - systemd-python: LGPLv2+ (PyPI metadata)
-- aioprocessing: BSD License (PyPI metadata)

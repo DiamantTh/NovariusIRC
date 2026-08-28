@@ -1,8 +1,4 @@
-"""Plugin system for NovariusIRC.
-
-Allows loading external Python plugins from plugins/ directory.
-Plugins can define hooks for IRC events and custom commands.
-"""
+"""Built-in and explicitly enabled external plugin support."""
 
 from __future__ import annotations
 
@@ -10,115 +6,82 @@ import importlib
 import importlib.util
 import inspect
 import logging
-from abc import ABC
-from dataclasses import dataclass
+import re
+import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from types import ModuleType
+from typing import Any
 
 from .auth import AuthManager
-from .commands import CommandRegistry
+from .commands import CommandContext, CommandRegistry, command
 from .config import Config
 from .feeds import FeedEngine
 
+PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+HOOK_NAMES = ("on_message", "on_join", "on_part", "on_quit", "on_nick_change")
 
-@dataclass
-class CommandContext:
-    """Context passed to command/hook handlers."""
-
-    nick: str
-    channel: str
-    message: str
-    role: str  # "user", "admin", "owner"
-    irc: Any  # IRCClient reference
+__all__ = ["BasePlugin", "CommandContext", "Plugin", "PluginManager", "command"]
 
 
-class command:
-    """Decorator for plugin commands."""
+class BasePlugin:
+    """Base class for external plugins loaded from the configured directory."""
 
-    def __init__(self, role: str = "user", aliases: Optional[List[str]] = None):
-        """Initialize command decorator.
+    name = "plugin"
+    version = "1.0"
+    description = "A NovariusIRC plugin"
 
-        Args:
-            role: Minimum role required ("user", "admin", "owner")
-            aliases: Alternative command names
-        """
-        self.role = role
-        self.aliases = aliases or []
-
-    def __call__(self, func: Callable) -> Callable:
-        """Mark function as a command."""
-        func._is_command = True
-        func._command_role = self.role
-        func._command_aliases = self.aliases
-        func._command_name = func.__name__.replace("cmd_", "")
-        return func
-
-
-class BasePlugin(ABC):
-    """Base class for NovariusIRC plugins.
-
-    Subclass and define hook methods (on_message, on_join, etc.)
-    and commands (cmd_* methods with @command decorator).
-    """
-
-    name: str = "plugin"
-    version: str = "1.0"
-    description: str = "A NovariusIRC plugin"
+    config: Config
+    client: object | None
+    logger: logging.Logger
 
     async def on_load(self) -> None:
-        """Called when plugin is loaded."""
-        pass
+        """Run after services and commands have been registered."""
 
     async def on_unload(self) -> None:
-        """Called when plugin is unloaded."""
-        pass
+        """Run before the plugin is removed."""
 
     async def on_message(self, ctx: CommandContext) -> None:
-        """Called on every IRC PRIVMSG."""
-        pass
+        """Handle an IRC PRIVMSG that was not consumed by a command."""
 
     async def on_join(self, ctx: CommandContext) -> None:
-        """Called when user joins channel."""
-        pass
+        """Handle an IRC JOIN."""
 
     async def on_part(self, ctx: CommandContext) -> None:
-        """Called when user leaves channel."""
-        pass
+        """Handle an IRC PART."""
 
     async def on_quit(self, ctx: CommandContext) -> None:
-        """Called when user quits IRC."""
-        pass
+        """Handle an IRC QUIT."""
 
-    def get_commands(self) -> Dict[str, Dict[str, Any]]:
-        """Return dict of available commands."""
-        commands = {}
+    async def on_nick_change(self, ctx: CommandContext) -> None:
+        """Handle an IRC NICK change."""
 
-        for attr_name in dir(self):
-            if attr_name.startswith("_"):
+    def _bind_services(
+        self,
+        config: Config,
+        client: object | None,
+        logger: logging.Logger,
+    ) -> None:
+        self.config = config
+        self.client = client
+        self.logger = logger.getChild(self.name)
+
+    def get_commands(self) -> list[tuple[Callable[..., Any], dict[str, Any]]]:
+        commands: list[tuple[Callable[..., Any], dict[str, Any]]] = []
+        for attribute_name in dir(self):
+            if attribute_name.startswith("_"):
                 continue
-
-            attr = getattr(self, attr_name)
-            if not callable(attr):
-                continue
-
-            if not getattr(attr, "_is_command", False):
-                continue
-
-            cmd_name = getattr(attr, "_command_name", attr_name.replace("cmd_", ""))
-            commands[cmd_name] = {
-                "handler": attr,
-                "role": getattr(attr, "_command_role", "user"),
-                "aliases": getattr(attr, "_command_aliases", []),
-                "help": attr.__doc__ or "No description",
-            }
-
+            handler = getattr(self, attribute_name)
+            metadata = getattr(handler, "__novarius_command__", None)
+            if callable(handler) and metadata:
+                commands.append((handler, dict(metadata)))
         return commands
 
 
 class Plugin:
-    """Legacy plugin class for backward compatibility."""
+    """Compatibility base class for built-in modules."""
 
-    name: str = "plugin"
+    name = "plugin"
 
     def __init__(
         self,
@@ -133,23 +96,193 @@ class Plugin:
         self.feeds = feeds
         self.auth = auth
         self.logger = logger.getChild(self.name)
-        self.client = None
+        self.client: object | None = None
 
     def set_client(self, client: object) -> None:
         self.client = client
 
     async def start(self) -> None:
-        return None
+        """Start the built-in module."""
 
     async def stop(self) -> None:
-        return None
+        """Stop the built-in module."""
 
     async def on_message(self, nick: str, channel: str, message: str) -> None:
-        return None
+        """Handle an unconsumed message."""
+
+
+class PluginLoader:
+    """Load named external plugins and register them with core services."""
+
+    def __init__(
+        self,
+        plugin_dir: Path,
+        enabled_plugins: list[str],
+        commands: CommandRegistry,
+        config: Config,
+        logger: logging.Logger,
+        client: object | None,
+    ):
+        self.plugin_dir = plugin_dir
+        self.enabled_plugins = enabled_plugins
+        self.commands = commands
+        self.config = config
+        self.logger = logger.getChild("loader")
+        self.client = client
+        self.plugins: dict[str, BasePlugin] = {}
+        self.hooks: dict[str, list[Callable[[CommandContext], Any]]] = {
+            hook_name: [] for hook_name in HOOK_NAMES
+        }
+        self._owners: dict[str, str] = {}
+        self._module_names: dict[str, str] = {}
+
+    def set_client(self, client: object) -> None:
+        self.client = client
+        for plugin in self.plugins.values():
+            plugin.client = client
+
+    def _resolve_plugin(self, configured_name: str) -> tuple[Path, bool]:
+        if not PLUGIN_NAME_RE.fullmatch(configured_name):
+            raise ValueError(f"Invalid plugin name: {configured_name!r}")
+
+        file_path = self.plugin_dir / f"{configured_name}.py"
+        if file_path.is_file():
+            return file_path, False
+
+        package_init = self.plugin_dir / configured_name / "__init__.py"
+        if package_init.is_file():
+            return package_init, True
+
+        raise FileNotFoundError(
+            f"Configured plugin {configured_name!r} was not found in {self.plugin_dir}"
+        )
+
+    @staticmethod
+    def _plugin_class(module: ModuleType) -> type[BasePlugin]:
+        candidates = [
+            value
+            for _, value in inspect.getmembers(module, inspect.isclass)
+            if issubclass(value, BasePlugin)
+            and value is not BasePlugin
+            and value.__module__ == module.__name__
+        ]
+        if len(candidates) != 1:
+            raise RuntimeError(
+                "External plugin modules must define exactly one BasePlugin subclass"
+            )
+        return candidates[0]
+
+    async def load_all(self) -> int:
+        if not self.enabled_plugins:
+            self.logger.info("No external plugins configured")
+            return 0
+        if not self.plugin_dir.is_dir():
+            raise FileNotFoundError(f"Plugin directory not found: {self.plugin_dir}")
+
+        loaded = 0
+        failed: list[str] = []
+        for configured_name in self.enabled_plugins:
+            try:
+                await self.load(configured_name)
+                loaded += 1
+            except Exception:
+                failed.append(configured_name)
+                self.logger.exception("Failed to load plugin %s", configured_name)
+        if failed:
+            await self.unload_all()
+            names = ", ".join(failed)
+            raise RuntimeError(f"Failed to load configured plugins: {names}")
+        self.logger.info("Loaded %s external plugin(s)", loaded)
+        return loaded
+
+    async def load(self, configured_name: str) -> None:
+        plugin_path, is_package = self._resolve_plugin(configured_name)
+        module_name = f"novariusirc_external_{configured_name}"
+        search_locations = [str(plugin_path.parent)] if is_package else None
+        spec = importlib.util.spec_from_file_location(
+            module_name,
+            plugin_path,
+            submodule_search_locations=search_locations,
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"Cannot create module spec for {plugin_path}")
+
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        owner: str | None = None
+        try:
+            spec.loader.exec_module(module)
+            plugin_class = self._plugin_class(module)
+            plugin = plugin_class()
+            if not PLUGIN_NAME_RE.fullmatch(plugin.name):
+                raise ValueError(f"Invalid plugin class name: {plugin.name!r}")
+            if plugin.name in self.plugins:
+                raise ValueError(f"Plugin name already loaded: {plugin.name}")
+
+            owner = f"external:{plugin.name}"
+            plugin._bind_services(self.config, self.client, self.logger)
+            for handler, metadata in plugin.get_commands():
+                self.commands.register(
+                    metadata["name"],
+                    handler,
+                    roles=metadata["roles"],
+                    help_text=metadata["help_text"],
+                    aliases=metadata["aliases"],
+                    owner=owner,
+                )
+
+            await plugin.on_load()
+            self.plugins[plugin.name] = plugin
+            self._owners[plugin.name] = owner
+            self._module_names[plugin.name] = module_name
+            for hook_name in HOOK_NAMES:
+                implementation = getattr(type(plugin), hook_name, None)
+                if implementation is not getattr(BasePlugin, hook_name):
+                    self.hooks[hook_name].append(getattr(plugin, hook_name))
+            self.logger.info("Loaded plugin %s v%s", plugin.name, plugin.version)
+        except Exception:
+            if owner:
+                self.commands.unregister_owner(owner)
+            sys.modules.pop(module_name, None)
+            raise
+
+    async def unload(self, plugin_name: str) -> None:
+        plugin = self.plugins.get(plugin_name)
+        if plugin is None:
+            raise ValueError(f"Plugin not loaded: {plugin_name}")
+
+        try:
+            await plugin.on_unload()
+        except Exception:
+            self.logger.exception("Plugin %s failed during unload", plugin_name)
+        finally:
+            for hook_list in self.hooks.values():
+                hook_list[:] = [
+                    handler
+                    for handler in hook_list
+                    if getattr(handler, "__self__", None) is not plugin
+                ]
+            self.commands.unregister_owner(self._owners.pop(plugin_name))
+            sys.modules.pop(self._module_names.pop(plugin_name), None)
+            del self.plugins[plugin_name]
+            self.logger.info("Unloaded plugin %s", plugin_name)
+
+    async def unload_all(self) -> None:
+        for plugin_name in reversed(tuple(self.plugins)):
+            await self.unload(plugin_name)
+
+    async def trigger_hook(self, hook_name: str, ctx: CommandContext) -> None:
+        for handler in self.hooks.get(hook_name, ()):
+            try:
+                result = handler(ctx)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                self.logger.exception("Plugin hook %s failed", hook_name)
 
 
 class PluginManager:
-    """Manages legacy Plugin instances and new BasePlugin plugins."""
+    """Coordinate built-in modules and external plugins."""
 
     def __init__(
         self,
@@ -164,299 +297,130 @@ class PluginManager:
         self.feeds = feeds
         self.auth = auth
         self.logger = logger.getChild("plugins")
-        self.plugins: List[Plugin] = []
-        self.loader: Optional[PluginLoader] = None
-        self.client: Optional[object] = None
+        self.plugins: list[Plugin] = []
+        self.loader: PluginLoader | None = None
+        self.client: object | None = None
 
     def set_client(self, client: object) -> None:
         self.client = client
         for plugin in self.plugins:
             plugin.set_client(client)
+        if self.loader:
+            self.loader.set_client(client)
 
     def load_builtin(self) -> None:
-        """Load built-in plugins from novariusirc.modules."""
-        builtin = self.config.modules.enabled
-        for name in builtin:
+        failed: list[str] = []
+        for name in self.config.modules.enabled:
             try:
                 module = importlib.import_module(f"novariusirc.modules.{name}")
-                plugin_cls = getattr(module, "Plugin")
-                plugin: Plugin = plugin_cls(
-                    self.config, self.commands, self.feeds, self.auth, self.logger
+                plugin_class = module.Plugin
+                plugin = plugin_class(
+                    self.config,
+                    self.commands,
+                    self.feeds,
+                    self.auth,
+                    self.logger,
                 )
                 if self.client:
                     plugin.set_client(self.client)
                 self.plugins.append(plugin)
-                self.logger.info("Loaded plugin %s", name)
-            except Exception as exc:
-                self.logger.error("Failed to load plugin %s: %s", name, exc)
+                self.logger.info("Loaded built-in module %s", name)
+            except Exception:
+                failed.append(name)
+                self.logger.exception("Failed to load built-in module %s", name)
+        if failed:
+            raise RuntimeError(f"Failed to load built-in modules: {', '.join(failed)}")
 
-    async def load_plugins(self, plugin_dir: Optional[Path] = None) -> None:
-        """Load external plugins from directory.
-
-        Args:
-            plugin_dir: Directory containing plugins (default: ./plugins)
-        """
-        self.loader = PluginLoader(plugin_dir)
+    async def load_plugins(self, plugin_dir: Path | None = None) -> None:
+        directory = plugin_dir or Path.cwd() / self.config.plugins.directory
+        self.loader = PluginLoader(
+            directory,
+            self.config.plugins.load,
+            self.commands,
+            self.config,
+            self.logger,
+            self.client,
+        )
         await self.loader.load_all()
 
     async def start(self) -> None:
-        """Start all plugins."""
         for plugin in self.plugins:
             await plugin.start()
 
     async def stop(self) -> None:
-        """Stop all plugins."""
-        for plugin in self.plugins:
+        if self.loader:
+            await self.loader.unload_all()
+        for plugin in reversed(self.plugins):
             await plugin.stop()
 
-    def _role_for_hostmask(self, nick: str, hostmask: str) -> str:
-        """Get highest role for user based on hostmask."""
-        roles = self.auth.roles_for_hostmask(nick, hostmask)
-        if "owner" in roles:
-            return "owner"
-        if "admin" in roles:
-            return "admin"
-        return "user"
+    def _context(
+        self,
+        nick: str,
+        channel: str | None,
+        message: str,
+        hostmask: str,
+    ) -> CommandContext:
+        resolved_hostmask = hostmask or f"{nick}!unknown@unknown"
+        return CommandContext(
+            nick=nick,
+            hostmask=resolved_hostmask,
+            channel=channel,
+            message=message,
+            config=self.config,
+            client=self.client,
+            logger=self.logger,
+            roles=self.auth.roles_for_hostmask(nick, resolved_hostmask),
+        )
 
-    async def on_message(self, nick: str, channel: str, message: str, hostmask: str = "") -> None:
-        """Trigger on_message hook for all plugins.
-        
-        Args:
-            nick: Sender nickname
-            channel: Target channel or nick (for PM)
-            message: Message content
-            hostmask: Full hostmask nick!user@host (if available)
-        """
+    async def on_message(
+        self,
+        nick: str,
+        channel: str,
+        message: str,
+        hostmask: str = "",
+    ) -> None:
         for plugin in self.plugins:
             try:
                 await plugin.on_message(nick, channel, message)
-            except Exception as exc:
-                self.logger.error("Plugin %s failed while handling message: %s", plugin.name, exc)
-
+            except Exception:
+                self.logger.exception("Built-in plugin %s failed", plugin.name)
         if self.loader:
-            hostmask = hostmask or f"{nick}!unknown@unknown"
-            ctx = CommandContext(
-                nick=nick,
-                channel=channel,
-                message=message,
-                role=self._role_for_hostmask(nick, hostmask),
-                irc=self.client,
+            await self.loader.trigger_hook(
+                "on_message", self._context(nick, channel, message, hostmask)
             )
-            await self.loader.trigger_hook("on_message", ctx)
 
     async def on_join(self, nick: str, channel: str, hostmask: str = "") -> None:
         if self.loader:
-            hostmask = hostmask or f"{nick}!unknown@unknown"
-            ctx = CommandContext(
-                nick=nick,
-                channel=channel,
-                message="",
-                role=self._role_for_hostmask(nick, hostmask),
-                irc=self.client,
+            await self.loader.trigger_hook(
+                "on_join", self._context(nick, channel, "", hostmask)
             )
-            await self.loader.trigger_hook("on_join", ctx)
 
-    async def on_part(self, nick: str, channel: str, message: str, hostmask: str = "") -> None:
+    async def on_part(
+        self,
+        nick: str,
+        channel: str,
+        message: str,
+        hostmask: str = "",
+    ) -> None:
         if self.loader:
-            hostmask = hostmask or f"{nick}!unknown@unknown"
-            ctx = CommandContext(
-                nick=nick,
-                channel=channel,
-                message=message,
-                role=self._role_for_hostmask(nick, hostmask),
-                irc=self.client,
+            await self.loader.trigger_hook(
+                "on_part", self._context(nick, channel, message, hostmask)
             )
-            await self.loader.trigger_hook("on_part", ctx)
 
     async def on_quit(self, nick: str, message: str, hostmask: str = "") -> None:
         if self.loader:
-            hostmask = hostmask or f"{nick}!unknown@unknown"
-            ctx = CommandContext(
-                nick=nick,
-                channel="",
-                message=message,
-                role=self._role_for_hostmask(nick, hostmask),
-                irc=self.client,
+            await self.loader.trigger_hook(
+                "on_quit", self._context(nick, None, message, hostmask)
             )
-            await self.loader.trigger_hook("on_quit", ctx)
 
-    async def on_nick_change(self, old_nick: str, new_nick: str) -> None:
+    async def on_nick_change(
+        self,
+        old_nick: str,
+        new_nick: str,
+        hostmask: str = "",
+    ) -> None:
         if self.loader:
-            ctx = CommandContext(
-                nick=new_nick,
-                channel="",
-                message=f"{old_nick}->{new_nick}",
-                role=self._role_for_nick(new_nick),
-                irc=self.client,
+            await self.loader.trigger_hook(
+                "on_nick_change",
+                self._context(new_nick, None, f"{old_nick}->{new_nick}", hostmask),
             )
-            await self.loader.trigger_hook("on_nick_change", ctx)
-
-
-class PluginLoader:
-    """Loads and manages BasePlugin plugins from plugins/ directory."""
-
-    def __init__(self, plugin_dir: Optional[Path] = None):
-        """Initialize plugin loader.
-
-        Args:
-            plugin_dir: Directory containing plugins (default: ./plugins)
-        """
-        self.plugin_dir = plugin_dir or Path.cwd() / "plugins"
-        self.plugins: Dict[str, BasePlugin] = {}
-        self.hooks: Dict[str, List[Callable]] = {
-            "on_message": [],
-            "on_join": [],
-            "on_part": [],
-            "on_quit": [],
-            "on_nick_change": [],
-        }
-        self.commands: Dict[str, Dict[str, Any]] = {}
-        self.logger = logging.getLogger("plugins.loader")
-
-    async def load_all(self) -> int:
-        """Load all plugins from plugin directory.
-
-        Returns:
-            Number of plugins loaded
-        """
-        if not self.plugin_dir.exists():
-            self.logger.debug(f"Plugin directory not found: {self.plugin_dir}")
-            return 0
-
-        loaded = 0
-        for plugin_file in sorted(self.plugin_dir.glob("*.py")):
-            if plugin_file.name.startswith("_"):
-                continue
-
-            try:
-                await self.load(plugin_file)
-                loaded += 1
-            except Exception as e:
-                self.logger.error(f"Failed to load plugin {plugin_file.name}: {e}")
-
-        if loaded > 0:
-            self.logger.info(f"Loaded {loaded} plugins from {self.plugin_dir}")
-        return loaded
-
-    async def load(self, plugin_path: Path) -> None:
-        """Load a single plugin.
-
-        Args:
-            plugin_path: Path to plugin .py file
-        """
-        if not plugin_path.exists():
-            raise FileNotFoundError(f"Plugin not found: {plugin_path}")
-
-        # Import module
-        spec = importlib.util.spec_from_file_location(plugin_path.stem, plugin_path)
-        if not spec or not spec.loader:
-            raise RuntimeError(f"Cannot load module spec: {plugin_path}")
-
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        # Find BasePlugin subclasses
-        for name, obj in inspect.getmembers(module):
-            if not inspect.isclass(obj):
-                continue
-
-            if not issubclass(obj, BasePlugin) or obj is BasePlugin:
-                continue
-
-            # Instantiate and register plugin
-            plugin = obj()
-            self.plugins[plugin.name] = plugin
-
-            # Register hooks
-            for hook_name in self.hooks.keys():
-                if hasattr(plugin, hook_name):
-                    method = getattr(plugin, hook_name)
-                    self.hooks[hook_name].append(method)
-
-            # Register commands
-            for cmd_name, cmd_info in plugin.get_commands().items():
-                self.commands[cmd_name] = cmd_info
-
-            self.logger.info(f"Loaded plugin: {plugin.name} v{plugin.version}")
-            await plugin.on_load()
-
-    async def unload(self, plugin_name: str) -> None:
-        """Unload a plugin.
-
-        Args:
-            plugin_name: Name of plugin to unload
-        """
-        if plugin_name not in self.plugins:
-            raise ValueError(f"Plugin not found: {plugin_name}")
-
-        plugin = self.plugins[plugin_name]
-        await plugin.on_unload()
-
-        # Remove hooks
-        for hook_list in self.hooks.values():
-            hook_list[:] = [h for h in hook_list if h.__self__ is not plugin]
-
-        # Remove commands
-        for cmd_name in list(self.commands.keys()):
-            if self.commands[cmd_name]["handler"].__self__ is plugin:
-                del self.commands[cmd_name]
-
-        del self.plugins[plugin_name]
-        self.logger.info(f"Unloaded plugin: {plugin_name}")
-
-    async def trigger_hook(self, hook_name: str, ctx: CommandContext) -> None:
-        """Trigger a hook for all registered plugins.
-
-        Args:
-            hook_name: Name of hook (e.g., "on_message")
-            ctx: Command context
-        """
-        if hook_name not in self.hooks:
-            return
-
-        for handler in self.hooks[hook_name]:
-            try:
-                await handler(ctx)
-            except Exception as e:
-                self.logger.error(f"Plugin hook error in {hook_name}: {e}", exc_info=True)
-
-    def get_command(self, cmd_name: str) -> Optional[Dict[str, Any]]:
-        """Get command info by name.
-
-        Args:
-            cmd_name: Command name
-
-        Returns:
-            Command info dict or None if not found
-        """
-        # Check direct match
-        if cmd_name in self.commands:
-            return self.commands[cmd_name]
-
-        # Check aliases
-        for cmd_info in self.commands.values():
-            if cmd_name in cmd_info.get("aliases", []):
-                return cmd_info
-
-        return None
-
-    def list_commands(self, role: str = "user") -> Dict[str, str]:
-        """List all available commands for a role.
-
-        Args:
-            role: User role ("user", "admin", "owner")
-
-        Returns:
-            Dict of command_name -> help_text
-        """
-        commands = {}
-
-        role_hierarchy = {"user": 0, "admin": 1, "owner": 2}
-        user_level = role_hierarchy.get(role, 0)
-
-        for cmd_name, cmd_info in self.commands.items():
-            required_level = role_hierarchy.get(cmd_info["role"], 0)
-            if user_level >= required_level:
-                commands[cmd_name] = cmd_info["help"]
-
-        return commands

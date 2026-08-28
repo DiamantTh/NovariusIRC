@@ -1,16 +1,17 @@
-"""Command registry and dispatch."""
+"""Command registration, authorization, and dispatch."""
 
 from __future__ import annotations
 
-import asyncio
+import inspect
 import logging
 import time
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Dict, Iterable, List, Optional, Tuple
 
 from .i18n import gettext_lazy as _
 
 ROLE_ORDER = ("user", "admin", "owner")
+CommandHandler = Callable[["CommandContext", list[str]], Awaitable[None] | None]
 
 
 def _role_rank(role: str) -> int:
@@ -21,72 +22,135 @@ def _role_rank(role: str) -> int:
 
 
 def _roles_satisfy(user_roles: Iterable[str], required: Iterable[str]) -> bool:
-    if not required:
+    required_roles = tuple(required)
+    if not required_roles:
         return True
     if "owner" in user_roles:
         return True
-    max_user = max((_role_rank(r) for r in user_roles), default=0)
-    max_required = max((_role_rank(r) for r in required), default=0)
+    max_user = max((_role_rank(role) for role in user_roles), default=0)
+    max_required = max((_role_rank(role) for role in required_roles), default=0)
     return max_user >= max_required
 
 
 @dataclass
 class CommandContext:
     nick: str
-    hostmask: str  # nick!user@host
-    channel: Optional[str]
+    hostmask: str
+    channel: str | None
     message: str
     config: object
     client: object
     logger: logging.Logger
-    roles: List[str]
+    roles: list[str]
 
     async def reply(self, text: str) -> None:
         target = self.channel or self.nick
         await self.client.send_privmsg(target, text)
 
 
+@dataclass(frozen=True)
 class Command:
-    def __init__(
-        self,
-        name: str,
-        handler: Callable[[CommandContext, List[str]], Awaitable[None]],
-        roles: Tuple[str, ...] = ("user",),
-        help_text: str = "",
-    ):
-        self.name = name
-        self.handler = handler
-        self.roles = roles
-        self.help_text = help_text
+    name: str
+    handler: CommandHandler
+    roles: tuple[str, ...] = ("user",)
+    help_text: str = ""
+    aliases: tuple[str, ...] = ()
+    owner: str | None = None
 
 
 class CommandRegistry:
     def __init__(self, prefix: str = "!", rate_limit_seconds: float = 0.0):
         self.prefix = prefix
-        self.rate_limit_seconds = rate_limit_seconds
-        self._commands: Dict[str, Command] = {}
-        self._last_exec: Dict[tuple[str, str], float] = {}
+        self.rate_limit_seconds = max(0.0, rate_limit_seconds)
+        self._commands: dict[str, Command] = {}
+        self._primary_commands: dict[str, Command] = {}
+        self._last_exec: dict[tuple[str, str], float] = {}
+
+    @staticmethod
+    def _normalize_name(name: str) -> str:
+        normalized = name.strip().lower()
+        if not normalized or any(character.isspace() for character in normalized):
+            raise ValueError(f"Invalid command name: {name!r}")
+        return normalized
 
     def register(
         self,
         name: str,
-        handler: Callable[[CommandContext, List[str]], Awaitable[None]],
-        roles: Tuple[str, ...] = ("user",),
+        handler: CommandHandler,
+        roles: Sequence[str] = ("user",),
         help_text: str = "",
+        aliases: Sequence[str] = (),
+        owner: str | None = None,
     ) -> None:
-        self._commands[name] = Command(name=name, handler=handler, roles=roles, help_text=help_text)
+        command_name = self._normalize_name(name)
+        command_aliases = tuple(self._normalize_name(alias) for alias in aliases)
+        invalid_roles = [role for role in roles if role not in ROLE_ORDER]
+        if invalid_roles:
+            raise ValueError(f"Unknown command roles: {', '.join(invalid_roles)}")
+        all_names = (command_name, *command_aliases)
 
-    def get(self, name: str) -> Optional[Command]:
-        return self._commands.get(name)
+        if len(set(all_names)) != len(all_names):
+            raise ValueError(f"Duplicate names declared for command {command_name!r}")
+        collisions = [
+            candidate for candidate in all_names if candidate in self._commands
+        ]
+        if collisions:
+            raise ValueError(
+                f"Command name already registered: {', '.join(collisions)}"
+            )
 
-    def list_commands(self) -> List[Command]:
-        return sorted(self._commands.values(), key=lambda c: c.name)
+        command_entry = Command(
+            name=command_name,
+            handler=handler,
+            roles=tuple(roles),
+            help_text=help_text,
+            aliases=command_aliases,
+            owner=owner,
+        )
+        self._primary_commands[command_name] = command_entry
+        for candidate in all_names:
+            self._commands[candidate] = command_entry
 
-    def parse(self, message: str) -> Optional[Tuple[str, List[str]]]:
+    def unregister(self, name: str) -> bool:
+        command_entry = self.get(name)
+        if command_entry is None:
+            return False
+        self._primary_commands.pop(command_entry.name, None)
+        for candidate in (command_entry.name, *command_entry.aliases):
+            self._commands.pop(candidate, None)
+        self._last_exec = {
+            key: value
+            for key, value in self._last_exec.items()
+            if key[1] != command_entry.name
+        }
+        return True
+
+    def unregister_owner(self, owner: str) -> None:
+        names = [
+            command_entry.name
+            for command_entry in self._primary_commands.values()
+            if command_entry.owner == owner
+        ]
+        for name in names:
+            self.unregister(name)
+
+    def get(self, name: str) -> Command | None:
+        return self._commands.get(name.strip().lower())
+
+    def list_commands(self, roles: Iterable[str] | None = None) -> list[Command]:
+        commands: Iterable[Command] = self._primary_commands.values()
+        if roles is not None:
+            commands = (
+                command_entry
+                for command_entry in commands
+                if _roles_satisfy(roles, command_entry.roles)
+            )
+        return sorted(commands, key=lambda item: item.name)
+
+    def parse(self, message: str) -> tuple[str, list[str]] | None:
         if not message.startswith(self.prefix):
             return None
-        without_prefix = message[len(self.prefix) :]
-        parts = without_prefix.strip().split()
+        parts = message[len(self.prefix) :].strip().split()
         if not parts:
             return None
         name, *args = parts
@@ -94,42 +158,56 @@ class CommandRegistry:
 
     async def dispatch(self, ctx: CommandContext) -> bool:
         parsed = self.parse(ctx.message)
-        if not parsed:
+        if parsed is None:
             return False
         name, args = parsed
-        command = self.get(name)
-        if not command:
+        command_entry = self.get(name)
+        if command_entry is None:
             return False
+
+        if not _roles_satisfy(ctx.roles, command_entry.roles):
+            await ctx.reply(_("You are not allowed to run this command."))
+            return True
+
         if self.rate_limit_seconds > 0:
-            key = (ctx.nick.lower(), command.name)
+            identity = ctx.hostmask.partition("!")[2] or ctx.nick
+            key = (identity.lower(), command_entry.name)
             now = time.monotonic()
             last = self._last_exec.get(key, 0.0)
             if now - last < self.rate_limit_seconds:
                 await ctx.reply(_("Please slow down."))
                 return True
             self._last_exec[key] = now
-        if not _roles_satisfy(ctx.roles, command.roles):
-            await ctx.reply(_("You are not allowed to run this command."))
-            return True
+
         try:
-            if asyncio.iscoroutinefunction(command.handler):
-                await command.handler(ctx, args)
-            else:
-                command.handler(ctx, args)
-        except Exception as exc:
-            ctx.logger.error("Command %s failed: %s", name, exc)
+            result = command_entry.handler(ctx, args)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            ctx.logger.exception("Command %s failed", command_entry.name)
             await ctx.reply(_("Command failed."))
         return True
 
 
 def command(
-    name: Optional[str] = None,
-    roles: Tuple[str, ...] = ("user",),
+    name: str | None = None,
+    *,
+    roles: Sequence[str] = ("user",),
+    role: str | None = None,
+    aliases: Sequence[str] = (),
     help_text: str = "",
-) -> Callable[[Callable[[CommandContext, List[str]], Awaitable[None]]], Callable]:
-    def decorator(func: Callable[[CommandContext, List[str]], Awaitable[None]]):
-        cmd_name = name or func.__name__
-        setattr(func, "__novarius_command__", {"name": cmd_name, "roles": roles, "help_text": help_text})
+) -> Callable[[CommandHandler], CommandHandler]:
+    """Mark a plugin method for registration in the central registry."""
+
+    required_roles = (role,) if role is not None else tuple(roles)
+
+    def decorator(func: CommandHandler) -> CommandHandler:
+        func.__dict__["__novarius_command__"] = {
+            "name": name or func.__name__.removeprefix("cmd_"),
+            "roles": required_roles,
+            "aliases": tuple(aliases),
+            "help_text": help_text or (func.__doc__ or "No description").strip(),
+        }
         return func
 
     return decorator

@@ -46,6 +46,7 @@ totp_valid_window = 1        # ±30s Toleranz
 2. **QR-Code** (für SHA-1 kompatibel):
    ```python
    import pyotp
+
    secret = "JBSWY3DPEHPK3PXP"
    totp = pyotp.TOTP(secret, digits=6, digest="sha1")
    print(totp.provisioning_uri("NovariusIRC", issuer_name="IRC Bot"))
@@ -60,7 +61,7 @@ import os
 
 # Generiere kryptographisch sicheres Secret
 random_bytes = os.urandom(32)  # 256 Bit
-secret = base64.b32encode(random_bytes).decode('utf-8').strip('=')
+secret = base64.b32encode(random_bytes).decode("utf-8").strip("=")
 print(f"TOTP Secret: {secret}")
 ```
 

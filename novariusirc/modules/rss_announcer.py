@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from novariusirc.core.i18n import gettext_lazy as _
 from novariusirc.core.plugins import Plugin
@@ -10,6 +10,7 @@ from novariusirc.core.plugins import Plugin
 
 class Plugin(Plugin):
     name = "rss_announcer"
+    command_owner = "builtin:rss_announcer"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,13 +30,19 @@ class Plugin(Plugin):
             self._cmd_rssfetch,
             roles=("admin",),
             help_text="Fetch RSS/ATOM feeds now (optional limit).",
+            owner=self.command_owner,
         )
         self.commands.register(
             "feed",
             self._cmd_feed,
             roles=("user",),
             help_text="Show feed overview. Usage: !feed list [query]",
+            owner=self.command_owner,
         )
+
+    async def stop(self) -> None:
+        self.feeds.unsubscribe(self._announce)
+        self.commands.unregister_owner(self.command_owner)
 
     async def _cmd_rssfetch(self, ctx, args) -> None:
         limit = None
@@ -60,6 +67,7 @@ class Plugin(Plugin):
         query = " ".join(args[1:]).strip().lower()
         feeds = list(self.feeds.feed_definitions.values())
         if query:
+
             def _matches(feed) -> bool:
                 channels = feed.channels or ([feed.channel] if feed.channel else [])
                 haystack = " ".join([feed.name, feed.url, " ".join(channels)]).lower()
@@ -80,7 +88,11 @@ class Plugin(Plugin):
         for feed in feeds:
             channels = feed.channels or ([feed.channel] if feed.channel else [])
             channels_text = ",".join(channels) if channels else "-"
-            min_interval = feed.min_interval_seconds if feed.min_interval_seconds is not None else "-"
+            min_interval = (
+                feed.min_interval_seconds
+                if feed.min_interval_seconds is not None
+                else "-"
+            )
             poll_limit = (
                 feed.max_items_per_poll
                 if feed.max_items_per_poll is not None
@@ -93,15 +105,8 @@ class Plugin(Plugin):
             )
             mode = "on" if feed.enabled else "off"
             msg = (
-                "{name} [{mode}] ch={channels} poll={poll} manual={manual} min={min_interval}s url={url}"
-            ).format(
-                name=feed.name,
-                mode=mode,
-                channels=channels_text,
-                poll=poll_limit,
-                manual=manual_limit,
-                min_interval=min_interval,
-                url=feed.url,
+                f"{feed.name} [{mode}] ch={channels_text} poll={poll_limit} manual={manual_limit} "
+                f"min={min_interval}s url={feed.url}"
             )
             await ctx.reply(msg)
 
@@ -120,7 +125,7 @@ class Plugin(Plugin):
         }
         template = feed.template or "[{feed}] {title} – {summary} {link}"
         message = self._safe_format(template, data).strip()
-        now = datetime.now()
+        now = datetime.now(UTC)
         for channel in channels:
             interval = feed.per_channel_interval.get(channel, feed.min_interval_seconds)
             if interval:

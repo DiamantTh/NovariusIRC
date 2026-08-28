@@ -6,7 +6,6 @@ import base64
 import fnmatch
 import logging
 import time
-from typing import Dict, Optional, Tuple
 
 import pyotp
 
@@ -15,7 +14,7 @@ from .config import AuthConfig, RolesConfig
 
 def hostmask_match(pattern: str, hostmask: str) -> bool:
     """Match hostmask against pattern with wildcards (* and ?).
-    
+
     Examples:
         *!*@*.trusted.net matches anyone@*.trusted.net
         admin!*@* matches nick 'admin' from any host
@@ -27,7 +26,7 @@ def hostmask_match(pattern: str, hostmask: str) -> bool:
 class AuthSessionManager:
     def __init__(self, ttl_seconds: int = 1800):
         self.ttl_seconds = ttl_seconds
-        self.sessions: Dict[str, float] = {}
+        self.sessions: dict[str, float] = {}
 
     def start(self, nick: str) -> None:
         self.sessions[nick.lower()] = time.time() + self.ttl_seconds
@@ -45,15 +44,24 @@ class AuthSessionManager:
         """End auth session for nick. Returns True if session existed."""
         return self.sessions.pop(nick.lower(), None) is not None
 
+    def rename(self, old_nick: str, new_nick: str) -> None:
+        expires = self.sessions.pop(old_nick.lower(), None)
+        if expires and expires >= time.time():
+            self.sessions[new_nick.lower()] = expires
+
 
 class AuthManager:
-    def __init__(self, auth_config: AuthConfig, roles: RolesConfig, logger: logging.Logger):
+    def __init__(
+        self, auth_config: AuthConfig, roles: RolesConfig, logger: logging.Logger
+    ):
         self.auth_config = auth_config
         self.roles_config = roles
         self.logger = logger
-        self.sessions = AuthSessionManager(ttl_seconds=auth_config.session_timeout_seconds)
+        self.sessions = AuthSessionManager(
+            ttl_seconds=auth_config.session_timeout_seconds
+        )
 
-    def sasl_credentials(self) -> Optional[Tuple[str, str]]:
+    def sasl_credentials(self) -> tuple[str, str] | None:
         if not self.auth_config.sasl_enabled:
             return None
         if not self.auth_config.sasl_username or not self.auth_config.sasl_password:
@@ -65,9 +73,11 @@ class AuthManager:
         return mechanism or "PLAIN"
 
     def certfp_ready(self) -> bool:
-        return bool(self.auth_config.certfp_enabled and self.auth_config.certfp_cert_file)
+        return bool(
+            self.auth_config.certfp_enabled and self.auth_config.certfp_cert_file
+        )
 
-    def sasl_plain_payload(self) -> Optional[str]:
+    def sasl_plain_payload(self) -> str | None:
         creds = self.sasl_credentials()
         if not creds:
             return None
@@ -75,20 +85,23 @@ class AuthManager:
         payload = f"{username}\0{username}\0{password}".encode()
         return base64.b64encode(payload).decode()
 
-    def nickserv_credentials(self) -> Optional[Tuple[str, str]]:
+    def nickserv_credentials(self) -> tuple[str, str] | None:
         if not self.auth_config.nickserv_enabled:
             return None
-        if not self.auth_config.nickserv_username or not self.auth_config.nickserv_password:
+        if (
+            not self.auth_config.nickserv_username
+            or not self.auth_config.nickserv_password
+        ):
             return None
         return self.auth_config.nickserv_username, self.auth_config.nickserv_password
 
-    def verify_totp(self, code: str, secret: Optional[str] = None) -> bool:
+    def verify_totp(self, code: str, secret: str | None = None) -> bool:
         """Verify TOTP code against secret with configured parameters.
-        
+
         Args:
             code: TOTP code to verify
             secret: Optional specific secret (uses global if not provided)
-        
+
         TOTP Parameters (RFC 6238):
             digest: sha1 (legacy), sha256, sha512
             digits: 6 (standard) or 8 (higher security)
@@ -99,7 +112,7 @@ class AuthManager:
         if not secret:
             self.logger.warning("TOTP secret unavailable; cannot verify code")
             return False
-        
+
         totp = pyotp.TOTP(
             secret,
             digits=self.auth_config.totp_digits,
@@ -110,7 +123,7 @@ class AuthManager:
 
     def start_totp_session(self, nick: str, code: str, hostmask: str = "") -> bool:
         """Start TOTP session if code is valid for user's secret.
-        
+
         Args:
             nick: User nickname (for session tracking)
             code: TOTP code
@@ -130,7 +143,7 @@ class AuthManager:
                     if hostmask_match(admin.hostmask, hostmask) and admin.totp_secret:
                         user_secret = admin.totp_secret
                         break
-        
+
         if not self.verify_totp(code, secret=user_secret):
             return False
         self.sessions.start(nick)
@@ -140,34 +153,41 @@ class AuthManager:
         """End TOTP session for nick. Returns True if session existed."""
         return self.sessions.end(nick)
 
+    def rename_nick(self, old_nick: str, new_nick: str) -> None:
+        self.sessions.rename(old_nick, new_nick)
+
     def roles_for_hostmask(self, nick: str, hostmask: str) -> list[str]:
         """Determine roles for user based on hostmask pattern matching.
-        
+
         Args:
             nick: User nickname (for TOTP session tracking)
             hostmask: Full hostmask nick!user@host
-        
+
         Returns:
             List of roles (always includes 'user', may include 'admin', 'owner')
         """
         roles = ["user"]
-        
+
         # Check admins (with optional TOTP)
         for admin in self.roles_config.admins:
             if hostmask_match(admin.hostmask, hostmask):
                 if admin.require_totp and not self.sessions.is_active(nick):
-                    self.logger.debug("Admin %s matched but requires TOTP auth", hostmask)
+                    self.logger.debug(
+                        "Admin %s matched but requires TOTP auth", hostmask
+                    )
                     break
                 roles.append("admin")
                 break
-        
+
         # Check owners
         for owner in self.roles_config.owners:
             if hostmask_match(owner.hostmask, hostmask):
                 if owner.require_totp and not self.sessions.is_active(nick):
-                    self.logger.debug("Owner %s matched but requires TOTP auth", hostmask)
+                    self.logger.debug(
+                        "Owner %s matched but requires TOTP auth", hostmask
+                    )
                     break
                 roles.append("owner")
                 break
-        
+
         return roles
