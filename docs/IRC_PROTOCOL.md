@@ -31,7 +31,12 @@ and offered by the server.
 The core parses the 512-byte IRC message body limit, IRCv3's extended tag
 budget, prefixes, all legal final-parameter forms, and UTF-8 without splitting
 outgoing code points. `PING`/`PONG` and registration traffic bypass the
-rate-limited output queue.
+rate-limited output queue. Direct CTCP `PING` requests are echoed through a
+size-limited `NOTICE`; CTCP `ACTION` is exposed to plugins as an action event.
+
+Connection loss, idle reads, and malformed oversized input trigger a clean
+reconnect. The configured retry delay grows to its final value without wrapping
+back to the shortest delay, and resets after a connection was established.
 
 `RPL_ISUPPORT` currently drives `CASEMAPPING`, `CHANTYPES`, `PREFIX`,
 `CHANMODES`, `STATUSMSG`, `NETWORK`, common length limits, `TARGMAX`, and

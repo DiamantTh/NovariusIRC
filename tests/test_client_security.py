@@ -39,6 +39,15 @@ class Reader:
         return line
 
 
+class IdleReader:
+    def at_eof(self) -> bool:
+        return False
+
+    async def readline(self) -> bytes:
+        await asyncio.Event().wait()
+        return b""
+
+
 class SaslAuth:
     @staticmethod
     def sasl_mechanism() -> str:
@@ -85,6 +94,71 @@ def test_ping_token_is_returned_unchanged() -> None:
     instance = client()
     asyncio.run(instance._handle_line("PING :opaque token with spaces"))
     assert bytes(instance.writer.data) == b"PONG :opaque token with spaces\r\n"  # type: ignore[union-attr]
+
+
+def test_ctcp_ping_to_bot_is_echoed_in_notice() -> None:
+    instance = client()
+    asyncio.run(
+        instance._handle_line(
+            ":Nick!user@host PRIVMSG bot :\x01PING opaque token 123\x01"
+        )
+    )
+    assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
+        b"NOTICE Nick :\x01PING opaque token 123\x01\r\n"
+    )
+
+
+def test_notice_respects_wire_limit_without_splitting_utf8() -> None:
+    instance = client()
+    asyncio.run(instance.send_notice("Nick", "ä" * 400))
+    payload = bytes(instance.writer.data)  # type: ignore[union-attr]
+    assert len(payload) <= 512
+    payload[:-2].decode("utf-8")
+
+
+def test_user_notice_cannot_trigger_server_quote_pong() -> None:
+    instance = client()
+    asyncio.run(
+        instance._handle_quote_pong("Nick!user@host", "Please send PONG :attacker")
+    )
+    assert not instance.writer.data  # type: ignore[union-attr]
+
+    asyncio.run(instance._handle_quote_pong("irc.example.test", "PONG :server-cookie"))
+    assert bytes(instance.writer.data) == b"PONG :server-cookie\r\n"  # type: ignore[union-attr]
+
+
+def test_idle_timeout_has_an_actionable_connection_error() -> None:
+    instance = client()
+    instance.config.network.idle_timeout_seconds = 0.01
+    instance.reader = IdleReader()  # type: ignore[assignment]
+
+    with pytest.raises(ConnectionError, match="received no data for 0.01 seconds"):
+        asyncio.run(instance._listen())
+
+
+def test_reconnect_backoff_saturates_and_resets_after_connection() -> None:
+    async def scenario() -> None:
+        instance = client()
+        outcomes = [False, False, False, False, False, True]
+        delays: list[int] = []
+
+        async def connect_once() -> None:
+            if not outcomes:
+                instance._stop.set()
+                return
+            if not outcomes.pop(0):
+                raise ConnectionError("test failure")
+
+        async def wait_for_reconnect(delay: int) -> None:
+            delays.append(delay)
+
+        instance._connect_once = connect_once  # type: ignore[method-assign]
+        instance._wait_for_reconnect = wait_for_reconnect  # type: ignore[method-assign]
+        await instance.run()
+
+        assert delays == [10, 20, 40, 80, 80, 10]
+
+    asyncio.run(scenario())
 
 
 def test_wire_limit_error_is_reported_as_connection_failure() -> None:

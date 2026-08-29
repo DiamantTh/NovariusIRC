@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import Any
 
+import pytest
+
 from novariusirc.core.auth import AuthManager
 from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandRegistry
@@ -187,7 +189,8 @@ def test_client_negotiates_ircv3_and_handles_server_features() -> None:
         auth.sessions.start("Other")
 
         async with server:
-            await client._connect_once()
+            with pytest.raises(ConnectionError, match="server closed the connection"):
+                await client._connect_once()
             await asyncio.wait_for(server_finished.wait(), timeout=2)
 
         assert client.network_name == "TestNet"

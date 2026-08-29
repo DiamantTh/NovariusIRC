@@ -9,7 +9,6 @@ import ssl
 import time
 from collections.abc import Coroutine
 from datetime import datetime
-from itertools import cycle
 from pathlib import Path
 
 from .auth import AuthManager
@@ -102,18 +101,28 @@ class IRCClient:
 
     async def run(self) -> None:
         base_delays = self.config.network.reconnect_delays or [10, 20, 40, 80]
-        delays_cycle = cycle(base_delays)
+        failure_count = 0
         while not self._stop.is_set():
-            delay = next(delays_cycle)
             try:
                 await self._connect_once()
-                delays_cycle = cycle(base_delays)
             except Exception as exc:  # noqa: BLE001 - reconnect is the process boundary
                 self.logger.warning("Connection failed: %s", exc)
+                delay = base_delays[min(failure_count, len(base_delays) - 1)]
+                failure_count += 1
+            else:
+                failure_count = 0
+                delay = base_delays[0]
             if self._stop.is_set():
                 break
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(self._stop.wait(), timeout=delay)
+            await self._wait_for_reconnect(delay)
+
+    async def _wait_for_reconnect(self, delay: int) -> None:
+        """Wait for a retry while still allowing shutdown to interrupt it."""
+        self.logger.info("Reconnecting in %d seconds", delay)
+        try:
+            await asyncio.wait_for(self._stop.wait(), timeout=delay)
+        except TimeoutError:
+            pass
 
     async def stop(self) -> None:
         self._stop.set()
@@ -196,6 +205,8 @@ class IRCClient:
                 raise TimeoutError("IRC registration timed out")
             registration_task.result()
             await listen_task
+            if not self._stop.is_set():
+                raise ConnectionError("IRC server closed the connection")
         finally:
             if registration_task and not registration_task.done():
                 registration_task.cancel()
@@ -261,6 +272,11 @@ class IRCClient:
                     self.reader.readline(),
                     timeout=self.config.network.idle_timeout_seconds,
                 )
+            except TimeoutError as exc:
+                raise ConnectionError(
+                    "IRC connection received no data for "
+                    f"{self.config.network.idle_timeout_seconds:g} seconds"
+                ) from exc
             except ValueError as exc:
                 raise ConnectionError(
                     "Incoming IRC message exceeds the wire limit"
@@ -382,7 +398,7 @@ class IRCClient:
             await self._handle_kline(trailing)
             return
         if command == "NOTICE":
-            await self._handle_quote_pong(trailing)
+            await self._handle_quote_pong(prefix, trailing)
         if command == "ERROR":
             raise ConnectionError(trailing or "IRC server closed the connection")
         if (
@@ -800,6 +816,14 @@ class IRCClient:
             nick = prefix.split("!", 1)[0]
             target = params[0] if params else ""
             message = self._text_parameter(parsed, 1)
+            if (
+                self._same_identifier(target, self._current_nick)
+                and message.startswith("\x01PING")
+                and message.endswith("\x01")
+                and (len(message) == 6 or message[5] == " ")
+            ):
+                await self.send_notice(nick, message)
+                return
             # Handle ACTION (\x01ACTION ...\x01)
             if message.startswith("\x01ACTION ") and message.endswith("\x01"):
                 action_text = message[8:-1]  # Strip \x01ACTION and \x01
@@ -845,8 +869,10 @@ class IRCClient:
                 ),
             )
 
-    async def _handle_quote_pong(self, message: str) -> None:
+    async def _handle_quote_pong(self, source: str | None, message: str) -> None:
         """Handle servers that request /QUOTE PONG :<cookie> in notices."""
+        if source and "!" in source:
+            return
         if "PONG :" in message:
             cookie = message.split("PONG :", 1)[1].strip()
             if cookie:
@@ -1311,6 +1337,19 @@ class IRCClient:
             raise ValueError(f"Invalid IRC target: {target!r}")
         clean_message = " ".join(message.replace("\0", "").splitlines()).strip()
         prefix = f"PRIVMSG {target} :"
+        maximum = 510 - len(prefix.encode("utf-8"))
+        clean_message = self._truncate_utf8(clean_message, maximum)
+        await self.send_raw(prefix + clean_message, sensitive=sensitive)
+
+    async def send_notice(
+        self, target: str, message: str, *, sensitive: bool = False
+    ) -> None:
+        if not target or any(
+            character.isspace() or character in "\r\n\0:" for character in target
+        ):
+            raise ValueError(f"Invalid IRC target: {target!r}")
+        clean_message = " ".join(message.replace("\0", "").splitlines()).strip()
+        prefix = f"NOTICE {target} :"
         maximum = 510 - len(prefix.encode("utf-8"))
         clean_message = self._truncate_utf8(clean_message, maximum)
         await self.send_raw(prefix + clean_message, sensitive=sensitive)
