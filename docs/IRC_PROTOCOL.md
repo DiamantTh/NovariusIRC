@@ -1,0 +1,45 @@
+# IRC and IRCv3 protocol support
+
+This matrix describes implemented behavior, not every extension an IRC server
+may advertise. Optional capabilities are requested only when both configured
+and offered by the server.
+
+## IRCv3
+
+| Feature | Status | Behavior |
+| --- | --- | --- |
+| CAP 302 / cap-notify | Implemented | Multiline `CAP LS`, `ACK`, `NAK`, `NEW`, and `DEL`; requests are split below the IRC line limit. |
+| Message tags | Implemented | Escaping, valueless tags, tag/body size limits, and propagation to commands/plugins. |
+| `server-time` | Implemented | UTC parsing including leap seconds; exposed as `ctx.server_time`. |
+| `account-tag` | Implemented | Updates message sender identity and exposes `ctx.account`. |
+| `account-notify` | Implemented | Tracks `ACCOUNT`, including logout, and exposes `on_account`. |
+| `away-notify` | Implemented | Tracks presence and away text and exposes `on_away`. |
+| `chghost` | Implemented | Updates username/hostname and exposes old/new hostmasks. |
+| `extended-join` | Implemented | Tracks account and real name from `JOIN`. |
+| `invite-notify` | Implemented | Exposes inviter, target, and channel through `on_invite`. |
+| `multi-prefix` | Implemented | Parses all advertised membership prefixes in `NAMES`. |
+| `userhost-in-names` | Implemented | Parses username and hostname from `NAMES`. |
+| `message-tags` / `TAGMSG` | Implemented | Exposes tag-only messages through `on_tagmsg`. |
+| SASL PLAIN | Implemented | 400-byte chunking, mechanism discovery, success/failure numerics, secret-safe logging. |
+| SASL EXTERNAL | Implemented | TLS client certificate loading and EXTERNAL authentication. |
+| WHOX | Implemented | Uses the `WHOX` ISUPPORT token to initialize account, host, real-name, and away state after joining. |
+| `batch`, `labeled-response`, `echo-message`, multiline | Not implemented | Not requested by default and no semantic processing is provided yet. |
+| SCRAM/OAUTH SASL mechanisms | Not implemented | Only PLAIN and EXTERNAL are accepted by configuration. |
+
+## IRC base protocol and ISUPPORT
+
+The core parses the 512-byte IRC message body limit, IRCv3's extended tag
+budget, prefixes, all legal final-parameter forms, and UTF-8 without splitting
+outgoing code points. `PING`/`PONG` and registration traffic bypass the
+rate-limited output queue.
+
+`RPL_ISUPPORT` currently drives `CASEMAPPING`, `CHANTYPES`, `PREFIX`,
+`CHANMODES`, `STATUSMSG`, `NETWORK`, common length limits, `TARGMAX`, and
+`WHOX`. User, channel, membership, topic, channel-mode, account, away, and
+hostmask state is updated from JOIN/PART/QUIT/NICK/KICK/MODE/TOPIC, NAMES,
+WHO, WHOX, and their relevant numerics. `NAMES` resynchronization removes stale
+members while preserving concurrent joins and nick changes.
+
+Unknown commands, numerics, capabilities, tags, and ISUPPORT tokens remain
+forward-compatible: they are parsed or retained where useful and otherwise
+ignored rather than treated as fatal protocol errors.

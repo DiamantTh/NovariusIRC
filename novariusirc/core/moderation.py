@@ -5,9 +5,12 @@ from __future__ import annotations
 import logging
 import re
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from .protocol import irc_casefold
 
 logger = logging.getLogger(__name__)
 
@@ -52,24 +55,48 @@ class UserStatus:
 class ModerationManager:
     """Evaluate messages and turn configured actions into IRC commands."""
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        casefold: Callable[[str], str] = irc_casefold,
+    ):
         self.config = config or {}
+        self.casefold = casefold
         self.user_status: dict[str, dict[str, UserStatus]] = {}
         self.actions: list[ModerationAction] = []
         self.banned_users: set[tuple[str, str]] = set()
         self.muted_users: dict[tuple[str, str], datetime] = {}
 
+    def set_casefold(self, casefold: Callable[[str], str]) -> None:
+        """Set the active network's identifier folding function."""
+        if self.user_status or self.banned_users or self.muted_users:
+            logger.info("Clearing transient moderation state after CASEMAPPING change")
+            self.user_status.clear()
+            self.banned_users.clear()
+            self.muted_users.clear()
+        self.casefold = casefold
+
     def _channel_config(self, channel: str) -> dict[str, Any]:
         overrides = self.config.get("channels", {})
-        override = overrides.get(channel, overrides.get(channel.lower(), {}))
+        override = overrides.get(channel)
+        if override is None:
+            channel_key = self.casefold(channel)
+            override = next(
+                (
+                    value
+                    for configured_channel, value in overrides.items()
+                    if self.casefold(configured_channel) == channel_key
+                ),
+                {},
+            )
         global_config = {
             key: value for key, value in self.config.items() if key != "channels"
         }
         return _merge(global_config, override)
 
     def _status(self, nick: str, channel: str) -> UserStatus:
-        channel_key = channel.lower()
-        nick_key = nick.lower()
+        channel_key = self.casefold(channel)
+        nick_key = self.casefold(nick)
         statuses = self.user_status.setdefault(channel_key, {})
         return statuses.setdefault(nick_key, UserStatus(nick=nick, channel=channel))
 
@@ -88,7 +115,7 @@ class ModerationManager:
         if not config.get("enabled", True):
             return None
 
-        key = (channel.lower(), nick.lower())
+        key = (self.casefold(channel), self.casefold(nick))
         now = _now()
         muted_until = self.muted_users.get(key)
         if muted_until:
@@ -164,7 +191,7 @@ class ModerationManager:
 
         status = self._status(nick, channel)
         config = self._channel_config(channel)
-        key = (channel.lower(), nick.lower())
+        key = (self.casefold(channel), self.casefold(nick))
 
         if action == "warn":
             status.warnings += 1
@@ -212,28 +239,30 @@ class ModerationManager:
         self._status(nick, channel).warnings = 0
 
     async def unban_user(self, nick: str, channel: str | None = None) -> None:
-        nick_key = nick.lower()
+        nick_key = self.casefold(nick)
         self.banned_users = {
             key
             for key in self.banned_users
             if not (
-                key[1] == nick_key and (channel is None or key[0] == channel.lower())
+                key[1] == nick_key
+                and (channel is None or key[0] == self.casefold(channel))
             )
         }
 
     async def unmute_user(self, nick: str, channel: str | None = None) -> None:
-        nick_key = nick.lower()
+        nick_key = self.casefold(nick)
         self.muted_users = {
             key: expiry
             for key, expiry in self.muted_users.items()
             if not (
-                key[1] == nick_key and (channel is None or key[0] == channel.lower())
+                key[1] == nick_key
+                and (channel is None or key[0] == self.casefold(channel))
             )
         }
 
     def rename_user(self, old_nick: str, new_nick: str) -> None:
-        old_key = old_nick.lower()
-        new_key = new_nick.lower()
+        old_key = self.casefold(old_nick)
+        new_key = self.casefold(new_nick)
         for channel, statuses in self.user_status.items():
             status = statuses.pop(old_key, None)
             if status:

@@ -74,6 +74,28 @@ class NetworkConfig(ConfigModel):
         None  # Optional override für Netzwerknamen (auto-detect via 005 NETWORK=)
     )
     reconnect_delays: list[int] = Field(default_factory=lambda: [10, 20, 40, 80])
+    connect_timeout_seconds: float = Field(default=30.0, gt=0)
+    registration_timeout_seconds: float = Field(default=60.0, gt=0)
+    idle_timeout_seconds: float = Field(default=300.0, gt=0)
+    ircv3_enabled: bool = True
+    ircv3_capabilities: list[str] = Field(
+        default_factory=lambda: [
+            "account-notify",
+            "account-tag",
+            "away-notify",
+            "chghost",
+            "extended-join",
+            "invite-notify",
+            "message-tags",
+            "multi-prefix",
+            "server-time",
+            "userhost-in-names",
+        ]
+    )
+    send_rate_per_second: float = Field(default=1.0, gt=0)
+    send_burst: int = Field(default=4, ge=1)
+    send_queue_size: int = Field(default=256, ge=1)
+    event_queue_size: int = Field(default=256, ge=1)
 
     @field_validator("reconnect_delays")
     @classmethod
@@ -82,6 +104,22 @@ class NetworkConfig(ConfigModel):
             raise ValueError("reconnect delays must be positive")
         return value
 
+    @field_validator("ircv3_capabilities")
+    @classmethod
+    def validate_ircv3_capabilities(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for capability in value:
+            capability = capability.strip()
+            if (
+                not capability
+                or capability.startswith("-")
+                or any(character.isspace() for character in capability)
+            ):
+                raise ValueError(f"invalid IRCv3 capability: {capability!r}")
+            if capability not in normalized:
+                normalized.append(capability)
+        return normalized
+
     @field_validator("nick", "user", "realname", "channels")
     @classmethod
     def reject_irc_control_characters(cls, value: Any) -> Any:
@@ -89,6 +127,24 @@ class NetworkConfig(ConfigModel):
         if any(any(char in item for char in "\r\n\0") for item in values):
             raise ValueError(
                 "IRC identity and channel values must not contain CR, LF, or NUL"
+            )
+        return value
+
+    @field_validator("channels")
+    @classmethod
+    def validate_channel_names(cls, value: list[str]) -> list[str]:
+        invalid = [
+            channel
+            for channel in value
+            if (
+                not channel
+                or any(character.isspace() for character in channel)
+                or any(character in channel for character in ",:")
+            )
+        ]
+        if invalid:
+            raise ValueError(
+                "IRC channels must be non-empty single channel names without spaces, commas, or colons"
             )
         return value
 
@@ -416,6 +472,10 @@ class Config(ConfigModel):
         if mechanism not in {"PLAIN", "EXTERNAL"}:
             raise ValueError(f"Unsupported SASL mechanism: {mechanism}")
         self.auth.sasl_mechanism = mechanism
+        if self.auth.sasl_enabled and not self.network.tls:
+            raise ValueError("SASL requires network.tls = true")
+        if self.auth.certfp_enabled and not self.network.tls:
+            raise ValueError("CertFP requires network.tls = true")
         if (
             self.auth.sasl_enabled
             and mechanism == "PLAIN"

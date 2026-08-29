@@ -9,6 +9,7 @@ import logging
 import re
 import sys
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -19,7 +20,23 @@ from .config import Config
 from .feeds import FeedEngine
 
 PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-HOOK_NAMES = ("on_message", "on_join", "on_part", "on_quit", "on_nick_change")
+HOOK_NAMES = (
+    "on_message",
+    "on_action",
+    "on_notice",
+    "on_join",
+    "on_part",
+    "on_quit",
+    "on_nick_change",
+    "on_kick",
+    "on_mode",
+    "on_topic",
+    "on_account",
+    "on_away",
+    "on_chghost",
+    "on_invite",
+    "on_tagmsg",
+)
 
 __all__ = ["BasePlugin", "CommandContext", "Plugin", "PluginManager", "command"]
 
@@ -44,6 +61,12 @@ class BasePlugin:
     async def on_message(self, ctx: CommandContext) -> None:
         """Handle an IRC PRIVMSG that was not consumed by a command."""
 
+    async def on_action(self, ctx: CommandContext) -> None:
+        """Handle a CTCP ACTION."""
+
+    async def on_notice(self, ctx: CommandContext) -> None:
+        """Handle an IRC NOTICE."""
+
     async def on_join(self, ctx: CommandContext) -> None:
         """Handle an IRC JOIN."""
 
@@ -55,6 +78,30 @@ class BasePlugin:
 
     async def on_nick_change(self, ctx: CommandContext) -> None:
         """Handle an IRC NICK change."""
+
+    async def on_kick(self, ctx: CommandContext) -> None:
+        """Handle an IRC KICK."""
+
+    async def on_mode(self, ctx: CommandContext) -> None:
+        """Handle an IRC channel MODE change."""
+
+    async def on_topic(self, ctx: CommandContext) -> None:
+        """Handle an IRC TOPIC change."""
+
+    async def on_account(self, ctx: CommandContext) -> None:
+        """Handle an IRCv3 ACCOUNT change."""
+
+    async def on_away(self, ctx: CommandContext) -> None:
+        """Handle an IRCv3 AWAY notification."""
+
+    async def on_chghost(self, ctx: CommandContext) -> None:
+        """Handle an IRCv3 CHGHOST notification."""
+
+    async def on_invite(self, ctx: CommandContext) -> None:
+        """Handle an IRC INVITE or invite-notify event."""
+
+    async def on_tagmsg(self, ctx: CommandContext) -> None:
+        """Handle an IRCv3 TAGMSG event."""
 
     def _bind_services(
         self,
@@ -359,6 +406,11 @@ class PluginManager:
         channel: str | None,
         message: str,
         hostmask: str,
+        tags: dict[str, str | None] | None = None,
+        account: str | None = None,
+        event: str = "PRIVMSG",
+        server_time: datetime | None = None,
+        metadata: dict[str, object] | None = None,
     ) -> CommandContext:
         resolved_hostmask = hostmask or f"{nick}!unknown@unknown"
         return CommandContext(
@@ -370,6 +422,11 @@ class PluginManager:
             client=self.client,
             logger=self.logger,
             roles=self.auth.roles_for_hostmask(nick, resolved_hostmask),
+            tags=dict(tags or {}),
+            account=account,
+            event=event,
+            server_time=server_time,
+            metadata=dict(metadata or {}),
         )
 
     async def on_message(
@@ -378,6 +435,9 @@ class PluginManager:
         channel: str,
         message: str,
         hostmask: str = "",
+        tags: dict[str, str | None] | None = None,
+        account: str | None = None,
+        server_time: datetime | None = None,
     ) -> None:
         for plugin in self.plugins:
             try:
@@ -386,13 +446,93 @@ class PluginManager:
                 self.logger.exception("Built-in plugin %s failed", plugin.name)
         if self.loader:
             await self.loader.trigger_hook(
-                "on_message", self._context(nick, channel, message, hostmask)
+                "on_message",
+                self._context(
+                    nick,
+                    channel,
+                    message,
+                    hostmask,
+                    tags,
+                    account,
+                    server_time=server_time,
+                ),
             )
 
-    async def on_join(self, nick: str, channel: str, hostmask: str = "") -> None:
+    async def on_join(
+        self,
+        nick: str,
+        channel: str,
+        hostmask: str = "",
+        *,
+        account: str | None = None,
+        realname: str | None = None,
+        tags: dict[str, str | None] | None = None,
+        server_time: datetime | None = None,
+    ) -> None:
         if self.loader:
             await self.loader.trigger_hook(
-                "on_join", self._context(nick, channel, "", hostmask)
+                "on_join",
+                self._context(
+                    nick,
+                    channel,
+                    "",
+                    hostmask,
+                    tags,
+                    account,
+                    event="JOIN",
+                    server_time=server_time,
+                    metadata={"realname": realname},
+                ),
+            )
+
+    async def on_action(
+        self,
+        nick: str,
+        channel: str | None,
+        message: str,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_action",
+                self._context(
+                    nick,
+                    channel,
+                    message,
+                    hostmask,
+                    tags,
+                    account,
+                    event="ACTION",
+                    server_time=server_time,
+                ),
+            )
+
+    async def on_notice(
+        self,
+        nick: str,
+        channel: str | None,
+        message: str,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_notice",
+                self._context(
+                    nick,
+                    channel,
+                    message,
+                    hostmask,
+                    tags,
+                    account,
+                    event="NOTICE",
+                    server_time=server_time,
+                ),
             )
 
     async def on_part(
@@ -401,16 +541,51 @@ class PluginManager:
         channel: str,
         message: str,
         hostmask: str = "",
+        *,
+        account: str | None = None,
+        tags: dict[str, str | None] | None = None,
+        server_time: datetime | None = None,
     ) -> None:
         if self.loader:
             await self.loader.trigger_hook(
-                "on_part", self._context(nick, channel, message, hostmask)
+                "on_part",
+                self._context(
+                    nick,
+                    channel,
+                    message,
+                    hostmask,
+                    tags,
+                    account,
+                    event="PART",
+                    server_time=server_time,
+                ),
             )
 
-    async def on_quit(self, nick: str, message: str, hostmask: str = "") -> None:
+    async def on_quit(
+        self,
+        nick: str,
+        message: str,
+        hostmask: str = "",
+        *,
+        account: str | None = None,
+        tags: dict[str, str | None] | None = None,
+        server_time: datetime | None = None,
+        channels: list[str] | None = None,
+    ) -> None:
         if self.loader:
             await self.loader.trigger_hook(
-                "on_quit", self._context(nick, None, message, hostmask)
+                "on_quit",
+                self._context(
+                    nick,
+                    None,
+                    message,
+                    hostmask,
+                    tags,
+                    account,
+                    event="QUIT",
+                    server_time=server_time,
+                    metadata={"channels": list(channels or [])},
+                ),
             )
 
     async def on_nick_change(
@@ -418,9 +593,232 @@ class PluginManager:
         old_nick: str,
         new_nick: str,
         hostmask: str = "",
+        *,
+        account: str | None = None,
+        tags: dict[str, str | None] | None = None,
+        server_time: datetime | None = None,
+        channels: list[str] | None = None,
     ) -> None:
         if self.loader:
             await self.loader.trigger_hook(
                 "on_nick_change",
-                self._context(new_nick, None, f"{old_nick}->{new_nick}", hostmask),
+                self._context(
+                    new_nick,
+                    None,
+                    f"{old_nick}->{new_nick}",
+                    hostmask,
+                    tags,
+                    account,
+                    event="NICK",
+                    server_time=server_time,
+                    metadata={
+                        "old_nick": old_nick,
+                        "new_nick": new_nick,
+                        "channels": list(channels or []),
+                    },
+                ),
+            )
+
+    async def on_account(
+        self,
+        nick: str,
+        account: str | None,
+        hostmask: str,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_account",
+                self._context(
+                    nick,
+                    None,
+                    account or "*",
+                    hostmask,
+                    tags,
+                    account,
+                    event="ACCOUNT",
+                    server_time=server_time,
+                ),
+            )
+
+    async def on_kick(
+        self,
+        nick: str,
+        channel: str,
+        target: str,
+        message: str,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_kick",
+                self._context(
+                    nick,
+                    channel,
+                    message,
+                    hostmask,
+                    tags,
+                    account,
+                    event="KICK",
+                    server_time=server_time,
+                    metadata={"target": target},
+                ),
+            )
+
+    async def on_mode(
+        self,
+        nick: str,
+        channel: str,
+        modes: str,
+        arguments: list[str],
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_mode",
+                self._context(
+                    nick,
+                    channel,
+                    modes,
+                    hostmask,
+                    tags,
+                    account,
+                    event="MODE",
+                    server_time=server_time,
+                    metadata={"arguments": list(arguments)},
+                ),
+            )
+
+    async def on_topic(
+        self,
+        nick: str,
+        channel: str,
+        topic: str,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_topic",
+                self._context(
+                    nick,
+                    channel,
+                    topic,
+                    hostmask,
+                    tags,
+                    account,
+                    event="TOPIC",
+                    server_time=server_time,
+                ),
+            )
+
+    async def on_away(
+        self,
+        nick: str,
+        away_message: str | None,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_away",
+                self._context(
+                    nick,
+                    None,
+                    away_message or "",
+                    hostmask,
+                    tags,
+                    account,
+                    event="AWAY",
+                    server_time=server_time,
+                    metadata={"away": away_message is not None},
+                ),
+            )
+
+    async def on_chghost(
+        self,
+        nick: str,
+        hostmask: str,
+        old_hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_chghost",
+                self._context(
+                    nick,
+                    None,
+                    hostmask,
+                    hostmask,
+                    tags,
+                    account,
+                    event="CHGHOST",
+                    server_time=server_time,
+                    metadata={"old_hostmask": old_hostmask},
+                ),
+            )
+
+    async def on_invite(
+        self,
+        nick: str,
+        target: str,
+        channel: str,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_invite",
+                self._context(
+                    nick,
+                    channel,
+                    target,
+                    hostmask,
+                    tags,
+                    account,
+                    event="INVITE",
+                    server_time=server_time,
+                    metadata={"target": target},
+                ),
+            )
+
+    async def on_tagmsg(
+        self,
+        nick: str,
+        target: str,
+        channel: str | None,
+        hostmask: str,
+        account: str | None,
+        tags: dict[str, str | None],
+        server_time: datetime | None,
+    ) -> None:
+        if self.loader:
+            await self.loader.trigger_hook(
+                "on_tagmsg",
+                self._context(
+                    nick,
+                    channel,
+                    "",
+                    hostmask,
+                    tags,
+                    account,
+                    event="TAGMSG",
+                    server_time=server_time,
+                    metadata={"target": target},
+                ),
             )

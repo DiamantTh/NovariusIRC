@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import pytest
+
+from novariusirc.core.protocol import (
+    IRCFeatures,
+    irc_casefold,
+    parse_message,
+    parse_server_time,
+)
+
+
+def test_message_tags_are_parsed_and_unescaped() -> None:
+    message = parse_message(
+        r"@account=alice;server-time=2026-08-29T12:00:00Z;example=a\sb\:c\\d "
+        ":Nick!user@host PRIVMSG #Test :hello world"
+    )
+
+    assert message.command == "PRIVMSG"
+    assert message.prefix == "Nick!user@host"
+    assert message.params == ("#Test",)
+    assert message.trailing == "hello world"
+    assert message.tags["account"] == "alice"
+    assert message.tags["example"] == "a b;c\\d"
+
+
+def test_tagged_ping_is_a_normal_parsed_message() -> None:
+    message = parse_message("@time=now PING :keepalive-cookie")
+    assert message.command == "PING"
+    assert message.trailing == "keepalive-cookie"
+
+
+@pytest.mark.parametrize(
+    ("mapping", "left", "right", "equal"),
+    [
+        ("ascii", "Nick[", "nick{", False),
+        ("rfc1459-strict", "Nick[", "nick{", True),
+        ("rfc1459-strict", "Nick^", "nick~", False),
+        ("rfc1459", "Nick^", "nick~", True),
+    ],
+)
+def test_irc_casemapping(mapping: str, left: str, right: str, equal: bool) -> None:
+    assert (irc_casefold(left, mapping) == irc_casefold(right, mapping)) is equal
+
+
+def test_isupport_updates_casemapping_and_chantypes() -> None:
+    features = IRCFeatures()
+    features.update(["Bot", "CASEMAPPING=ascii", "CHANTYPES=#", "NETWORK=ExampleNet"])
+
+    assert features.casemapping == "ascii"
+    assert features.is_channel("#channel")
+    assert not features.is_channel("&local")
+    assert features.network == "ExampleNet"
+
+
+def test_malformed_prefix_is_rejected_without_index_error() -> None:
+    with pytest.raises(ValueError, match="source prefix"):
+        parse_message(":server-only")
+
+
+def test_message_body_limit_is_enforced_separately_from_tags() -> None:
+    parse_message("@label=ok PRIVMSG #test :" + "x" * 495)
+    with pytest.raises(ValueError, match="body exceeds"):
+        parse_message("@label=ok PRIVMSG #test :" + "x" * 496)
+
+
+def test_server_time_supports_fractional_and_leap_seconds() -> None:
+    regular = parse_server_time("2026-08-29T12:34:56.123Z")
+    leap = parse_server_time("2016-12-31T23:59:60.500Z")
+
+    assert regular is not None
+    assert regular.isoformat() == "2026-08-29T12:34:56.123000+00:00"
+    assert leap is not None
+    assert leap.isoformat() == "2017-01-01T00:00:00.500000+00:00"
+    assert parse_server_time("not-a-time") is None

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
+import signal
 import sys
 import time
 from pathlib import Path
@@ -128,6 +130,17 @@ async def async_main() -> None:
 
     client = IRCClient(config, commands, auth, plugins, moderation, logger)
     plugins.set_client(client)
+    loop = asyncio.get_running_loop()
+    handled_signals = (signal.SIGINT, signal.SIGTERM)
+    for handled_signal in handled_signals:
+        with contextlib.suppress(NotImplementedError):
+            loop.add_signal_handler(
+                handled_signal,
+                lambda current=handled_signal: (
+                    logger.info("Received %s; shutting down", current.name),
+                    asyncio.create_task(client.stop()),
+                ),
+            )
     try:
         plugins.load_builtin()
         if config.plugins.enabled:
@@ -136,6 +149,9 @@ async def async_main() -> None:
         await feeds.start()
         await client.run()
     finally:
+        for handled_signal in handled_signals:
+            with contextlib.suppress(NotImplementedError):
+                loop.remove_signal_handler(handled_signal)
         await client.stop()
         await feeds.stop()
         await plugins.stop()

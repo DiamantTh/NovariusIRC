@@ -4,9 +4,13 @@ import asyncio
 import logging
 from pathlib import Path
 
+import pytest
+
+from novariusirc.core.auth import hostmask_match
 from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config
 from novariusirc.core.plugins import PluginLoader
+from novariusirc.core.protocol import irc_casefold
 
 
 class ReplyClient:
@@ -119,6 +123,7 @@ def test_plugin_configuration_rejects_paths() -> None:
 
 def test_enabled_sasl_requires_complete_credentials() -> None:
     config = minimal_config()
+    config.network.tls = True
     config.auth.sasl_enabled = True
     config.auth.sasl_username = "bot"
     try:
@@ -127,3 +132,24 @@ def test_enabled_sasl_requires_complete_credentials() -> None:
         assert "sasl_password" in str(exc)
     else:
         raise AssertionError("incomplete SASL configuration was accepted")
+
+
+def test_sasl_and_certfp_require_tls() -> None:
+    plain = minimal_config()
+    plain.auth.sasl_enabled = True
+    plain.auth.sasl_username = "bot"
+    plain.auth.sasl_password = "secret"
+    with pytest.raises(ValueError, match="SASL requires network.tls"):
+        plain.validate_runtime_secrets()
+
+    external = minimal_config()
+    external.auth.certfp_enabled = True
+    external.auth.certfp_cert_file = "client.pem"
+    with pytest.raises(ValueError, match="CertFP requires network.tls"):
+        external.validate_runtime_secrets()
+
+
+def test_hostmask_matching_applies_irc_casemapping_only_to_nick() -> None:
+    casefold = lambda value: irc_casefold(value, "rfc1459")
+    assert hostmask_match("Nick^!*@*", "nick~!user@host", casefold)
+    assert not hostmask_match("*!user^@host", "Nick!user~@host", casefold)

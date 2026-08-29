@@ -82,3 +82,20 @@ def test_unknown_typed_config_fields_are_rejected() -> None:
                 },
             }
         )
+
+
+@pytest.mark.parametrize("channel", ["", "#one,#two", "#bad channel", ":#bad"])
+def test_config_rejects_ambiguous_channel_names(channel: str) -> None:
+    with pytest.raises(ValueError, match="IRC channels"):
+        Config.model_validate(
+            {
+                "bot": {},
+                "network": {
+                    "server": "irc.example.test",
+                    "nick": "bot",
+                    "user": "bot",
+                    "realname": "Bot",
+                    "channels": [channel],
+                },
+            }
+        )

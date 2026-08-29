@@ -6,7 +6,8 @@ import inspect
 import logging
 import time
 from collections.abc import Awaitable, Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 
 from .i18n import gettext_lazy as _
 
@@ -42,6 +43,11 @@ class CommandContext:
     client: object
     logger: logging.Logger
     roles: list[str]
+    tags: dict[str, str | None] = field(default_factory=dict)
+    account: str | None = None
+    event: str = "PRIVMSG"
+    server_time: datetime | None = None
+    metadata: dict[str, object] = field(default_factory=dict)
 
     async def reply(self, text: str) -> None:
         target = self.channel or self.nick

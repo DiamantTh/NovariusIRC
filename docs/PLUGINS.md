@@ -47,9 +47,37 @@ fail visibly.
 ## Lifecycle and hooks
 
 `on_load()` runs after core services and commands have been bound. `on_unload()`
-runs during clean shutdown. Plugins may override `on_message`, `on_join`,
-`on_part`, `on_quit`, and `on_nick_change`; each receives a `CommandContext`.
-When a plugin unloads, all of its commands, aliases, and hooks are removed.
+runs during clean shutdown. Every hook receives one `CommandContext`:
+
+| Hook | `ctx.event` | Additional `ctx.metadata` |
+| --- | --- | --- |
+| `on_message` | `PRIVMSG` | — |
+| `on_action` | `ACTION` | — |
+| `on_notice` | `NOTICE` | — |
+| `on_join` | `JOIN` | `realname` |
+| `on_part` | `PART` | — |
+| `on_quit` | `QUIT` | `channels` |
+| `on_nick_change` | `NICK` | `old_nick`, `new_nick`, `channels` |
+| `on_kick` | `KICK` | `target` |
+| `on_mode` | `MODE` | `arguments` |
+| `on_topic` | `TOPIC` | — |
+| `on_account` | `ACCOUNT` | — |
+| `on_away` | `AWAY` | `away` |
+| `on_chghost` | `CHGHOST` | `old_hostmask` |
+| `on_invite` | `INVITE` | `target` |
+| `on_tagmsg` | `TAGMSG` | `target` |
+
+The common fields are `ctx.nick`, `ctx.hostmask`, `ctx.channel`, `ctx.message`,
+`ctx.account`, `ctx.tags`, `ctx.server_time`, and `ctx.roles`. `ctx.channel` is
+`None` for private messages and events without one. IRCv3 server time is an
+aware UTC `datetime` when the server supplied a valid `time` tag.
+
+Hooks and commands run in arrival order on a bounded application queue. This
+keeps the IRC protocol reader responsive, but one slow handler still delays the
+following application events. Use explicit network timeouts. If the queue
+reaches `[network].event_queue_size`, new application events are dropped with a
+warning instead of consuming unbounded memory. When a plugin unloads, all of
+its commands, aliases, and hooks are removed.
 
 Settings are available through `self.config.plugins.settings`; each plugin
 should document the key it reads. Network access and background tasks belong in

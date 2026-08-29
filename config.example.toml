@@ -23,8 +23,33 @@ user = "novarius"
 realname = "Novarius IRC Bot"
 # name = "libera"  # Optional: Override für Netzwerknamen (auto-detect via 005 NETWORK=)
 channels = ["#novariusirc"]
+# IRCv3 CAP wird standardmaessig ausgehandelt. Nur angebotene Features werden
+# angefordert; unbekannte Features werden nicht blind aktiviert.
+ircv3_enabled = true
+ircv3_capabilities = [
+    "account-notify",
+    "account-tag",
+    "away-notify",
+    "chghost",
+    "extended-join",
+    "invite-notify",
+    "message-tags",
+    "multi-prefix",
+    "server-time",
+    "userhost-in-names",
+]
+# Schutz gegen haengende Verbindungen und ausgehende Floods.
+connect_timeout_seconds = 30
+registration_timeout_seconds = 60
+idle_timeout_seconds = 300
+send_rate_per_second = 1.0
+send_burst = 4
+send_queue_size = 256
+# Begrenzte Queue fuer Commands und Plugin-Hooks; der IRC-Leseloop bleibt frei.
+event_queue_size = 256
 
 [auth]
+# SASL PLAIN und EXTERNAL werden nur mit network.tls = true akzeptiert.
 sasl_enabled = true
 sasl_mechanism = "PLAIN"
 sasl_username = "NovariusBot"

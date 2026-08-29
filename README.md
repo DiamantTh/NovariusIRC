@@ -40,15 +40,32 @@ Build a local image:
 docker build -t novariusirc:local .
 ```
 
-Run the container (mount your config):
+Run the container. Mount the complete instance directory so relative includes,
+certificates, and external plugins stay available; keep data and logs writable:
 ```bash
-docker run --rm -v "$(pwd)/config.toml:/app/config.toml:ro" novariusirc:local
+docker run --rm \
+  -v "$(pwd)/instance:/app/instance:ro" \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/logs:/app/logs" \
+  -e NOVARIUSIRC_DATA_ROOT=/app/data \
+  -e NOVARIUSIRC_LOG_ROOT=/app/logs \
+  novariusirc:local --config /app/instance/config.toml
 ```
 
 Podman with SELinux label:
 ```bash
-podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
+podman run --rm \
+  -v "$(pwd)/instance:/app/instance:ro,Z" \
+  -v "$(pwd)/data:/app/data:Z" \
+  -v "$(pwd)/logs:/app/logs:Z" \
+  -e NOVARIUSIRC_DATA_ROOT=/app/data \
+  -e NOVARIUSIRC_LOG_ROOT=/app/logs \
+  novariusirc:local --config /app/instance/config.toml
 ```
+
+For an environment-only container, pass `--config env` and at minimum set
+`NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK`. The image handles `SIGINT` and
+`SIGTERM` for a graceful stop and runs as an unprivileged user.
 
 ## Project Layout
 - `novariusirc/core`: core services (client, config, auth, commands, logging, i18n, feeds, plugins, workers)
@@ -63,6 +80,12 @@ podman run --rm -v "$(pwd)/config.toml:/app/config.toml:ro,Z" novariusirc:local
 
 ## Notes
 - Structured STDOUT logging plus rotating files under `logs/`; optional journald if installed.
+- The connection core supports IRCv3 CAP 302, message tags, SASL PLAIN and
+  EXTERNAL, dynamic `CAP NEW`/`DEL`, server time, identity/presence events,
+  WHO/WHOX snapshots, and the relevant `RPL_ISUPPORT` network features.
+  Incoming protocol work is separated from a bounded, ordered application
+  event queue, so a slow command or plugin cannot delay `PING`/`PONG`.
+  See [docs/IRC_PROTOCOL.md](docs/IRC_PROTOCOL.md) for the exact support matrix.
 - IRC connection settings and secrets can be overridden via env vars (e.g. `NOVARIUSIRC_SERVER`, `NOVARIUSIRC_NICK`, `NOVARIUSIRC_SASL_PASSWORD`).
 - Env-only startup is supported; set `NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK` (others optional) or pass `--config env`.
 - Feed engine caches ETag/Last-Modified, tracks seen item ids per feed, supports custom templates (`{feed}`, `{title}`, `{summary}`, `{link}`, `{published}`), per-feed enable/disable, and User-Agent rotation/TLS settings (see `config/feeds.example.toml`).
