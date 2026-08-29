@@ -44,7 +44,7 @@ ENV_PATHS_DATA_ROOT = "NOVARIUSIRC_DATA_ROOT"
 
 
 class ConfigModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
 
 class BotConfig(ConfigModel):
@@ -116,6 +116,12 @@ class NetworkConfig(ConfigModel):
                 or any(character.isspace() for character in capability)
             ):
                 raise ValueError(f"invalid IRCv3 capability: {capability!r}")
+            if capability == "sasl":
+                raise ValueError(
+                    "SASL is configured through [auth], not ircv3_capabilities"
+                )
+            if len(f"CAP REQ :{capability}".encode()) > 510:
+                raise ValueError(f"IRCv3 capability is too long: {capability!r}")
             if capability not in normalized:
                 normalized.append(capability)
         return normalized

@@ -31,6 +31,12 @@ class SaslAuth:
         return "PLAIN"
 
 
+class ChunkedSaslAuth(SaslAuth):
+    @staticmethod
+    def sasl_plain_payload() -> str:
+        return "x" * 800
+
+
 def client() -> IRCClient:
     config = Config.model_validate(
         {
@@ -204,6 +210,52 @@ def test_required_sasl_fails_when_cap_is_unavailable_or_disabled() -> None:
     with pytest.raises(ConnectionError, match="disabled the required SASL"):
         asyncio.run(disabled._handle_cap(["bot", "ACK"], "-sasl"))
     assert bytes(disabled.writer.data) == b"CAP END\r\n"  # type: ignore[union-attr]
+
+
+def test_welcome_is_rejected_until_required_sasl_has_completed() -> None:
+    instance = client()
+    instance.config.auth.sasl_enabled = True
+    with pytest.raises(ConnectionError, match="before required SASL succeeded"):
+        asyncio.run(instance._handle_line(":irc.test 001 bot :Welcome"))
+
+
+def test_unexpected_sasl_challenge_aborts_immediately() -> None:
+    instance = client()
+    instance._sasl_in_progress = True
+    with pytest.raises(ConnectionError, match="unsupported SASL challenge"):
+        asyncio.run(instance._handle_authenticate(["unexpected"], ""))
+    assert bytes(instance.writer.data) == b"AUTHENTICATE *\r\nCAP END\r\n"  # type: ignore[union-attr]
+
+
+def test_sasl_plain_chunks_and_terminates_exact_400_byte_multiple() -> None:
+    instance = client()
+    instance.auth = ChunkedSaslAuth()  # type: ignore[assignment]
+    instance._sasl_in_progress = True
+    asyncio.run(instance._handle_authenticate(["+"], ""))
+
+    lines = bytes(instance.writer.data).splitlines()  # type: ignore[union-attr]
+    assert lines == [
+        b"AUTHENTICATE " + b"x" * 400,
+        b"AUTHENTICATE " + b"x" * 400,
+        b"AUTHENTICATE +",
+    ]
+    assert all(len(line) <= 510 for line in lines)
+
+
+def test_dynamic_cap_new_ack_and_del_updates_connection_state() -> None:
+    instance = client()
+    instance.config.network.ircv3_capabilities = ["away-notify"]
+    instance._cap_end_sent = True
+
+    asyncio.run(instance._handle_cap(["bot", "NEW"], "away-notify"))
+    assert instance._pending_capabilities == {"away-notify"}
+    assert bytes(instance.writer.data) == b"CAP REQ :away-notify\r\n"  # type: ignore[union-attr]
+
+    asyncio.run(instance._handle_cap(["bot", "ACK"], "away-notify"))
+    assert instance.active_capabilities == {"away-notify"}
+    asyncio.run(instance._handle_cap(["bot", "DEL"], "away-notify"))
+    assert not instance.active_capabilities
+    assert "away-notify" not in instance._offered_capabilities
 
 
 def test_slow_application_hook_does_not_block_ping() -> None:

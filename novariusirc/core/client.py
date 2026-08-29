@@ -322,6 +322,10 @@ class IRCClient:
             await self._end_cap_negotiation()
             raise ConnectionError("SASL authentication failed")
         if command == "001":
+            if self.config.auth.sasl_enabled and not self._sasl_complete:
+                raise ConnectionError(
+                    "Server completed registration before required SASL succeeded"
+                )
             self.logger.info("Connected and welcomed by server")
             if params:
                 self._current_nick = params[0]
@@ -1362,7 +1366,11 @@ class IRCClient:
                         )
                 else:
                     self._active_capabilities.add(capability)
-            if "sasl" in capabilities and "sasl" in self._active_capabilities:
+            if (
+                self.config.auth.sasl_enabled
+                and "sasl" in capabilities
+                and "sasl" in self._active_capabilities
+            ):
                 mechanism = self.auth.sasl_mechanism()
                 self._sasl_in_progress = True
                 await self.send_raw(f"AUTHENTICATE {mechanism}", priority=True)
@@ -1385,6 +1393,7 @@ class IRCClient:
                 capability
                 for capability in self.config.network.ircv3_capabilities
                 if capability in self._offered_capabilities
+                and capability != "sasl"
                 and capability not in self._active_capabilities
                 and capability not in self._pending_capabilities
             ]
@@ -1422,8 +1431,13 @@ class IRCClient:
 
     async def _handle_authenticate(self, params: list[str], trailing: str) -> None:
         challenge = trailing or (params[0] if params else "")
-        if not self._sasl_in_progress or challenge != "+":
+        if not self._sasl_in_progress:
             return
+        if challenge != "+":
+            self._sasl_in_progress = False
+            await self.send_raw("AUTHENTICATE *", priority=True)
+            await self._end_cap_negotiation()
+            raise ConnectionError("Server sent an unsupported SASL challenge")
         if self.auth.sasl_mechanism() == "EXTERNAL":
             await self.send_raw("AUTHENTICATE +", sensitive=True, priority=True)
             return

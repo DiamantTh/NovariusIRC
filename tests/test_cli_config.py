@@ -99,3 +99,41 @@ def test_config_rejects_ambiguous_channel_names(channel: str) -> None:
                 },
             }
         )
+
+
+def test_sasl_cannot_be_configured_as_an_optional_ircv3_capability() -> None:
+    with pytest.raises(ValueError, match=r"configured through \[auth\]"):
+        Config.model_validate(
+            {
+                "bot": {},
+                "network": {
+                    "server": "irc.example.test",
+                    "nick": "bot",
+                    "user": "bot",
+                    "realname": "Bot",
+                    "ircv3_capabilities": ["sasl"],
+                },
+            }
+        )
+
+
+def test_environment_overrides_are_revalidated(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[bot]
+
+[network]
+server = "irc.example.test"
+nick = "bot"
+user = "bot"
+realname = "Bot"
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NOVARIUSIRC_CHANNELS", "#good,#bad channel")
+
+    with pytest.raises(ValueError, match="IRC channels"):
+        Config.load(config_file)
