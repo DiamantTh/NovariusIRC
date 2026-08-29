@@ -69,6 +69,8 @@ def test_membership_state_tracks_names_modes_and_identity_changes() -> None:
     state.set_away_status("Renamed", False)
     assert renamed.away is None
     assert renamed.is_away is False
+    state.set_account("Renamed!newuser@new.host", "*")
+    assert renamed.account is None
 
 
 def test_state_reindexes_when_server_changes_casemapping() -> None:

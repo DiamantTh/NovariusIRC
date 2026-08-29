@@ -926,7 +926,7 @@ class IRCClient:
         )
         if account == "0":
             membership.user.account = None
-        membership.user.is_away = "G" in flags
+        self.state.set_away_status(membership.user.nick, "G" in flags)
         for prefix_symbol in self._features.prefix_symbols:
             mode = self._features.mode_for_prefix(prefix_symbol)
             if mode and prefix_symbol in flags:

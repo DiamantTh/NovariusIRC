@@ -238,5 +238,19 @@ def test_client_negotiates_ircv3_and_handles_server_features() -> None:
             "PART",
             "QUIT",
         ]
+        join_name, join_args, join_metadata = plugins.events[0]
+        assert join_name == "JOIN"
+        assert join_args == ("Nick[", "#room")
+        assert join_metadata["account"] == "Alice"
+        assert join_metadata["realname"] == "Alice Example"
+        assert join_metadata["server_time"].isoformat() == ("2026-08-29T01:02:04+00:00")
+        chghost_name, chghost_args, _ = plugins.events[3]
+        assert chghost_name == "CHGHOST"
+        assert chghost_args[:4] == (
+            "Nick[",
+            "Nick[!newuser@new.host",
+            "Nick[!user@old.host",
+            "Bob",
+        )
 
     asyncio.run(scenario())

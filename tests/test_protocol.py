@@ -24,6 +24,16 @@ def test_message_tags_are_parsed_and_unescaped() -> None:
     assert message.tags["example"] == "a b;c\\d"
 
 
+def test_tag_keys_are_opaque_duplicates_use_last_and_empty_is_valueless() -> None:
+    message = parse_message(
+        "@future$key=kept;Duplicate=first;Duplicate=last;empty= PING :cookie"
+    )
+
+    assert message.tags["future$key"] == "kept"
+    assert message.tags["Duplicate"] == "last"
+    assert message.tags["empty"] is None
+
+
 def test_tagged_ping_is_a_normal_parsed_message() -> None:
     message = parse_message("@time=now PING :keepalive-cookie")
     assert message.command == "PING"
@@ -73,3 +83,5 @@ def test_server_time_supports_fractional_and_leap_seconds() -> None:
     assert leap is not None
     assert leap.isoformat() == "2017-01-01T00:00:00.500000+00:00"
     assert parse_server_time("not-a-time") is None
+    assert parse_server_time("2026-08-29T12:34:61.000Z") is None
+    assert parse_server_time("2026-08-29T12:34:56.000+02:00") is None

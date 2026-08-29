@@ -145,9 +145,11 @@ def test_whox_reply_populates_identity_membership_and_away_state() -> None:
     assert channel.members[instance._features.casefold("nick")].user is user
     assert channel.members[instance._features.casefold("nick")].modes == {"o"}
 
+    user.away = "stale away text"
     asyncio.run(instance._handle_line(":irc.test 354 bot 152 #test u h Nick H 0 :Name"))
     assert user.account is None
     assert user.is_away is False
+    assert user.away is None
 
 
 def test_standard_who_reply_populates_identity_and_presence() -> None:
