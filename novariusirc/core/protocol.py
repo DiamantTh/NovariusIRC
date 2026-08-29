@@ -10,6 +10,7 @@ CASEMAPPINGS = {"ascii", "rfc1459", "rfc1459-strict", "strict-rfc1459"}
 _ASCII_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 _ASCII_LOWER = "abcdefghijklmnopqrstuvwxyz"
 _SERVER_TIME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}):(\d{2})(\.\d+)?Z$")
+_COMMAND_RE = re.compile(r"^(?:[A-Za-z]+|\d{3})$")
 
 
 def irc_casefold(value: str, mapping: str = "rfc1459") -> str:
@@ -101,7 +102,7 @@ def parse_message(line: str) -> IRCMessage:
             key, equals, value = item.partition("=")
             if not key:
                 raise ValueError("IRCv3 tag name must not be empty")
-            tags[key] = _unescape_tag(value) if equals and value else None
+            tags[key] = _unescape_tag(value) if equals else None
         rest = rest.lstrip(" ")
 
     prefix: str | None = None
@@ -116,8 +117,8 @@ def parse_message(line: str) -> IRCMessage:
     if not parts:
         raise ValueError("IRC message has no command")
     command, *params = parts
-    if len(params) + bool(marker) > 15:
-        raise ValueError("IRC message has more than 15 parameters")
+    if _COMMAND_RE.fullmatch(command) is None:
+        raise ValueError(f"Invalid IRC command: {command!r}")
     return IRCMessage(
         command=command.upper(),
         params=tuple(params),

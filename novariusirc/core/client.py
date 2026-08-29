@@ -165,19 +165,7 @@ class IRCClient:
             ),
             timeout=self.config.network.connect_timeout_seconds,
         )
-        self._registration_complete = False
-        self._registration_event.clear()
-        self._sasl_in_progress = False
-        self._sasl_complete = False
-        self._features = IRCFeatures()
-        self.state = IRCState(self._features)
-        self.auth.set_casefold(self._features.casefold)
-        self.moderation.set_casefold(self._features.casefold)
-        self._offered_capabilities.clear()
-        self._active_capabilities.clear()
-        self._pending_capabilities.clear()
-        self._sasl_mechanisms.clear()
-        self._cap_end_sent = False
+        self._reset_connection_state()
         self._send_queue = asyncio.PriorityQueue(
             maxsize=self.config.network.send_queue_size
         )
@@ -238,6 +226,24 @@ class IRCClient:
             self.reader = None
             self.writer = None
 
+    def _reset_connection_state(self) -> None:
+        """Discard all state learned from the previous IRC connection."""
+        self._registration_complete = False
+        self._registration_event.clear()
+        self._detected_network_name = None
+        self._current_nick = self.config.network.nick
+        self._sasl_in_progress = False
+        self._sasl_complete = False
+        self._features = IRCFeatures()
+        self.state = IRCState(self._features)
+        self.auth.set_casefold(self._features.casefold)
+        self.moderation.set_casefold(self._features.casefold)
+        self._offered_capabilities.clear()
+        self._active_capabilities.clear()
+        self._pending_capabilities.clear()
+        self._sasl_mechanisms.clear()
+        self._cap_end_sent = False
+
     async def _register(self) -> None:
         if self.config.network.ircv3_enabled or self.config.auth.sasl_enabled:
             await self.send_raw("CAP LS 302", priority=True)
@@ -250,11 +256,19 @@ class IRCClient:
     async def _listen(self) -> None:
         assert self.reader is not None
         while not self.reader.at_eof():
-            raw = await asyncio.wait_for(
-                self.reader.readline(),
-                timeout=self.config.network.idle_timeout_seconds,
-            )
+            try:
+                raw = await asyncio.wait_for(
+                    self.reader.readline(),
+                    timeout=self.config.network.idle_timeout_seconds,
+                )
+            except ValueError as exc:
+                raise ConnectionError(
+                    "Incoming IRC message exceeds the wire limit"
+                ) from exc
             if not raw:
+                break
+            if not raw.endswith(b"\n"):
+                self.logger.warning("Ignoring incomplete IRC message at end of stream")
                 break
             if len(raw) > _MAX_INCOMING_BYTES:
                 self.logger.warning(

@@ -24,14 +24,17 @@ def test_message_tags_are_parsed_and_unescaped() -> None:
     assert message.tags["example"] == "a b;c\\d"
 
 
-def test_tag_keys_are_opaque_duplicates_use_last_and_empty_is_valueless() -> None:
+def test_tag_keys_are_opaque_duplicates_use_last_and_empty_is_distinct() -> None:
     message = parse_message(
         "@future$key=kept;Duplicate=first;Duplicate=last;empty= PING :cookie"
     )
 
     assert message.tags["future$key"] == "kept"
     assert message.tags["Duplicate"] == "last"
-    assert message.tags["empty"] is None
+    assert message.tags["empty"] == ""
+
+    valueless = parse_message("@empty PING :cookie")
+    assert valueless.tags["empty"] is None
 
 
 def test_tagged_ping_is_a_normal_parsed_message() -> None:
@@ -66,6 +69,17 @@ def test_isupport_updates_casemapping_and_chantypes() -> None:
 def test_malformed_prefix_is_rejected_without_index_error() -> None:
     with pytest.raises(ValueError, match="source prefix"):
         parse_message(":server-only")
+
+
+def test_parser_accepts_more_than_fifteen_parameters() -> None:
+    message = parse_message("COMMAND " + " ".join(f"p{index}" for index in range(20)))
+    assert len(message.params) == 20
+
+
+@pytest.mark.parametrize("command", ["!INVALID", "12", "1234", "CMD_1"])
+def test_parser_rejects_invalid_command_syntax(command: str) -> None:
+    with pytest.raises(ValueError, match="Invalid IRC command"):
+        parse_message(f"{command} value")
 
 
 def test_message_body_limit_is_enforced_separately_from_tags() -> None:

@@ -25,6 +25,20 @@ class Writer:
         return None
 
 
+class Reader:
+    def __init__(self, *lines: bytes | ValueError) -> None:
+        self.lines = list(lines)
+
+    def at_eof(self) -> bool:
+        return not self.lines
+
+    async def readline(self) -> bytes:
+        line = self.lines.pop(0)
+        if isinstance(line, ValueError):
+            raise line
+        return line
+
+
 class SaslAuth:
     @staticmethod
     def sasl_mechanism() -> str:
@@ -65,6 +79,48 @@ def test_send_raw_rejects_command_injection() -> None:
     instance = client()
     with pytest.raises(ValueError, match="CR, LF, or NUL"):
         asyncio.run(instance.send_raw("PRIVMSG #safe :hello\r\nOPER attacker"))
+
+
+def test_ping_token_is_returned_unchanged() -> None:
+    instance = client()
+    asyncio.run(instance._handle_line("PING :opaque token with spaces"))
+    assert bytes(instance.writer.data) == b"PONG :opaque token with spaces\r\n"  # type: ignore[union-attr]
+
+
+def test_wire_limit_error_is_reported_as_connection_failure() -> None:
+    instance = client()
+    instance.reader = Reader(ValueError("Separator is not found"))  # type: ignore[assignment]
+
+    with pytest.raises(ConnectionError, match="exceeds the wire limit"):
+        asyncio.run(instance._listen())
+
+
+def test_incomplete_final_wire_message_is_not_processed() -> None:
+    instance = client()
+    instance.reader = Reader(b"PING :must-not-be-processed")  # type: ignore[assignment]
+    asyncio.run(instance._listen())
+    assert not instance.writer.data  # type: ignore[union-attr]
+
+
+def test_reconnect_discards_network_and_nickname_state() -> None:
+    instance = client()
+    instance.auth = AuthManager(
+        instance.config.auth,
+        instance.config.roles,
+        logging.getLogger("test.reset.auth"),
+    )
+    instance.moderation = ModerationManager()
+    instance._detected_network_name = "OldNetwork"
+    instance._current_nick = "OldNick"
+    instance._active_capabilities.add("server-time")
+    instance.state.join("Someone!user@host", "#old")
+
+    instance._reset_connection_state()
+
+    assert instance._detected_network_name is None
+    assert instance._current_nick == instance.config.network.nick
+    assert not instance.active_capabilities
+    assert not instance.state.channels
 
 
 def test_privmsg_flattens_lines_and_respects_irc_byte_limit() -> None:
