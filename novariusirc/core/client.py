@@ -10,11 +10,13 @@ from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
 
+from novariusirc import __version__
 from novariusirc.irc.capabilities import (
     CapabilityProfile,
     CapabilityState,
     cap_req_lines,
 )
+from novariusirc.irc.ctcp import format_ctcp, parse_ctcp
 from novariusirc.irc.events import IRCEnvelope
 from novariusirc.irc.protocol import (
     CASEMAPPINGS,
@@ -863,23 +865,20 @@ class IRCClient:
             nick = prefix.split("!", 1)[0]
             target = params[0] if params else ""
             message = self._text_parameter(parsed, 1)
-            if (
-                self._same_identifier(target, self._current_nick)
-                and message.startswith("\x01PING")
-                and message.endswith("\x01")
-                and (len(message) == 6 or message[5] == " ")
-            ):
-                await self.send_notice(nick, message)
-                return
-            # Handle ACTION (\x01ACTION ...\x01)
-            if message.startswith("\x01ACTION ") and message.endswith("\x01"):
-                action_text = message[8:-1]  # Strip \x01ACTION and \x01
+            ctcp = parse_ctcp(message)
+            if ctcp and self._same_identifier(target, self._current_nick):
+                handled = await self._handle_ctcp_query(
+                    nick, ctcp.command, ctcp.parameters
+                )
+                if handled:
+                    return
+            if ctcp and ctcp.command == "ACTION":
                 await self._dispatch_application(
                     "ACTION",
                     self._handle_action(
                         nick,
                         target,
-                        action_text,
+                        ctcp.parameters,
                         prefix=prefix,
                         tags=parsed.tags,
                         server_time=server_time,
@@ -915,6 +914,27 @@ class IRCClient:
                     account=source_user.account if source_user else None,
                 ),
             )
+
+    async def _handle_ctcp_query(
+        self, nick: str, command: str, parameters: str
+    ) -> bool:
+        """Handle supported direct CTCP queries."""
+        if command == "PING":
+            await self.send_notice(nick, format_ctcp("PING", parameters))
+            return True
+        if command == "VERSION" and self.config.bot.ctcp_version_enabled:
+            reply = self.config.bot.ctcp_version_reply.format(version=__version__)
+            await self.send_notice(nick, format_ctcp("VERSION", reply))
+            return True
+        if command == "CLIENTINFO":
+            commands = ["ACTION", "CLIENTINFO", "PING"]
+            if self.config.bot.ctcp_version_enabled:
+                commands.append("VERSION")
+            await self.send_notice(
+                nick, format_ctcp("CLIENTINFO", " ".join(commands))
+            )
+            return True
+        return False
 
     async def _handle_quote_pong(self, source: str | None, message: str) -> None:
         """Handle servers that request /QUOTE PONG :<cookie> in notices."""
@@ -1057,9 +1077,7 @@ class IRCClient:
         is_pm = self._same_identifier(target, self._current_nick)
         message_tags = dict(tags or {})
         sender_user = self.state.ensure_user(nick, prefix)
-        if "account" in message_tags:
-            sender_user.account = normalize_account(message_tags.get("account"))
-        elif account is not None:
+        if account is not None:
             sender_user.account = account
         account = sender_user.account
 

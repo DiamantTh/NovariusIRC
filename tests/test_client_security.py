@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from novariusirc import __version__
 from novariusirc.core.auth import AuthManager
 from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandRegistry
@@ -106,6 +107,29 @@ def test_ctcp_ping_to_bot_is_echoed_in_notice() -> None:
     assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
         b"NOTICE Nick :\x01PING opaque token 123\x01\r\n"
     )
+
+
+def test_ctcp_version_and_clientinfo_are_minimal_and_configurable() -> None:
+    instance = client()
+    asyncio.run(
+        instance._handle_line(":Nick!user@host PRIVMSG bot :\x01VERSION\x01")
+    )
+    assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
+        f"NOTICE Nick :\x01VERSION NovariusIRC {__version__}\x01\r\n".encode()
+    )
+
+    instance.writer.data.clear()  # type: ignore[union-attr]
+    asyncio.run(
+        instance._handle_line(":Nick!user@host PRIVMSG bot :\x01CLIENTINFO\x01")
+    )
+    assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
+        b"NOTICE Nick :\x01CLIENTINFO ACTION CLIENTINFO PING VERSION\x01\r\n"
+    )
+
+    instance.writer.data.clear()  # type: ignore[union-attr]
+    instance.config.bot.ctcp_version_enabled = False
+    assert not asyncio.run(instance._handle_ctcp_query("Nick", "VERSION", ""))
+    assert not instance.writer.data  # type: ignore[union-attr]
 
 
 def test_notice_respects_wire_limit_without_splitting_utf8() -> None:

@@ -2,6 +2,10 @@
 prefix = "!"
 # Sprache: en (default), de, ja
 language = "en"
+# Direct CTCP VERSION replies are minimal by default and can be disabled or
+# replaced without exposing Python, operating-system, or dependency versions.
+ctcp_version_enabled = true
+ctcp_version_reply = "NovariusIRC {version}"
 
 # Include-Dateien relativ zu diesem config.toml (oder absoluter Pfad)
 # Unterstützt auch top-level: include = ["secrets.toml", "feeds.toml"]

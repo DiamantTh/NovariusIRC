@@ -117,6 +117,21 @@ def test_draft_capabilities_require_explicit_namespace() -> None:
         Config.model_validate(base)
 
 
+def test_ctcp_version_template_is_validated() -> None:
+    with pytest.raises(ValueError, match="version.*placeholder"):
+        Config.model_validate(
+            {
+                "bot": {"ctcp_version_reply": "Bot {platform}"},
+                "network": {
+                    "server": "irc.example.test",
+                    "nick": "bot",
+                    "user": "bot",
+                    "realname": "Bot",
+                },
+            }
+        )
+
+
 def test_check_config_accepts_builtin_modules() -> None:
     config = Config.model_validate(
         {

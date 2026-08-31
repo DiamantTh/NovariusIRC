@@ -51,6 +51,23 @@ class ConfigModel(BaseModel):
 class BotConfig(ConfigModel):
     prefix: str = "!"
     language: str = "en"
+    ctcp_version_enabled: bool = True
+    ctcp_version_reply: str = "NovariusIRC {version}"
+
+    @field_validator("ctcp_version_reply")
+    @classmethod
+    def validate_ctcp_version_reply(cls, value: str) -> str:
+        if any(character in value for character in "\r\n\0\x01"):
+            raise ValueError("CTCP VERSION reply contains a forbidden character")
+        if len(value.encode("utf-8")) > 400:
+            raise ValueError("CTCP VERSION reply is too long")
+        try:
+            value.format(version="0")
+        except (IndexError, KeyError, ValueError) as exc:
+            raise ValueError(
+                "CTCP VERSION reply may only use a valid {version} placeholder"
+            ) from exc
+        return value
 
     def resolve_env(self) -> None:
         env_val = os.getenv(ENV_BOT_PREFIX)

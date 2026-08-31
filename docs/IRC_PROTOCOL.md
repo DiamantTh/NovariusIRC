@@ -47,6 +47,9 @@ budget, prefixes, all legal final-parameter forms, and UTF-8 without splitting
 outgoing code points. `PING`/`PONG` and registration traffic bypass the
 rate-limited output queue. Direct CTCP `PING` requests are echoed through a
 size-limited `NOTICE`; CTCP `ACTION` is exposed to plugins as an action event.
+Direct CTCP `VERSION` and `CLIENTINFO` are supported. The minimal VERSION text
+is configurable through `[bot]` and can be disabled without affecting CTCP
+PING or ACTION.
 
 Connection loss, idle reads, and malformed oversized input trigger a clean
 reconnect. The configured retry delay grows to its final value without wrapping
