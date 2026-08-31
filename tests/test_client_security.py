@@ -197,6 +197,25 @@ def test_reconnect_discards_network_and_nickname_state() -> None:
     assert not instance.state.channels
 
 
+def test_account_tag_only_updates_identity_when_capability_is_active() -> None:
+    instance = client()
+    line = "@account=alice :Nick!user@host 999 bot :future numeric"
+
+    asyncio.run(instance._handle_line(line))
+    assert instance.state.get_user("Nick").account is None  # type: ignore[union-attr]
+
+    instance._active_capabilities.add("account-tag")
+    asyncio.run(instance._handle_line(line))
+    assert instance.state.get_user("Nick").account == "alice"  # type: ignore[union-attr]
+
+    asyncio.run(
+        instance._handle_line(
+            "@account=* :Nick!user@host 999 bot :future numeric"
+        )
+    )
+    assert instance.state.get_user("Nick").account is None  # type: ignore[union-attr]
+
+
 def test_privmsg_flattens_lines_and_respects_irc_byte_limit() -> None:
     instance = client()
     asyncio.run(instance.send_privmsg("#test", "first\nsecond " + "ä" * 400))

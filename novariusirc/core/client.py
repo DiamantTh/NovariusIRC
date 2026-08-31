@@ -11,12 +11,12 @@ from datetime import datetime
 from pathlib import Path
 
 from novariusirc.irc.capabilities import CapabilityState, cap_req_lines
+from novariusirc.irc.events import IRCEnvelope
 from novariusirc.irc.protocol import (
     CASEMAPPINGS,
     IRCFeatures,
     IRCMessage,
     parse_message,
-    parse_server_time,
 )
 from novariusirc.irc.state import IRCState, normalize_account, split_source
 from novariusirc.irc.transport import RateLimitedSender
@@ -306,18 +306,22 @@ class IRCClient:
             self.logger.warning("Ignoring malformed IRC message: %s", exc)
             return
 
-        prefix = parsed.prefix
+        envelope = IRCEnvelope.from_message(parsed)
+        prefix = envelope.source.raw if envelope.source else None
         command = parsed.command
         params = list(parsed.params)
         trailing = parsed.trailing or ""
-        server_time = parse_server_time(parsed.tags.get("time"))
-        if "time" in parsed.tags and server_time is None:
+        server_time = envelope.server_time
+        if envelope.invalid_server_time:
             self.logger.warning("Ignoring invalid IRCv3 server-time tag")
         source_user = None
         if prefix and "!" in prefix:
             source_nick, _, _ = split_source(prefix)
             source_user = self.state.ensure_user(source_nick, prefix)
-            if "account" in parsed.tags:
+            if (
+                "account-tag" in self._active_capabilities
+                and "account" in parsed.tags
+            ):
                 source_user = self.state.set_account(prefix, parsed.tags.get("account"))
         if command == "PING":
             cookie = trailing or (params[0] if params else "")
