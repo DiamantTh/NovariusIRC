@@ -14,6 +14,26 @@ class CapabilityToken:
     disabled: bool = False
 
 
+@dataclass(frozen=True)
+class CapabilityProfile:
+    """Capabilities requested normally and experimental drafts enabled explicitly."""
+
+    standard: tuple[str, ...] = ()
+    drafts: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        invalid_drafts = [name for name in self.drafts if not name.startswith("draft/")]
+        if invalid_drafts:
+            raise ValueError(
+                "Experimental IRC capabilities must use the draft/ namespace: "
+                + ", ".join(invalid_drafts)
+            )
+
+    @property
+    def requested(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys((*self.standard, *self.drafts)))
+
+
 def parse_capability_token(value: str) -> CapabilityToken:
     """Parse a capability token while keeping its name case-sensitive."""
     disabled = value.startswith("-")

@@ -3,10 +3,26 @@ from __future__ import annotations
 import pytest
 
 from novariusirc.irc.capabilities import (
+    CapabilityProfile,
     CapabilityState,
     cap_req_lines,
     parse_capability_token,
 )
+
+
+def test_capability_profile_keeps_drafts_explicit() -> None:
+    profile = CapabilityProfile(
+        standard=("server-time", "message-tags"),
+        drafts=("draft/chathistory",),
+    )
+    assert profile.requested == (
+        "server-time",
+        "message-tags",
+        "draft/chathistory",
+    )
+
+    with pytest.raises(ValueError, match="draft/ namespace"):
+        CapabilityProfile(drafts=("chathistory",))
 
 
 def test_capability_state_tracks_lifecycle_and_values() -> None:

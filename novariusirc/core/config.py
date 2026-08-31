@@ -94,6 +94,9 @@ class NetworkConfig(ConfigModel):
             "userhost-in-names",
         ]
     )
+    # Work-in-progress IRCv3 extensions are never enabled by the normal list.
+    # Naming an entry here is the operator's explicit opt-in to draft semantics.
+    ircv3_draft_capabilities: list[str] = Field(default_factory=list)
     send_rate_per_second: float = Field(default=1.0, gt=0)
     send_burst: int = Field(default=4, ge=1)
     send_queue_size: int = Field(default=256, ge=1)
@@ -126,6 +129,18 @@ class NetworkConfig(ConfigModel):
                 raise ValueError(f"IRCv3 capability is too long: {capability!r}")
             if capability not in normalized:
                 normalized.append(capability)
+        return normalized
+
+    @field_validator("ircv3_draft_capabilities")
+    @classmethod
+    def validate_ircv3_draft_capabilities(cls, value: list[str]) -> list[str]:
+        normalized = cls.validate_ircv3_capabilities(value)
+        invalid = [name for name in normalized if not name.startswith("draft/")]
+        if invalid:
+            raise ValueError(
+                "experimental IRCv3 capabilities must use the draft/ namespace: "
+                + ", ".join(invalid)
+            )
         return normalized
 
     @field_validator("nick", "user", "realname", "channels")

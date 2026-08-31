@@ -98,6 +98,25 @@ def test_check_config_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> Non
     assert parse_args().check_config
 
 
+def test_draft_capabilities_require_explicit_namespace() -> None:
+    base = {
+        "bot": {},
+        "network": {
+            "server": "irc.example.test",
+            "nick": "bot",
+            "user": "bot",
+            "realname": "Bot",
+            "ircv3_draft_capabilities": ["draft/chathistory"],
+        },
+    }
+    assert Config.model_validate(base).network.ircv3_draft_capabilities == [
+        "draft/chathistory"
+    ]
+    base["network"]["ircv3_draft_capabilities"] = ["chathistory"]
+    with pytest.raises(ValueError, match="draft/ namespace"):
+        Config.model_validate(base)
+
+
 def test_check_config_accepts_builtin_modules() -> None:
     config = Config.model_validate(
         {

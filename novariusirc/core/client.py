@@ -10,7 +10,11 @@ from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
 
-from novariusirc.irc.capabilities import CapabilityState, cap_req_lines
+from novariusirc.irc.capabilities import (
+    CapabilityProfile,
+    CapabilityState,
+    cap_req_lines,
+)
 from novariusirc.irc.events import IRCEnvelope
 from novariusirc.irc.protocol import (
     CASEMAPPINGS,
@@ -68,6 +72,10 @@ class IRCClient:
         self._features = IRCFeatures()
         self.state = IRCState(self._features)
         self._capabilities = CapabilityState()
+        self._capability_profile = CapabilityProfile(
+            standard=tuple(config.network.ircv3_capabilities),
+            drafts=tuple(config.network.ircv3_draft_capabilities),
+        )
         # Compatibility aliases while the bot adapter is split incrementally.
         self._offered_capabilities = self._capabilities.offered
         self._active_capabilities = self._capabilities.active
@@ -1341,7 +1349,7 @@ class IRCClient:
             if self.config.network.ircv3_enabled:
                 optional = [
                     capability
-                    for capability in self.config.network.ircv3_capabilities
+                    for capability in self._capability_profile.requested
                     if capability in self._offered_capabilities and capability != "sasl"
                 ]
             requests = (["sasl"] if self.config.auth.sasl_enabled else []) + optional
@@ -1381,7 +1389,7 @@ class IRCClient:
             wanted = self._capabilities.wanted(
                 [
                     capability
-                    for capability in self.config.network.ircv3_capabilities
+                    for capability in self._capability_profile.requested
                     if capability != "sasl"
                 ]
             )

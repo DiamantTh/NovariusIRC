@@ -40,6 +40,11 @@ ircv3_capabilities = [
     "server-time",
     "userhost-in-names",
 ]
+# Work-in-progress features are opt-in and must retain their draft/ name.
+# Empty by default because draft semantics may change incompatibly.
+ircv3_draft_capabilities = []
+# Example only after the corresponding extension is implemented:
+# ircv3_draft_capabilities = ["draft/chathistory"]
 # Schutz gegen haengende Verbindungen und ausgehende Floods.
 connect_timeout_seconds = 30
 registration_timeout_seconds = 60

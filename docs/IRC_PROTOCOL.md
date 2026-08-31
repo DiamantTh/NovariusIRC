@@ -12,6 +12,12 @@ This matrix describes implemented behavior, not every extension an IRC server
 may advertise. Optional capabilities are requested only when both configured
 and offered by the server.
 
+Work-in-progress capabilities are kept separate in
+`network.ircv3_draft_capabilities`. They must use the `draft/` namespace and
+remain disabled unless the operator names them explicitly. Advertising and
+negotiating a draft does not by itself imply that its higher-level semantics
+are implemented by the bot.
+
 ## IRCv3
 
 | Feature | Status | Behavior |
