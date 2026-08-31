@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import logging
 import ssl
-import time
 from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +19,7 @@ from novariusirc.irc.protocol import (
     parse_server_time,
 )
 from novariusirc.irc.state import IRCState, normalize_account, split_source
+from novariusirc.irc.transport import RateLimitedSender
 from novariusirc.irc.wire import format_join, format_text_command, validate_raw_line
 
 from .auth import AuthManager
@@ -37,8 +37,6 @@ from .logging import (
 from .moderation import ModerationManager
 from .plugins import PluginManager
 
-_SEND_NORMAL = 10
-_SEND_PRIORITY = 0
 _MAX_INCOMING_BYTES = 8703  # 8191 bytes of tags plus a 512-byte IRC message.
 
 
@@ -76,12 +74,13 @@ class IRCClient:
         self._pending_capabilities = self._capabilities.pending
         self._sasl_mechanisms: set[str] = set()
         self._cap_end_sent = False
-        self._send_queue: (
-            asyncio.PriorityQueue[tuple[int, int, str, bool, asyncio.Future[None]]]
-            | None
-        ) = None
-        self._send_sequence = 0
-        self._sender_task: asyncio.Task[None] | None = None
+        self._sender = RateLimitedSender(
+            self._send_direct,
+            rate_per_second=config.network.send_rate_per_second,
+            burst=config.network.send_burst,
+            queue_size=config.network.send_queue_size,
+            on_failure=self._sender_failed,
+        )
         self._event_queue: (
             asyncio.Queue[tuple[str, Coroutine[object, object, None]]] | None
         ) = None
@@ -185,12 +184,7 @@ class IRCClient:
             timeout=self.config.network.connect_timeout_seconds,
         )
         self._reset_connection_state()
-        self._send_queue = asyncio.PriorityQueue(
-            maxsize=self.config.network.send_queue_size
-        )
-        self._sender_task = asyncio.create_task(
-            self._send_loop(), name="irc-send-queue"
-        )
+        self._sender.start()
         self._event_queue = asyncio.Queue(maxsize=self.config.network.event_queue_size)
         self._event_task = asyncio.create_task(
             self._event_loop(), name="irc-application-events"
@@ -233,13 +227,7 @@ class IRCClient:
             self._close_event_queue()
             self._event_task = None
             self._event_queue = None
-            if self._sender_task:
-                self._sender_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, ConnectionError):
-                    await self._sender_task
-            self._fail_send_queue(ConnectionError("IRC connection closed"))
-            self._sender_task = None
-            self._send_queue = None
+            await self._sender.stop(ConnectionError("IRC connection closed"))
             if self.writer:
                 self.writer.close()
                 with contextlib.suppress(ConnectionError, OSError, RuntimeError):
@@ -1235,32 +1223,9 @@ class IRCClient:
         validate_raw_line(message)
         if not self.writer:
             raise ConnectionError("IRC client is not connected")
-
-        # Keepalive and registration traffic must not sit behind a flooded
-        # application queue. The write lock still serializes it with a write
-        # already in progress.
-        if priority:
-            await self._send_direct(message, sensitive=sensitive)
-            return
-
-        if self._send_queue is not None and self._sender_task is not None:
-            result = asyncio.get_running_loop().create_future()
-            self._send_sequence += 1
-            item = (
-                _SEND_PRIORITY if priority else _SEND_NORMAL,
-                self._send_sequence,
-                message,
-                sensitive,
-                result,
-            )
-            try:
-                await asyncio.wait_for(self._send_queue.put(item), timeout=5.0)
-            except TimeoutError as exc:
-                raise ConnectionError("IRC send queue is full") from exc
-            await result
-            return
-
-        await self._send_direct(message, sensitive=sensitive)
+        await self._sender.send(
+            message, sensitive=sensitive, priority=priority
+        )
 
     async def _send_direct(self, message: str, *, sensitive: bool = False) -> None:
         writer = self.writer
@@ -1280,50 +1245,10 @@ class IRCClient:
             writer.write((message + "\r\n").encode())
             await writer.drain()
 
-    async def _send_loop(self) -> None:
-        assert self._send_queue is not None
-        tokens = float(self.config.network.send_burst)
-        last_refill = time.monotonic()
-        try:
-            while True:
-                priority, _, message, sensitive, result = await self._send_queue.get()
-                if result.cancelled():
-                    self._send_queue.task_done()
-                    continue
-                try:
-                    if priority != _SEND_PRIORITY:
-                        now = time.monotonic()
-                        tokens = min(
-                            float(self.config.network.send_burst),
-                            tokens
-                            + (now - last_refill)
-                            * self.config.network.send_rate_per_second,
-                        )
-                        last_refill = now
-                        if tokens < 1.0:
-                            delay = (
-                                1.0 - tokens
-                            ) / self.config.network.send_rate_per_second
-                            await asyncio.sleep(delay)
-                            last_refill = time.monotonic()
-                            tokens = 0.0
-                        else:
-                            tokens -= 1.0
-                    await self._send_direct(message, sensitive=sensitive)
-                except Exception as exc:  # noqa: BLE001 - fail the connection boundary
-                    if not result.done():
-                        result.set_exception(exc)
-                    if self.writer:
-                        self.writer.close()
-                    self._fail_send_queue(exc)
-                    return
-                else:
-                    if not result.done():
-                        result.set_result(None)
-                finally:
-                    self._send_queue.task_done()
-        finally:
-            self._fail_send_queue(ConnectionError("IRC sender stopped"))
+    def _sender_failed(self, error: Exception) -> None:
+        self.logger.warning("IRC sender failed: %s", error)
+        if self.writer:
+            self.writer.close()
 
     async def _dispatch_application(
         self, event: str, coroutine: Coroutine[object, object, None]
@@ -1366,18 +1291,6 @@ class IRCClient:
                 break
             coroutine.close()
             self._event_queue.task_done()
-
-    def _fail_send_queue(self, error: Exception) -> None:
-        if self._send_queue is None:
-            return
-        while True:
-            try:
-                _, _, _, _, result = self._send_queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            if not result.done():
-                result.set_exception(error)
-            self._send_queue.task_done()
 
     async def send_privmsg(
         self, target: str, message: str, *, sensitive: bool = False
