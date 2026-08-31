@@ -11,6 +11,7 @@ from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
 
+from novariusirc.irc.capabilities import CapabilityState, cap_req_lines
 from novariusirc.irc.protocol import (
     CASEMAPPINGS,
     IRCFeatures,
@@ -67,9 +68,11 @@ class IRCClient:
         self._sasl_complete = False
         self._features = IRCFeatures()
         self.state = IRCState(self._features)
-        self._offered_capabilities: dict[str, str | None] = {}
-        self._active_capabilities: set[str] = set()
-        self._pending_capabilities: set[str] = set()
+        self._capabilities = CapabilityState()
+        # Compatibility aliases while the bot adapter is split incrementally.
+        self._offered_capabilities = self._capabilities.offered
+        self._active_capabilities = self._capabilities.active
+        self._pending_capabilities = self._capabilities.pending
         self._sasl_mechanisms: set[str] = set()
         self._cap_end_sent = False
         self._send_queue: (
@@ -255,9 +258,7 @@ class IRCClient:
         self.state = IRCState(self._features)
         self.auth.set_casefold(self._features.casefold)
         self.moderation.set_casefold(self._features.casefold)
-        self._offered_capabilities.clear()
-        self._active_capabilities.clear()
-        self._pending_capabilities.clear()
+        self._capabilities.reset()
         self._sasl_mechanisms.clear()
         self._cap_end_sent = False
 
@@ -1423,14 +1424,11 @@ class IRCClient:
             param for param in params[2:] if param != "*"
         )
         capability_tokens = capability_text.split()
-        capabilities = {token.removeprefix("-") for token in capability_tokens}
         if subcommand == "LS":
-            for capability in capability_tokens:
-                name, _, values = capability.partition("=")
-                self._offered_capabilities[name] = values or None
-                if name == "sasl" and values:
+            for token in self._capabilities.advertise(capability_tokens):
+                if token.name == "sasl" and token.value:
                     self._sasl_mechanisms.update(
-                        mechanism.upper() for mechanism in values.split(",")
+                        mechanism.upper() for mechanism in token.value.split(",")
                     )
             if params and params[-1] == "*":
                 return
@@ -1451,7 +1449,7 @@ class IRCClient:
                     if capability in self._offered_capabilities and capability != "sasl"
                 ]
             requests = (["sasl"] if self.config.auth.sasl_enabled else []) + optional
-            self._pending_capabilities.update(requests)
+            self._capabilities.request(requests)
             if self.config.auth.sasl_enabled:
                 await self.send_raw("CAP REQ :sasl", priority=True)
             if optional:
@@ -1459,22 +1457,13 @@ class IRCClient:
             if not requests:
                 await self._end_cap_negotiation()
         elif subcommand == "ACK":
-            for token in capability_tokens:
-                disabled = token.startswith("-")
-                capability = token[1:] if disabled else token
-                self._pending_capabilities.discard(capability)
-                if disabled:
-                    self._active_capabilities.discard(capability)
-                    if capability == "sasl" and self.config.auth.sasl_enabled:
-                        await self._end_cap_negotiation()
-                        raise ConnectionError(
-                            "Server disabled the required SASL capability"
-                        )
-                else:
-                    self._active_capabilities.add(capability)
+            enabled, disabled = self._capabilities.acknowledge(capability_tokens)
+            if "sasl" in disabled and self.config.auth.sasl_enabled:
+                await self._end_cap_negotiation()
+                raise ConnectionError("Server disabled the required SASL capability")
             if (
                 self.config.auth.sasl_enabled
-                and "sasl" in capabilities
+                and "sasl" in enabled
                 and "sasl" in self._active_capabilities
             ):
                 mechanism = self.auth.sasl_mechanism()
@@ -1483,8 +1472,8 @@ class IRCClient:
             else:
                 await self._maybe_end_cap_negotiation()
         elif subcommand == "NAK":
-            self._pending_capabilities.difference_update(capabilities)
-            if "sasl" in capabilities:
+            rejected = self._capabilities.reject(capability_tokens)
+            if "sasl" in rejected:
                 await self._end_cap_negotiation()
                 raise ConnectionError("Server rejected the required SASL capability")
             self.logger.warning(
@@ -1492,37 +1481,23 @@ class IRCClient:
             )
             await self._maybe_end_cap_negotiation()
         elif subcommand == "NEW":
-            for capability in capability_tokens:
-                name, _, value = capability.partition("=")
-                self._offered_capabilities[name] = value or None
-            wanted = [
-                capability
-                for capability in self.config.network.ircv3_capabilities
-                if capability in self._offered_capabilities
-                and capability != "sasl"
-                and capability not in self._active_capabilities
-                and capability not in self._pending_capabilities
-            ]
-            self._pending_capabilities.update(wanted)
+            self._capabilities.advertise(capability_tokens)
+            wanted = self._capabilities.wanted(
+                [
+                    capability
+                    for capability in self.config.network.ircv3_capabilities
+                    if capability != "sasl"
+                ]
+            )
+            self._capabilities.request(wanted)
             if wanted:
                 await self._request_capabilities(wanted)
         elif subcommand == "DEL":
-            for capability in capabilities:
-                self._offered_capabilities.pop(capability, None)
-                self._active_capabilities.discard(capability)
-                self._pending_capabilities.discard(capability)
+            self._capabilities.remove(capability_tokens)
 
     async def _request_capabilities(self, capabilities: list[str]) -> None:
-        chunk: list[str] = []
-        for capability in capabilities:
-            candidate = " ".join([*chunk, capability])
-            if len(f"CAP REQ :{candidate}".encode()) > 510 and chunk:
-                await self.send_raw(f"CAP REQ :{' '.join(chunk)}", priority=True)
-                chunk = [capability]
-            else:
-                chunk.append(capability)
-        if chunk:
-            await self.send_raw(f"CAP REQ :{' '.join(chunk)}", priority=True)
+        for line in cap_req_lines(capabilities):
+            await self.send_raw(line, priority=True)
 
     async def _end_cap_negotiation(self) -> None:
         if self._cap_end_sent:
