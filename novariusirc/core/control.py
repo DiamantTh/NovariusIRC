@@ -56,7 +56,9 @@ async def dispatch_local_command(
         roles=["owner"],
     )
     if not await commands.dispatch(context):
-        await client.send_privmsg("local", f"Unknown command: {line}")
+        await client.send_privmsg(
+            "local", context.tr("Unknown command: {command}", command=line)
+        )
     return True
 
 

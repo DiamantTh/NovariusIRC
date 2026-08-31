@@ -1,6 +1,6 @@
 # Startbereitschaft, Module und Plugins
 
-Stand: 31. August 2026
+Stand: 1. September 2026
 
 Dieses Dokument hält den technischen Stand am Ende der Stabilisierungsrunde
 fest. Es trennt bereits funktionierende Bestandteile von noch offenen Arbeiten
@@ -15,9 +15,9 @@ Ein normaler Start mit dem eingebauten RSS-Modul und einem explizit aktivierten
 externen Plugin ist als MVP möglich. Die Grundlage ist testbar und
 funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
-Am 31. August 2026 wurde folgender Stand verifiziert:
+Am 1. September 2026 wurde folgender Stand verifiziert:
 
-- 142 von 142 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 152 von 152 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
@@ -39,6 +39,7 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | Relative Pfade | fertig | Werden relativ zur Instanzkonfiguration aufgelöst |
 | Validierung | fertig | Unbekannte Felder und unsichere Modul-/Pluginnamen werden abgelehnt |
 | Core-Commands | fertig | `ping`, `uptime`, `version`, `botinfo` und `help`; im Channel nur gezielte Nick-Ansprache, in Query/Local ohne Botnamen |
+| Core-/Modul-I18n | fertig grundgelegt | Gettext-Kataloge für `de`, `en` und `ja`, ENV-/Locale-Erkennung, englischer Fallback und kontextbezogene Command-/RSS-Ausgaben |
 | Modul-Auswahl | fertig | Über `[modules].enabled` |
 | Plugin-Auswahl | fertig | Explizite Allowlist über `[plugins].load` |
 | Plugin-Ablage | fertig | Einzelne Python-Datei oder Paket mit `__init__.py` |

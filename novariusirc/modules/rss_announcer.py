@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from novariusirc.core.i18n import gettext_lazy as _
+from novariusirc.core.i18n import translate
 from novariusirc.core.plugins import Plugin
 
 
@@ -36,7 +36,7 @@ class Plugin(Plugin):
             "feed",
             self._cmd_feed,
             roles=("user",),
-            help_text="Show feed overview. Usage: !feed list [query]",
+            help_text="Show feed overview",
             owner=self.command_owner,
         )
 
@@ -50,18 +50,22 @@ class Plugin(Plugin):
             try:
                 limit = max(1, int(args[0]))
             except ValueError:
-                await ctx.reply(_("Usage: !rssfetch [limit]"))
+                await ctx.reply(
+                    ctx.tr("Usage: {command}", command=ctx.invocation("rssfetch [limit]"))
+                )
                 return
         await self.feeds.poll_now(limit)
-        await ctx.reply(_("RSS/ATOM fetch triggered."))
+        await ctx.reply(ctx.tr("RSS/ATOM fetch triggered."))
 
     async def _cmd_feed(self, ctx, args) -> None:
         if not self.config.feeds.enabled:
-            await ctx.reply(_("Feeds are disabled."))
+            await ctx.reply(ctx.tr("Feeds are disabled."))
             return
 
         if not args or args[0].lower() not in {"list", "ls"}:
-            await ctx.reply(_("Usage: !feed list [query]"))
+            await ctx.reply(
+                ctx.tr("Usage: {command}", command=ctx.invocation("feed list [query]"))
+            )
             return
 
         query = " ".join(args[1:]).strip().lower()
@@ -76,12 +80,15 @@ class Plugin(Plugin):
             feeds = [feed for feed in feeds if _matches(feed)]
 
         if not feeds:
-            await ctx.reply(_("No feeds matched your query."))
+            await ctx.reply(ctx.tr("No feeds matched your query."))
             return
 
         await ctx.reply(
-            _("Feeds: {count} active. Query: {query}").format(
-                count=len(feeds), query=query or "*"
+            ctx.trn(
+                "Feeds: {count} active feed. Query: {query}",
+                "Feeds: {count} active feeds. Query: {query}",
+                len(feeds),
+                query=query or "*",
             )
         )
 
@@ -103,10 +110,17 @@ class Plugin(Plugin):
                 if feed.max_items_per_manual is not None
                 else self.config.feeds.max_items_per_manual
             )
-            mode = "on" if feed.enabled else "off"
-            msg = (
-                f"{feed.name} [{mode}] ch={channels_text} poll={poll_limit} manual={manual_limit} "
-                f"min={min_interval}s url={feed.url}"
+            mode = ctx.tr("on" if feed.enabled else "off")
+            msg = ctx.tr(
+                "{name} [{mode}] channels={channels} poll={poll} manual={manual} "
+                "minimum={minimum}s url={url}",
+                name=feed.name,
+                mode=mode,
+                channels=channels_text,
+                poll=poll_limit,
+                manual=manual_limit,
+                minimum=min_interval,
+                url=feed.url,
             )
             await ctx.reply(msg)
 
@@ -118,7 +132,8 @@ class Plugin(Plugin):
             return
         data = {
             "feed": feed.name,
-            "title": entry.get("title") or _("New item"),
+            "title": entry.get("title")
+            or translate("New item", self.config.bot.language),
             "summary": entry.get("summary") or "",
             "link": entry.get("link") or "",
             "published": entry.get("published") or entry.get("updated") or "",

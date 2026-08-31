@@ -9,7 +9,7 @@ from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from .i18n import gettext_lazy as _
+from .i18n import ntranslate, translate
 
 ROLE_ORDER = ("user", "admin", "owner")
 CommandHandler = Callable[["CommandContext", list[str]], Awaitable[None] | None]
@@ -52,6 +52,27 @@ class CommandContext:
     async def reply(self, text: str) -> None:
         target = self.channel or self.nick
         await self.client.send_privmsg(target, text)
+
+    @property
+    def language(self) -> str:
+        bot = getattr(self.config, "bot", None)
+        return getattr(bot, "language", "en")
+
+    def tr(self, message: str, **values: object) -> str:
+        return translate(message, self.language, **values)
+
+    def trn(
+        self, singular: str, plural: str, count: int, **values: object
+    ) -> str:
+        return ntranslate(singular, plural, count, self.language, **values)
+
+    def invocation(self, command: str) -> str:
+        if self.channel:
+            nick = getattr(self.client, "current_nick", None)
+            if nick:
+                return f"{nick}: {command}"
+        bot = getattr(self.config, "bot", None)
+        return f"{getattr(bot, 'prefix', '!')}{command}"
 
 
 @dataclass(frozen=True)
@@ -175,7 +196,7 @@ class CommandRegistry:
             return False
 
         if not _roles_satisfy(ctx.roles, command_entry.roles):
-            await ctx.reply(_("You are not allowed to run this command."))
+            await ctx.reply(ctx.tr("You are not allowed to run this command."))
             return True
 
         if self.rate_limit_seconds > 0:
@@ -184,7 +205,7 @@ class CommandRegistry:
             now = time.monotonic()
             last = self._last_exec.get(key, 0.0)
             if now - last < self.rate_limit_seconds:
-                await ctx.reply(_("Please slow down."))
+                await ctx.reply(ctx.tr("Please slow down."))
                 return True
             self._last_exec[key] = now
 
@@ -194,7 +215,7 @@ class CommandRegistry:
                 await result
         except Exception:
             ctx.logger.exception("Command %s failed", command_entry.name)
-            await ctx.reply(_("Command failed."))
+            await ctx.reply(ctx.tr("Command failed."))
         return True
 
 

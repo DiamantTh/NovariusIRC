@@ -1,0 +1,118 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: NovariusIRC 0.1.5\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "pong"
+msgstr "pong"
+
+msgid "uptime: {seconds}s"
+msgstr "Laufzeit: {seconds}s"
+
+msgid "Commands ({prefix}):"
+msgstr "Befehle ({prefix}):"
+
+msgid "Commands (address {nick}):"
+msgstr "Befehle ({nick} direkt ansprechen):"
+
+msgid "You are not allowed to run this command."
+msgstr "Du darfst diesen Befehl nicht ausführen."
+
+msgid "Please slow down."
+msgstr "Bitte langsamer."
+
+msgid "Command failed."
+msgstr "Befehl fehlgeschlagen."
+
+msgid "Unknown command: {command}"
+msgstr "Unbekannter Befehl: {command}"
+
+msgid "Health check"
+msgstr "Funktionsprüfung"
+
+msgid "Show bot uptime"
+msgstr "Bot-Laufzeit anzeigen"
+
+msgid "Show bot version"
+msgstr "Botversion anzeigen"
+
+msgid "Show available commands"
+msgstr "Verfügbare Befehle anzeigen"
+
+msgid "Show core service status"
+msgstr "Status der Core-Dienste anzeigen"
+
+msgid "Show bot identity and features"
+msgstr "Botidentität und Funktionen anzeigen"
+
+msgid "connected"
+msgstr "verbunden"
+
+msgid "disconnected"
+msgstr "getrennt"
+
+msgid "none"
+msgstr "keine"
+
+msgid "running"
+msgstr "läuft"
+
+msgid "idle"
+msgstr "bereit"
+
+msgid "disabled"
+msgstr "deaktiviert"
+
+msgid "Status: {connection}; network={network}; modules={modules}; feeds={feeds}"
+msgstr "Status: {connection}; Netzwerk={network}; Module={modules}; Feeds={feeds}"
+
+msgid "Bot: {nick}; software={software}; network={network}; status={status}; uptime={uptime}s"
+msgstr "Bot: {nick}; Software={software}; Netzwerk={network}; Status={status}; Laufzeit={uptime}s"
+
+msgid "Runtime: {value}"
+msgstr "Laufzeitumgebung: {value}"
+
+msgid "Features: {value}"
+msgstr "Funktionen: {value}"
+
+msgid "Optional: {value}"
+msgstr "Optional: {value}"
+
+msgid "Fetch RSS/ATOM feeds now (optional limit)."
+msgstr "RSS-/ATOM-Feeds jetzt abrufen (optionales Limit)."
+
+msgid "Show feed overview"
+msgstr "Feedübersicht anzeigen"
+
+msgid "Usage: {command}"
+msgstr "Nutzung: {command}"
+
+msgid "RSS/ATOM fetch triggered."
+msgstr "RSS-/ATOM-Abruf gestartet."
+
+msgid "Feeds are disabled."
+msgstr "Feeds sind deaktiviert."
+
+msgid "No feeds matched your query."
+msgstr "Keine Feeds passen zur Suche."
+
+msgid "Feeds: {count} active feed. Query: {query}"
+msgid_plural "Feeds: {count} active feeds. Query: {query}"
+msgstr[0] "Feeds: {count} aktiver Feed. Suche: {query}"
+msgstr[1] "Feeds: {count} aktive Feeds. Suche: {query}"
+
+msgid "on"
+msgstr "an"
+
+msgid "off"
+msgstr "aus"
+
+msgid "New item"
+msgstr "Neuer Eintrag"
+
+msgid "{name} [{mode}] channels={channels} poll={poll} manual={manual} minimum={minimum}s url={url}"
+msgstr "{name} [{mode}] Kanäle={channels} Abruf={poll} manuell={manual} Minimum={minimum}s URL={url}"

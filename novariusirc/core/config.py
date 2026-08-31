@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from .i18n import detect_environment_language, normalize_language
+
 DEFAULT_INCLUDE_FILES = ["secrets.toml"]
 
 ENV_BOT_PREFIX = "NOVARIUSIRC_PREFIX"
@@ -50,8 +52,16 @@ class ConfigModel(BaseModel):
 
 class BotConfig(ConfigModel):
     prefix: str = "!"
-    language: str = "en"
+    language: str = Field(default_factory=detect_environment_language)
     ctcp_version_extra: str = ""
+
+    @field_validator("language")
+    @classmethod
+    def validate_language(cls, value: str) -> str:
+        language = normalize_language(value)
+        if language is None:
+            raise ValueError(f"unsupported bot language: {value!r}")
+        return language
 
     @field_validator("ctcp_version_extra")
     @classmethod

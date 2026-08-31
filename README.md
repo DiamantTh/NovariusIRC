@@ -128,6 +128,9 @@ For an environment-only container, pass `--config env` and at minimum set
 
 ## Notes
 - Structured STDOUT logging plus rotating files under `logs/`; optional journald if installed.
+- Core and built-in module replies use gettext catalogs for `de`, `en`, and
+  `ja`. If `[bot].language` is omitted, startup checks `NOVARIUSIRC_LANG`,
+  `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, and `LANG`, then falls back to English.
 - The connection core supports IRCv3 CAP 302, message tags, SASL PLAIN and
   EXTERNAL, dynamic `CAP NEW`/`DEL`, server time, identity/presence events,
   WHO/WHOX snapshots, and the relevant `RPL_ISUPPORT` network features.

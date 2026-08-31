@@ -1,6 +1,6 @@
 [bot]
 prefix = "!"
-# Sprache: en (default), de, ja
+# Sprache: en, de, ja; ohne Angabe Erkennung aus ENV/Locale, Fallback en
 language = "en"
 # CTCP VERSION always reports the native NovariusIRC package version. Optional
 # plain text is appended, but cannot replace the product name or version.

@@ -24,7 +24,6 @@ from novariusirc.core.control import (
     run_control_command,
 )
 from novariusirc.core.feeds import FeedEngine
-from novariusirc.core.i18n import gettext_lazy as _
 from novariusirc.core.i18n import init_i18n
 from novariusirc.core.logging import setup_logging, setup_moderation_logging
 from novariusirc.core.moderation import ModerationManager
@@ -203,19 +202,27 @@ def register_builtin_commands(
     commands: CommandRegistry, config: Config, start_time: float
 ) -> None:
     async def ping(ctx: CommandContext, args: list[str]) -> None:
-        await ctx.reply(_("pong"))
+        await ctx.reply(ctx.tr("pong"))
 
     async def uptime(ctx: CommandContext, args: list[str]) -> None:
         seconds = int(time.monotonic() - start_time)
-        await ctx.reply(_("uptime: {seconds}s").format(seconds=seconds))
+        await ctx.reply(ctx.tr("uptime: {seconds}s", seconds=seconds))
 
     async def version(ctx: CommandContext, args: list[str]) -> None:
         await ctx.reply(SIMPLE_VERSION)
 
     async def help_cmd(ctx: CommandContext, args: list[str]) -> None:
-        lines = [_("Commands ({prefix}):").format(prefix=config.bot.prefix)]
+        if ctx.channel:
+            lines = [
+                ctx.tr(
+                    "Commands (address {nick}):",
+                    nick=getattr(ctx.client, "current_nick", config.network.nick),
+                )
+            ]
+        else:
+            lines = [ctx.tr("Commands ({prefix}):", prefix=config.bot.prefix)]
         for cmd in commands.list_commands(ctx.roles):
-            lines.append(f"{cmd.name} - {cmd.help_text}")
+            lines.append(f"{cmd.name} - {ctx.tr(cmd.help_text)}")
         await ctx.reply(" | ".join(lines))
 
     commands.register("ping", ping, help_text="Health check", owner="core")
@@ -235,28 +242,45 @@ def register_runtime_commands(
     runtime_started = time.monotonic() if start_time is None else start_time
 
     async def status(ctx: CommandContext, args: list[str]) -> None:
-        connection = "connected" if client.is_connected else "disconnected"
+        connection = ctx.tr("connected" if client.is_connected else "disconnected")
         module_names = ", ".join(modules.active_builtin_modules) or "none"
+        if module_names == "none":
+            module_names = ctx.tr("none")
         feed_state = (
-            "running"
+            ctx.tr("running")
             if feeds.is_running
-            else ("idle" if feeds.config.enabled else "disabled")
+            else (ctx.tr("idle") if feeds.config.enabled else ctx.tr("disabled"))
         )
         await ctx.reply(
-            f"Status: {connection}; network={client.network_name}; "
-            f"modules={module_names}; feeds={feed_state}"
+            ctx.tr(
+                "Status: {connection}; network={network}; modules={modules}; "
+                "feeds={feeds}",
+                connection=connection,
+                network=client.network_name,
+                modules=module_names,
+                feeds=feed_state,
+            )
         )
 
     async def botinfo(ctx: CommandContext, args: list[str]) -> None:
-        connection = "connected" if client.is_connected else "disconnected"
+        connection = ctx.tr("connected" if client.is_connected else "disconnected")
         uptime_seconds = max(0, int(time.monotonic() - runtime_started))
         version_line, *diagnostics = detailed_version().splitlines()
-        identity = (
-            f"Bot: {client.current_nick}; software={version_line}; "
-            f"network={client.network_name}; status={connection}; "
-            f"uptime={uptime_seconds}s"
+        identity = ctx.tr(
+            "Bot: {nick}; software={software}; network={network}; "
+            "status={status}; uptime={uptime}s",
+            nick=client.current_nick,
+            software=version_line,
+            network=client.network_name,
+            status=connection,
+            uptime=uptime_seconds,
         )
-        await ctx.reply(" | ".join((identity, *diagnostics)))
+        diagnostic_keys = ("Runtime: {value}", "Features: {value}", "Optional: {value}")
+        localized_diagnostics = [
+            ctx.tr(key, value=line.partition(": ")[2])
+            for key, line in zip(diagnostic_keys, diagnostics, strict=True)
+        ]
+        await ctx.reply(" | ".join((identity, *localized_diagnostics)))
 
     commands.register(
         "status", status, help_text="Show core service status", owner="core"

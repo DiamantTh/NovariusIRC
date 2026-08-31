@@ -1,4 +1,4 @@
-.PHONY: help install build clean uninstall
+.PHONY: help install build clean translations uninstall
 
 PREFIX ?= $(HOME)/NovariusIRC
 
@@ -9,6 +9,7 @@ help:
 	@echo "Targets:"
 	@echo "  make install       - Build und Installation nach $(PREFIX)"
 	@echo "  make build         - Nur Wheel-Paket bauen"
+	@echo "  make translations  - Gettext-Kataloge kompilieren"
 	@echo "  make clean         - Build-Artefakte entfernen"
 	@echo "  make uninstall     - Installation entfernen"
 	@echo ""
@@ -21,6 +22,10 @@ install:
 build:
 	python3 scripts/generate_build_info.py
 	poetry build; status=$$?; rm -f novariusirc/_build_info.json; exit $$status
+
+translations:
+	msgfmt --check-format -o novariusirc/locales/de/LC_MESSAGES/novariusirc.mo novariusirc/locales/de/LC_MESSAGES/novariusirc.po
+	msgfmt --check-format -o novariusirc/locales/ja/LC_MESSAGES/novariusirc.mo novariusirc/locales/ja/LC_MESSAGES/novariusirc.po
 
 clean:
 	rm -rf dist/ build/ *.egg-info

@@ -72,7 +72,7 @@ def test_ctl_command_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_terminal_console_dispatches_owner_commands() -> None:
     config = Config.model_validate(
         {
-            "bot": {},
+            "bot": {"language": "en"},
             "network": {
                 "server": "irc.example.test",
                 "nick": "bot",
@@ -112,7 +112,7 @@ def test_terminal_console_dispatches_owner_commands() -> None:
 def test_irc_version_is_simple_and_botinfo_is_detailed() -> None:
     config = Config.model_validate(
         {
-            "bot": {},
+            "bot": {"language": "en"},
             "network": {
                 "server": "irc.example.test",
                 "nick": "bot",
