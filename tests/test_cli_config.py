@@ -9,6 +9,7 @@ import pytest
 
 from novariusirc.__main__ import (
     check_config,
+    configuration_status,
     parse_args,
     register_builtin_commands,
     register_runtime_commands,
@@ -31,13 +32,18 @@ def test_cli_accepts_positional_and_option_config_paths(
     assert parse_args().config == Path("selected.toml")
 
 
-def test_unimplemented_cli_modes_fail_explicitly(
+def test_terminal_dcc_mode_fails_explicitly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--channel-stats"])
+    monkeypatch.setattr(sys, "argv", ["novariusirc", "--terminal-dcc"])
     with pytest.raises(SystemExit) as exc:
         parse_args()
     assert exc.value.code == 2
+
+
+def test_status_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["novariusirc", "--status"])
+    assert parse_args().status
 
 
 def test_check_config_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -59,6 +65,7 @@ def test_check_config_accepts_builtin_modules() -> None:
         }
     )
     assert check_config(config) == []
+    assert configuration_status(config)[0] == "Network: irc.example.test:6667 (plain TCP)"
 
 
 def test_check_config_reports_invalid_builtin_module(

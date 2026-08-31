@@ -44,9 +44,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "-s",
+        "--status",
         "--channel-stats",
+        dest="status",
         action="store_true",
-        help="Reserved; channel statistics mode is not implemented yet",
+        help="Show configured core status without connecting to IRC",
     )
     parser.add_argument(
         "-t",
@@ -73,8 +75,6 @@ def parse_args() -> argparse.Namespace:
         help="Show version and exit",
     )
     args = parser.parse_args()
-    if args.channel_stats:
-        parser.error("--channel-stats is not implemented yet")
     if args.terminal_dcc:
         parser.error("--terminal-dcc is not implemented yet")
     args.config = args.config_option or args.config_path or Path("./config.toml")
@@ -128,6 +128,22 @@ def check_config(config: Config) -> list[str]:
             errors.append(f"Built-in module {name!r} cannot be loaded: {exc}")
 
     return errors
+
+
+def configuration_status(config: Config) -> list[str]:
+    """Return a secret-free summary for the local status CLI mode."""
+    security = "TLS" if config.network.tls else "plain TCP"
+    channels = ", ".join(config.network.channels) or "none"
+    modules = ", ".join(config.modules.enabled) or "none"
+    feeds = "enabled" if config.feeds.enabled else "disabled"
+    return [
+        f"Network: {config.network.server}:{config.network.port} ({security})",
+        f"Channels: {channels}",
+        f"Built-in modules: {modules}",
+        f"Feeds: {feeds} ({len(config.feeds.feeds)} configured)",
+        f"Log root: {config.paths.log_root}",
+        f"Data root: {config.paths.data_root}",
+    ]
 
 
 def configure_event_loop() -> None:
@@ -191,12 +207,17 @@ def register_runtime_commands(
 async def async_main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    if args.check_config:
+    if args.check_config or args.status:
         errors = check_config(config)
         if errors:
             for error in errors:
                 print(f"Configuration error: {error}", file=sys.stderr)
             raise SystemExit(1)
+        if args.status:
+            print("Configuration status:")
+            for line in configuration_status(config):
+                print(f"  {line}")
+            return
         print("Configuration check passed.")
         return
     init_i18n(config.bot.language)

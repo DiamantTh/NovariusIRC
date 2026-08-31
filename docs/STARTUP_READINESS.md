@@ -91,7 +91,7 @@ Wichtige Implementierungen:
 | erledigt | Zeitzone | `Europe/Berlin` ist konfigurierbar und für IRC-Textlogs aktiv; `tzdata` stellt die Daten auch in Minimalcontainern bereit |
 | erledigt | Channelnamen | Konservative Unicode-Policy mit expliziter Kompatibilitätsfreigabe für ungewöhnliche Zeichen |
 | niedrig | Control-Shell | Unix-Socket, SSH-Anmeldung und reine Botcommand-Shell sind nur vorgemerkt |
-| niedrig | Terminal-/Statusmodus | `-t` und `-s` sind weiterhin reserviert |
+| teilweise | Terminal-/Statusmodus | `-s`/`--status` zeigt die lokale Instanzkonfiguration ohne IRC-Verbindung; `-t` bleibt für eine spätere Kontrollkonsole reserviert |
 | grundsätzlich | Plugin-Vertrauen | Externe Plugins laufen als vertrauenswürdiger Code im Botprozess |
 
 ## Unabhängige Arbeitspakete

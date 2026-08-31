@@ -42,6 +42,12 @@ create log directories, start feeds, or open a network connection:
 poetry run novariusirc --check-config --config ./config.toml
 ```
 
+Show the configured instance status without opening an IRC connection:
+
+```bash
+poetry run novariusirc --status --config ./config.toml
+```
+
 ## Container
 Build a local image:
 ```bash
