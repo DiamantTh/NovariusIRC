@@ -1,25 +1,32 @@
-# TOTP Authentication Setup
+# Optionaler TOTP-Baustein
 
-NovariusIRC unterstützt TOTP (Time-based One-Time Password) nach RFC 6238 für Owner- und Admin-Authentifizierung.
+NovariusIRC enthält TOTP-Prüfung und zeitlich begrenzte Sitzungen nach RFC 6238
+als optionalen Baustein für Owner- und Admin-Rechte. TOTP ist weder für den
+normalen Botstart noch für die lokale Unix-Control-Shell erforderlich.
+
+Ein IRC-Command wie `!auth` und eine CTCP-Anmeldung sind derzeit **nicht**
+implementiert. Die Konfiguration und diese Hinweise dienen der Vorbereitung;
+der konkrete Bedienweg wird erst festgelegt, wenn klar ist, ob TOTP überhaupt
+und an welcher Stelle eingesetzt werden soll.
 
 ## Konfigurierbare Parameter
 
 ### Hash-Algorithmus (`totp_digest`)
-- **`sha1`** (Standard): Legacy, kompatibel mit allen Authenticator-Apps
-- **`sha256`**: Moderne Alternative, empfohlen für neue Setups
+- **`sha1`**: Legacy, kompatibel mit allen Authenticator-Apps
+- **`sha256`** (Standard): Moderne Alternative für neue Setups
 - **`sha512`**: Höchste Sicherheit, erfordert App-Support
 
 ### Code-Länge (`totp_digits`)
-- **`6`** (Standard): 6-stelliger Code (z.B. `123456`)
-- **`8`**: 8-stelliger Code (z.B. `12345678`) - höhere Sicherheit
+- **`6`**: 6-stelliger Code (z.B. `123456`)
+- **`8`** (Standard): 8-stelliger Code (z.B. `12345678`) - höhere Sicherheit
 
 ### Zeitfenster (`totp_interval`)
 - **`30`** (Standard): 30 Sekunden Gültigkeit pro Code
 - `60`: 60 Sekunden (seltener verwendet)
 
 ### Toleranz-Fenster (`totp_valid_window`)
-- **`1`** (Standard): ±1 Intervall (bei 30s → ±30s Toleranz)
-- `2`: ±2 Intervalle (bei 30s → ±60s Toleranz) - für Uhren-Drift
+- **`4`** (Standard): ±4 Intervalle (bei 30s → ±120s Toleranz)
+- Kleinere Werte begrenzen die Toleranz für Uhren-Drift stärker.
 
 ## AEGIS Authenticator Setup
 
@@ -107,31 +114,28 @@ owners = [
 ]
 ```
 
-## Authentifizierung
+## Bedienweg ist noch offen
 
-### Via Private Message
-```
-/msg NovariusBot !auth 123456
-```
-
-### Via CTCP (weniger sichtbar in Logs)
-```
-/ctcp NovariusBot AUTH 123456
-```
+Es gibt derzeit absichtlich keinen nutzbaren IRC- oder CTCP-Login-Befehl. Vor
+einer Integration muss entschieden werden, ob TOTP für IRC-Commands, eine
+spätere SSH-Control-Shell oder gar nicht verwendet werden soll. Bis dahin
+sollte `require_totp = true` nicht in einer produktiven Rollenregel gesetzt
+werden, weil diese Rolle ohne Login-Flow nicht aktiviert werden kann.
 
 ## Troubleshooting
 
-### "Authentication failed"
-- Prüfe Uhrzeit-Synchronisation (NTP)
-- Prüfe TOTP-Parameter (Digest, Digits, Interval) in App
-- Erhöhe `totp_valid_window` für Uhren-Drift
-- Prüfe Hostmask-Match (`/whois dein_nick`)
+### Spätere Fehlersuche bei einer Integration
+- Uhrzeit-Synchronisation (NTP) prüfen.
+- TOTP-Parameter (Digest, Digits, Interval) in App und Konfiguration abgleichen.
+- `totp_valid_window` nur bewusst für Uhren-Drift erhöhen.
+- Hostmask-Match (`/whois dein_nick`) prüfen, falls Hostmask-Rollen verwendet werden.
 
 ### AEGIS zeigt falschen Code
 - Algorithm in AEGIS muss mit `totp_digest` übereinstimmen
 - Digits in AEGIS muss mit `totp_digits` übereinstimmen
 - Period in AEGIS muss mit `totp_interval` übereinstimmen
 
-### "No active authentication session"
-- Session ist abgelaufen (`session_timeout_seconds`)
-- Erneut authentifizieren mit `!auth` oder CTCP
+### Keine aktive Sitzung
+
+Derzeit erwartbar: Ohne implementierten Login-Flow kann keine TOTP-Sitzung über
+IRC erzeugt werden.

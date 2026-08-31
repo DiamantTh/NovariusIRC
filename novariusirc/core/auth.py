@@ -137,7 +137,7 @@ class AuthManager:
             digest: sha1 (legacy), sha256, sha512
             digits: 6 (standard) or 8 (higher security)
             interval: 30 seconds (standard)
-            valid_window: ±1 interval tolerance (±30s default)
+            valid_window: configured interval tolerance (±4 intervals by default)
         """
         secret = secret or self.auth_config.totp_secret
         if not secret:

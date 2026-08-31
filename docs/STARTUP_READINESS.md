@@ -1,14 +1,13 @@
 # Startbereitschaft, Module und Plugins
 
-Stand: 30. August 2026
+Stand: 31. August 2026
 
 Dieses Dokument hält den technischen Stand am Ende der Stabilisierungsrunde
 fest. Es trennt bereits funktionierende Bestandteile von noch offenen Arbeiten
 für einen normalen Start mit eingebauten Modulen und externen Plugins.
 
-Das ursprünglich geplante optionale FragDenStaat-Plugin wurde in dieser Runde
-noch nicht umgesetzt. Der Wiedereinstieg dafür ist am Ende des Dokuments
-festgehalten, damit die nächste Sitzung wieder beim eigentlichen Plugin beginnt.
+Plugin-Vorhaben werden hier nur als Abgrenzung geführt. Dieser Checkup bewertet
+den Core, eingebaute Module und die lokale Betriebsführung unabhängig davon.
 
 ## Kurzbewertung
 
@@ -16,15 +15,17 @@ Ein normaler Start mit dem eingebauten RSS-Modul und einem explizit aktivierten
 externen Plugin ist als MVP möglich. Die Grundlage ist testbar und
 funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
-Am 30. August 2026 wurde folgender Stand verifiziert:
+Am 31. August 2026 wurde folgender Stand verifiziert:
 
-- 80 von 80 Tests erfolgreich
+- 101 von 101 nicht-netzwerkgebundenen Tests erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
 - gemeinsamer Lifecycle-Smoke-Test mit `rss_announcer` und
   `example_greetings` erfolgreich
 - Modul und externes Plugin werden geladen, gestartet und wieder entfernt
+- `--check-config`, `--status`, Terminal-Konsole und Unix-Control-Socket sind
+  ohne IRC-Verbindung beziehungsweise ohne TCP-Listener verfügbar
 
 Der IRC-Integrationstest verwendet einen lokalen Testserver. Ein längerer Test
 gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
@@ -58,6 +59,9 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | RSS-Modul | funktionsfähig | Feedregistrierung, Polling, Commands und Ankündigungen |
 | Moderation | funktionsfähig | Zentraler Core-Service; das alte Modul ist nur noch ein Kompatibilitätshinweis |
 | Graceful Shutdown | fertig | SIGINT/SIGTERM sowie Feeds, Plugins und Worker werden behandelt |
+| Lokale Terminal-Konsole | fertig | `-t` führt registrierte Botcommands als lokaler Owner aus, ohne DCC oder TCP |
+| Lokale Einmalbefehle | fertig | `--ctl "!status"` nutzt den optionalen Unix-Socket und gibt nur die Command-Antwort aus |
+| Control-Socket | fertig | Optional über `[control]`, Rechte `0600`, kein TCP-Listener und keine Betriebssystem-Shell |
 | Container-Grundlage | vorhanden | Python 3.12 und unprivilegierter Laufzeitbenutzer |
 
 Wichtige Implementierungen:
@@ -85,12 +89,12 @@ Wichtige Implementierungen:
 | mittel | Reload | Keine öffentliche Schnittstelle zum Laden, Entladen oder Neuladen |
 | mittel | Einheitliche API | Eingebaute Module und externe Plugins verwenden noch verschiedene Basisklassen |
 | mittel | Account-Rollen | IRC-Services-Accounts werden erfasst, aber noch nicht zentral Rollen zugeordnet |
-| mittel | TOTP-Bedienung | Prüfung ist vorhanden, ein eingebauter Login-/Auth-Command fehlt |
+| Entscheidung offen | TOTP-Bedienung | Prüfung und Sitzungsverwaltung sind als optionaler Baustein vorhanden; ein Login-/Auth-Command wird erst nach Festlegung des gewünschten Bedienwegs gebaut |
 | erledigt | Logstruktur | Core-Logs sowie IRC-Channel-, PM- und Raw-Logs liegen getrennt unter `core/` beziehungsweise `irc/<network>/...` |
 | erledigt | Ereigniszeit im Log | IRCv3-`server-time` wird für Channel- und PM-Ereignisse verwendet, wenn der Server einen gültigen Zeit-Tag liefert |
 | erledigt | Zeitzone | `Europe/Berlin` ist konfigurierbar und für IRC-Textlogs aktiv; `tzdata` stellt die Daten auch in Minimalcontainern bereit |
 | erledigt | Channelnamen | Konservative Unicode-Policy mit expliziter Kompatibilitätsfreigabe für ungewöhnliche Zeichen |
-| teilweise erledigt | Control-Shell | Lokaler Unix-Socket mit Dateirechten `0600` und reiner Botcommand-Shell; SSH-Anmeldung ist weiterhin nur vorgemerkt |
+| teilweise erledigt | Control-Shell | Lokaler Unix-Socket mit Dateirechten `0600` und reiner Botcommand-Shell ist fertig; ein möglicher SSH-Zugang ist weiterhin nur vorgemerkt |
 | erledigt | Terminal-/Statusmodus | `-s`/`--status` zeigt die lokale Instanzkonfiguration ohne IRC-Verbindung; `-t` startet eine lokale, nicht über DCC oder TCP erreichbare Owner-Konsole |
 | grundsätzlich | Plugin-Vertrauen | Externe Plugins laufen als vertrauenswürdiger Code im Botprozess |
 
@@ -98,15 +102,13 @@ Wichtige Implementierungen:
 
 Die nächsten Arbeiten können in getrennten, überschaubaren Blöcken erfolgen:
 
-1. Start-Bootstrap und `--check-config`
-2. Logging, Zeitzone und IRCv3-`server-time`
-3. Einheitliches Metadatenmodell für Module und Plugins
-4. Separate Plugin-Konfigurationen
-5. Robuster Lifecycle mit Taskverwaltung, Timeouts und Rollback
-6. `plugins list`, `status`, `reload` und passende Hilfe
-7. Accountbasierte Rollen und eingebauter TOTP-Login
-8. Container-Härtung und eigener Python-3.12-Container-Test
-9. Später optional SSH-Zugang zur bereits vorhandenen lokalen Command-Shell
+1. Accountbasierte Rollen unabhängig von Hostmasks bewerten
+2. Bedienweg für den optionalen TOTP-Baustein festlegen
+3. Container-Härtung und einen eigenen Python-3.12-Container-Test ergänzen
+4. Optional SSH-Zugang zur bereits vorhandenen lokalen Command-Shell
+
+Die übrigen Punkte in der offenen Tabelle betreffen die Pluginplattform und
+sind bewusst nicht Teil dieses Core-Checkups.
 
 Für einen ersten realen Belastungstest fehlen keine fundamentalen
 Startbestandteile. Er setzt eine gültige Instanzkonfiguration mit echten
