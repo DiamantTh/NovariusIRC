@@ -65,6 +65,10 @@ class FeedEngine:
         self.feed_states.setdefault(feed.url, self._load_state(feed.url) or FeedState())
         self.logger.info("Registered feed %s -> channel %s", feed.name, feed.channel)
 
+    @property
+    def is_running(self) -> bool:
+        return bool(self._task and not self._task.done())
+
     def subscribe(self, callback: Subscriber) -> None:
         if callback not in self.subscribers:
             self.subscribers.append(callback)

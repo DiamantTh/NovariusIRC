@@ -9,7 +9,8 @@ import pytest
 from novariusirc.core.auth import hostmask_match
 from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config
-from novariusirc.core.plugins import PluginLoader
+from novariusirc.core.feeds import FeedEngine
+from novariusirc.core.plugins import Plugin, PluginLoader, PluginManager
 from novariusirc.core.protocol import irc_casefold
 
 
@@ -147,6 +148,45 @@ def test_sasl_and_certfp_require_tls() -> None:
     external.auth.certfp_cert_file = "client.pem"
     with pytest.raises(ValueError, match="CertFP requires network.tls"):
         external.validate_runtime_secrets()
+
+
+def test_builtin_module_start_failure_rolls_back_started_modules() -> None:
+    events: list[str] = []
+
+    class TrackingModule(Plugin):
+        def __init__(self, name: str, fail: bool = False) -> None:
+            self.name = name
+            self.fail = fail
+
+        async def start(self) -> None:
+            events.append(f"start:{self.name}")
+            if self.fail:
+                raise RuntimeError("start failed")
+
+        async def stop(self) -> None:
+            events.append(f"stop:{self.name}")
+
+    config = minimal_config()
+    logger = logging.getLogger("test.module-lifecycle")
+    manager = PluginManager(
+        config,
+        CommandRegistry(),
+        FeedEngine(config.feeds, logger, data_root=Path(config.paths.data_root)),
+        object(),  # type: ignore[arg-type]
+        logger,
+    )
+    manager.plugins = [TrackingModule("first"), TrackingModule("second", fail=True)]
+
+    async def scenario() -> None:
+        blocker = asyncio.Event()
+        task = manager.tasks.create_task("first", blocker.wait(), name="test-blocker")
+        with pytest.raises(RuntimeError, match="start failed"):
+            await manager.start_builtin_modules()
+        assert task.cancelled()
+
+    asyncio.run(scenario())
+
+    assert events == ["start:first", "start:second", "stop:second", "stop:first"]
 
 
 def test_hostmask_matching_applies_irc_casemapping_only_to_nick() -> None:

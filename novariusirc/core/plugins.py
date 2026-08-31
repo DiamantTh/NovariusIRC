@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import importlib.util
 import inspect
@@ -18,6 +19,7 @@ from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry, command
 from .config import Config
 from .feeds import FeedEngine
+from .tasks import TaskSupervisor
 
 PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 HOOK_NAMES = (
@@ -137,16 +139,22 @@ class Plugin:
         feeds: FeedEngine,
         auth: AuthManager,
         logger: logging.Logger,
+        tasks: TaskSupervisor,
     ):
         self.config = config
         self.commands = commands
         self.feeds = feeds
         self.auth = auth
         self.logger = logger.getChild(self.name)
+        self.tasks = tasks
         self.client: object | None = None
 
     def set_client(self, client: object) -> None:
         self.client = client
+
+    def create_task(self, coroutine, *, name: str | None = None):
+        """Register background work that belongs to this built-in module."""
+        return self.tasks.create_task(self.name, coroutine, name=name)
 
     async def start(self) -> None:
         """Start the built-in module."""
@@ -338,13 +346,16 @@ class PluginManager:
         feeds: FeedEngine,
         auth: AuthManager,
         logger: logging.Logger,
+        tasks: TaskSupervisor | None = None,
     ):
         self.config = config
         self.commands = commands
         self.feeds = feeds
         self.auth = auth
         self.logger = logger.getChild("plugins")
+        self.tasks = tasks or TaskSupervisor(self.logger)
         self.plugins: list[Plugin] = []
+        self._started_modules: list[Plugin] = []
         self.loader: PluginLoader | None = None
         self.client: object | None = None
 
@@ -354,6 +365,10 @@ class PluginManager:
             plugin.set_client(client)
         if self.loader:
             self.loader.set_client(client)
+
+    @property
+    def active_builtin_modules(self) -> tuple[str, ...]:
+        return tuple(plugin.name for plugin in self._started_modules)
 
     def load_builtin(self) -> None:
         failed: list[str] = []
@@ -367,6 +382,7 @@ class PluginManager:
                     self.feeds,
                     self.auth,
                     self.logger,
+                    self.tasks,
                 )
                 if self.client:
                     plugin.set_client(self.client)
@@ -390,15 +406,59 @@ class PluginManager:
         )
         await self.loader.load_all()
 
-    async def start(self) -> None:
+    async def start_builtin_modules(self) -> None:
+        """Start built-in modules in order and roll back a partial start."""
         for plugin in self.plugins:
-            await plugin.start()
+            try:
+                await asyncio.wait_for(
+                    plugin.start(),
+                    timeout=self.config.lifecycle.module_start_timeout_seconds,
+                )
+            except TimeoutError as exc:
+                self.logger.error("Built-in module %s timed out during start", plugin.name)
+                await self._stop_builtin_module(plugin)
+                await self.stop_builtin_modules()
+                raise RuntimeError(
+                    f"Built-in module {plugin.name!r} timed out during start"
+                ) from exc
+            except Exception:
+                self.logger.exception("Built-in module %s failed during start", plugin.name)
+                await self._stop_builtin_module(plugin)
+                await self.stop_builtin_modules()
+                raise
+            self._started_modules.append(plugin)
+
+    async def _stop_builtin_module(self, plugin: Plugin) -> None:
+        await self.tasks.cancel_owner(
+            plugin.name,
+            timeout=self.config.lifecycle.module_stop_timeout_seconds,
+        )
+        try:
+            await asyncio.wait_for(
+                plugin.stop(),
+                timeout=self.config.lifecycle.module_stop_timeout_seconds,
+            )
+        except TimeoutError:
+            self.logger.error("Built-in module %s timed out during stop", plugin.name)
+        except Exception:
+            self.logger.exception("Built-in module %s failed during stop", plugin.name)
+
+    async def stop_builtin_modules(self) -> None:
+        """Stop every started built-in module without skipping later cleanup."""
+        for plugin in reversed(self._started_modules):
+            await self._stop_builtin_module(plugin)
+        self._started_modules.clear()
+
+    async def start(self) -> None:
+        """Compatibility wrapper for the built-in module lifecycle."""
+        await self.start_builtin_modules()
 
     async def stop(self) -> None:
-        if self.loader:
-            await self.loader.unload_all()
-        for plugin in reversed(self.plugins):
-            await plugin.stop()
+        try:
+            if self.loader:
+                await self.loader.unload_all()
+        finally:
+            await self.stop_builtin_modules()
 
     def _context(
         self,

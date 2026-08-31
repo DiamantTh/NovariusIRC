@@ -4,7 +4,7 @@
 # GLOBAL DEFAULTS (applied to all channels unless overridden)
 [moderation]
 enabled = true
-log_file = "logs/moderation.log"
+log_file = "logs/moderation/moderation.log"
 
 # Default rate limiting (can be overridden per channel)
 [moderation.rate_limit]

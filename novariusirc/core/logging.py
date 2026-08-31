@@ -8,6 +8,7 @@ import sys
 from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .config import LoggingConfig, PathsConfig
 
@@ -70,6 +71,18 @@ class IRCLogHandler(TimedRotatingFileHandler):
         super().emit(record)
 
 
+class IRCFormatter(logging.Formatter):
+    """Format IRC logs in the instance timezone rather than host-local time."""
+
+    def __init__(self, *args, timezone: str, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.timezone = ZoneInfo(timezone)
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        timestamp = datetime.fromtimestamp(record.created, self.timezone)
+        return timestamp.strftime(datefmt) if datefmt else timestamp.isoformat()
+
+
 def _structured_formatter() -> logging.Formatter:
     return logging.Formatter(
         fmt='ts=%(asctime)s level=%(levelname)s logger=%(name)s msg="%(message)s"',
@@ -88,8 +101,12 @@ def setup_logging(config: LoggingConfig, paths: PathsConfig) -> logging.Logger:
     stream.setFormatter(formatter)
     handlers.append(stream)
 
+    core_log_path = log_root / "core" / "novariusirc.log"
+    core_log_path.parent.mkdir(parents=True, exist_ok=True)
     file_handler = RotatingFileHandler(
-        log_root / "novariusirc.log", maxBytes=5 * 1024 * 1024, backupCount=3
+        core_log_path,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
     )
     file_handler.setFormatter(formatter)
     handlers.append(file_handler)
@@ -112,6 +129,29 @@ def setup_logging(config: LoggingConfig, paths: PathsConfig) -> logging.Logger:
     return logging.getLogger("novariusirc")
 
 
+def setup_moderation_logging(log_file: str) -> logging.Logger:
+    """Write moderation decisions to their dedicated rotating log file."""
+    logger = logging.getLogger("novariusirc.core.moderation")
+    path = Path(log_file).expanduser()
+    resolved_path = path.resolve()
+    for handler in logger.handlers:
+        if isinstance(handler, RotatingFileHandler) and Path(handler.baseFilename) == resolved_path:
+            return logger
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = RotatingFileHandler(path, maxBytes=5 * 1024 * 1024, backupCount=14)
+    handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s level=%(levelname)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        )
+    )
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    return logger
+
+
 def _safe_component(value: str, fallback: str) -> str:
     sanitized = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip().lstrip("#"))
     sanitized = sanitized.strip(".")
@@ -124,14 +164,16 @@ def channel_log_path(network_name: str, channel: str, paths: PathsConfig) -> Pat
     root = Path(paths.log_root).expanduser()
     return (
         root
+        / "irc"
         / _safe_component(network_name, "network")
+        / "channels"
         / sanitized_channel
         / f"{today}.log"
     )
 
 
 def get_channel_logger(
-    network_name: str, channel: str, paths: PathsConfig
+    network_name: str, channel: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
 ) -> logging.Logger:
     logger_name = f"channel.{network_name}.{channel}"
     logger = logging.getLogger(logger_name)
@@ -142,7 +184,9 @@ def get_channel_logger(
     path.parent.mkdir(parents=True, exist_ok=True)
     handler = IRCLogHandler(path, when="midnight", backupCount=14)
     handler.setFormatter(
-        logging.Formatter(fmt="[%(asctime)s] %(message)s", datefmt="%H:%M:%S")
+        IRCFormatter(
+            fmt="[%(asctime)s] %(message)s", datefmt="%H:%M:%S", timezone=timezone
+        )
     )
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
@@ -156,13 +200,17 @@ def pm_log_path(network_name: str, nick: str, paths: PathsConfig) -> Path:
     root = Path(paths.log_root).expanduser()
     return (
         root
+        / "irc"
         / _safe_component(network_name, "network")
+        / "private"
         / _safe_component(nick, "nick")
         / f"{today}.log"
     )
 
 
-def get_pm_logger(network_name: str, nick: str, paths: PathsConfig) -> logging.Logger:
+def get_pm_logger(
+    network_name: str, nick: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
+) -> logging.Logger:
     """Get logger for private messages (PRIVMSG + NOTICE to bot)."""
     logger_name = f"pm.{network_name}.{nick}"
     logger = logging.getLogger(logger_name)
@@ -173,7 +221,9 @@ def get_pm_logger(network_name: str, nick: str, paths: PathsConfig) -> logging.L
     path.parent.mkdir(parents=True, exist_ok=True)
     handler = IRCLogHandler(path, when="midnight", backupCount=14)
     handler.setFormatter(
-        logging.Formatter(fmt="[%(asctime)s] %(message)s", datefmt="%H:%M:%S")
+        IRCFormatter(
+            fmt="[%(asctime)s] %(message)s", datefmt="%H:%M:%S", timezone=timezone
+        )
     )
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)
@@ -185,7 +235,13 @@ def raw_log_path(network_name: str, paths: PathsConfig) -> Path:
     """Get log path for raw IRC protocol lines."""
     today = datetime.now(UTC).strftime("%Y-%m-%d")
     root = Path(paths.log_root).expanduser()
-    return root / _safe_component(network_name, "network") / "_raw" / f"{today}.log"
+    return (
+        root
+        / "irc"
+        / _safe_component(network_name, "network")
+        / "raw"
+        / f"{today}.log"
+    )
 
 
 def get_raw_logger(network_name: str, paths: PathsConfig) -> logging.Logger:
@@ -212,17 +268,51 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
+def log_irc(
+    logger: logging.Logger,
+    message: str,
+    *args: object,
+    event_time: datetime | None = None,
+) -> None:
+    """Log an IRC event using its server time when the server supplied one."""
+    if event_time is None:
+        logger.info(message, *args)
+        return
+    record = logger.makeRecord(
+        logger.name,
+        logging.INFO,
+        "",
+        0,
+        message,
+        args,
+        None,
+    )
+    record.created = event_time.timestamp()
+    record.msecs = (record.created - int(record.created)) * 1000
+    logger.handle(record)
+
+
 def log_pm_event(
-    network_name: str, nick: str, paths: PathsConfig, message: str
+    network_name: str,
+    nick: str,
+    paths: PathsConfig,
+    message: str,
+    event_time: datetime | None = None,
+    timezone: str = "Europe/Berlin",
 ) -> None:
     """Log an event to PM log (QUIT/DCC)."""
-    logger = get_pm_logger(network_name, nick, paths)
-    logger.info("*** %s", message)
+    logger = get_pm_logger(network_name, nick, paths, timezone)
+    log_irc(logger, "*** %s", message, event_time=event_time)
 
 
 def log_channel_event(
-    network_name: str, channel: str, paths: PathsConfig, message: str
+    network_name: str,
+    channel: str,
+    paths: PathsConfig,
+    message: str,
+    event_time: datetime | None = None,
+    timezone: str = "Europe/Berlin",
 ) -> None:
     """Log an event to channel log (JOIN/PART/QUIT/NICK/MODE/KICK/TOPIC)."""
-    logger = get_channel_logger(network_name, channel, paths)
-    logger.info("*** %s", message)
+    logger = get_channel_logger(network_name, channel, paths, timezone)
+    log_irc(logger, "*** %s", message, event_time=event_time)

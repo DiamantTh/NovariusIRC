@@ -34,6 +34,14 @@ Then run the bot:
 poetry run novariusirc --config ./config.toml
 ```
 
+Validate an instance before connecting it to IRC. This loads and validates the
+configuration, referenced TLS files, and enabled built-in modules, but does not
+create log directories, start feeds, or open a network connection:
+
+```bash
+poetry run novariusirc --check-config --config ./config.toml
+```
+
 ## Container
 Build a local image:
 ```bash
@@ -90,6 +98,8 @@ For an environment-only container, pass `--config env` and at minimum set
 - Env-only startup is supported; set `NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK` (others optional) or pass `--config env`.
 - Feed engine caches ETag/Last-Modified, tracks seen item ids per feed, supports custom templates (`{feed}`, `{title}`, `{summary}`, `{link}`, `{published}`), per-feed enable/disable, and User-Agent rotation/TLS settings (see `config/feeds.example.toml`).
 - Feed overview command is available when `rss_announcer` is enabled: `!feed list [query]` (shows channels and active limits/options).
+- Core status is available through `!status` and reports connection, network,
+  active built-in modules, and feed-engine state.
 - Built-in modules are configurable via `[modules].enabled` (e.g. `rss_announcer`).
 - External plugins live in `plugins/`, but are loaded only when named in `[plugins].load`. Their commands use the same aliases, role checks, help listing, and rate limiting as built-in commands.
 - Multi-bot IRC environments should use different prefixes per bot (recommended) to avoid command collisions.

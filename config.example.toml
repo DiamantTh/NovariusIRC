@@ -23,6 +23,8 @@ user = "novarius"
 realname = "Novarius IRC Bot"
 # name = "libera"  # Optional: Override für Netzwerknamen (auto-detect via 005 NETWORK=)
 channels = ["#novariusirc"]
+# Standard: Unicode-Buchstaben/-Zahlen sowie - und _ nach dem IRC-Channelpräfix.
+# Nur fuer alte oder ungewoehnliche IRCds: allow_unusual_channel_names = true
 # IRCv3 CAP wird standardmaessig ausgehandelt. Nur angebotene Features werden
 # angefordert; unbekannte Features werden nicht blind aktiviert.
 ircv3_enabled = true
@@ -85,11 +87,19 @@ admins = [
 [logging]
 level = "INFO"
 log_dir = "logs"
+# Lesbare IRC-Logs; intern bleiben Ereigniszeiten zeitzonenbewusst.
+timezone = "Europe/Berlin"
 journald_enabled = false
 
 [commands]
 # Simple anti-spam for command usage (seconds between same command per user)
 rate_limit_seconds = 2.0
+
+[lifecycle]
+# Timeout fuer Start und Stop eingebauter Module. Bei einem Startfehler werden
+# bereits gestartete Module in umgekehrter Reihenfolge wieder gestoppt.
+module_start_timeout_seconds = 30
+module_stop_timeout_seconds = 30
 
 [plugins]
 enabled = true

@@ -8,6 +8,7 @@ import re
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -66,6 +67,7 @@ class NetworkConfig(ConfigModel):
     tls: bool = False
     bind_ip: str | None = None
     bind_hostname: str | None = None
+    allow_unusual_channel_names: bool = False
     nick: str
     user: str
     realname: str
@@ -139,6 +141,7 @@ class NetworkConfig(ConfigModel):
     @field_validator("channels")
     @classmethod
     def validate_channel_names(cls, value: list[str]) -> list[str]:
+        allowed_prefixes = "#&+!"
         invalid = [
             channel
             for channel in value
@@ -146,13 +149,29 @@ class NetworkConfig(ConfigModel):
                 not channel
                 or any(character.isspace() for character in channel)
                 or any(character in channel for character in ",:")
+                or not channel.startswith(tuple(allowed_prefixes))
             )
         ]
         if invalid:
             raise ValueError(
-                "IRC channels must be non-empty single channel names without spaces, commas, or colons"
+                "IRC channels must use a standard channel prefix and contain no spaces, commas, or colons"
             )
         return value
+
+    def model_post_init(self, __context: Any, /) -> None:
+        if self.allow_unusual_channel_names:
+            return
+        invalid = [
+            channel
+            for channel in self.channels
+            if any(not (character.isalnum() or character in "-_") for character in channel[1:])
+        ]
+        if invalid:
+            raise ValueError(
+                "IRC channel names may only contain Unicode letters, numbers, hyphens, "
+                "and underscores after their prefix; set allow_unusual_channel_names "
+                "to enable compatibility mode"
+            )
 
     def resolve_env(self) -> None:
         env_val = os.getenv(ENV_NETWORK_SERVER)
@@ -278,6 +297,7 @@ class ChannelLoggingConfig(ConfigModel):
 class LoggingConfig(ConfigModel):
     level: str = "INFO"
     log_dir: str = "logs"
+    timezone: str = "Europe/Berlin"
     channel_logging: list[ChannelLoggingConfig] = Field(default_factory=list)
     journald_enabled: bool = False
 
@@ -286,9 +306,23 @@ class LoggingConfig(ConfigModel):
     def uppercase_level(cls, value: str) -> str:
         return value.upper()
 
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(f"unknown timezone: {value}") from exc
+        return value
+
 
 class CommandsConfig(ConfigModel):
     rate_limit_seconds: float = Field(default=2.0, ge=0)
+
+
+class LifecycleConfig(ConfigModel):
+    module_start_timeout_seconds: float = Field(default=30.0, gt=0)
+    module_stop_timeout_seconds: float = Field(default=30.0, gt=0)
 
 
 class PluginsConfig(ConfigModel):
@@ -404,7 +438,7 @@ class ModerationWarningsConfig(ConfigModel):
 
 class ModerationConfig(ConfigModel):
     enabled: bool = True
-    log_file: str = "logs/moderation.log"
+    log_file: str = "logs/moderation/moderation.log"
     rate_limit: ModerationRateLimitConfig = Field(
         default_factory=ModerationRateLimitConfig
     )
@@ -456,6 +490,7 @@ class Config(ConfigModel):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     roles: RolesConfig = Field(default_factory=RolesConfig)
     commands: CommandsConfig = Field(default_factory=CommandsConfig)
+    lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     feeds: FeedsConfig = Field(default_factory=FeedsConfig)

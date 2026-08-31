@@ -72,24 +72,24 @@ Wichtige Implementierungen:
 
 | Priorität | Bereich | Offener Punkt |
 | --- | --- | --- |
-| hoch | Start-Bootstrap | Verständliche Startfehler statt möglicher Python-Tracebacks |
-| hoch | Konfigurationsprüfung | `--check-config` für Secrets, Pfade, Zeitzone, Module und Plugins ohne IRC-Verbindung |
-| hoch | Lifecycle-Absicherung | Timeouts und Rollback bei fehlerhaftem `start()`, `stop()` oder `on_unload()` |
+| erledigt | Start-Bootstrap | Konfigurations- und Startfehler werden in der CLI ohne Traceback ausgegeben |
+| erledigt | Konfigurationsprüfung | `--check-config` prüft Core-Konfiguration, TLS-Dateien und eingebaute Module ohne IRC-Verbindung; externe Plugins sind bewusst ausgenommen |
+| erledigt | Lifecycle-Absicherung | Eingebaute Module haben Start-/Stop-Timeouts, Rollback und zentral überwachte Hintergrundtasks |
 | hoch | Startreihenfolge | Externe `on_load()`-Hooks laufen derzeit vor dem `start()` eingebauter Module |
 | hoch | Plugin-Tasks | Keine zentrale Registrierung, Überwachung und Beendigung eigener Hintergrundtasks |
 | hoch | Plugin-Abhängigkeiten | Keine deklarative Prüfung zusätzlicher PyPI-Pakete |
 | mittel | Zentrale Metadaten | Manifest für Name, Version, Beschreibung, Autor, Abhängigkeiten und API-Kompatibilität fehlt |
 | mittel | Einheitliche Identität | Konfigurationsname und interner Pluginname können voneinander abweichen |
 | mittel | Plugin-Konfiguration | Einstellungen liegen noch unter `plugins.settings`; separate Plugin-Dateien fehlen |
-| mittel | Plugin-/Modulliste | Kein Bot- oder CLI-Command für Laufzustand und Metadaten |
+| erledigt | Modulstatus | `!status` zeigt Verbindungszustand, Netzwerk, aktive eingebaute Module und Feed-Zustand |
 | mittel | Reload | Keine öffentliche Schnittstelle zum Laden, Entladen oder Neuladen |
 | mittel | Einheitliche API | Eingebaute Module und externe Plugins verwenden noch verschiedene Basisklassen |
 | mittel | Account-Rollen | IRC-Services-Accounts werden erfasst, aber noch nicht zentral Rollen zugeordnet |
 | mittel | TOTP-Bedienung | Prüfung ist vorhanden, ein eingebauter Login-/Auth-Command fehlt |
-| mittel | Logstruktur | Core-, IRC-, Channel-, PM-, Raw- und Moderationslogs sind noch nicht sauber getrennt |
-| mittel | Ereigniszeit im Log | IRCv3-`server-time` wird noch nicht für Channel- und PM-Logzeitstempel verwendet |
-| mittel | Zeitzone | `Europe/Berlin`, CET/CEST-Ausgabe und eine garantierte Zeitzonendatenquelle fehlen |
-| mittel | Channelnamen | Konservative Unicode-/Sonderzeichen-Policy samt Dokumentation fehlt |
+| erledigt | Logstruktur | Core-Logs sowie IRC-Channel-, PM- und Raw-Logs liegen getrennt unter `core/` beziehungsweise `irc/<network>/...` |
+| erledigt | Ereigniszeit im Log | IRCv3-`server-time` wird für Channel- und PM-Ereignisse verwendet, wenn der Server einen gültigen Zeit-Tag liefert |
+| erledigt | Zeitzone | `Europe/Berlin` ist konfigurierbar und für IRC-Textlogs aktiv; `tzdata` stellt die Daten auch in Minimalcontainern bereit |
+| erledigt | Channelnamen | Konservative Unicode-Policy mit expliziter Kompatibilitätsfreigabe für ungewöhnliche Zeichen |
 | niedrig | Control-Shell | Unix-Socket, SSH-Anmeldung und reine Botcommand-Shell sind nur vorgemerkt |
 | niedrig | Terminal-/Statusmodus | `-t` und `-s` sind weiterhin reserviert |
 | grundsätzlich | Plugin-Vertrauen | Externe Plugins laufen als vertrauenswürdiger Code im Botprozess |
@@ -189,9 +189,10 @@ ausgehandelte Capability gilt die Empfangszeit. Für lesbare Logs ist eine
 instanzweite Ausgabe in `Europe/Berlin` vorgesehen; intern bleibt die Zeit
 zeitzonenbewusst.
 
-Als portable Datenquelle wurde das offizielle PyPI-Paket `tzdata` in Betracht
-gezogen. Pendulum beziehungsweise Arrow bleiben lediglich eine spätere
-Überlegung für umfangreichere Kalender-, Intervall- und Pluginfunktionen.
+Das offizielle PyPI-Paket `tzdata` ist als reguläre Abhängigkeit enthalten,
+damit die IANA-Zeitzonendaten auch in Minimalcontainern verfügbar sind.
+Pendulum beziehungsweise Arrow bleiben lediglich eine spätere Überlegung für
+umfangreichere Kalender- und Intervallfunktionen.
 
 ### Control-Shell
 

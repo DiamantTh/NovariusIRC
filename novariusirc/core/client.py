@@ -19,6 +19,7 @@ from .logging import (
     get_pm_logger,
     get_raw_logger,
     log_channel_event,
+    log_irc,
     log_pm_event,
     strip_irc_formatting,
 )
@@ -98,6 +99,10 @@ class IRCClient:
     @property
     def casemapping(self) -> str:
         return self._features.casemapping
+
+    @property
+    def is_connected(self) -> bool:
+        return bool(self.writer and not self.writer.is_closing())
 
     async def run(self) -> None:
         base_delays = self.config.network.reconnect_delays or [10, 20, 40, 80]
@@ -450,7 +455,12 @@ class IRCClient:
                 realname=realname,
             ).user
             log_channel_event(
-                self.network_name, channel, self.config.paths, f"{nick} joins"
+                self.network_name,
+                channel,
+                self.config.paths,
+                f"{nick} joins",
+                server_time,
+                self.config.logging.timezone,
             )
             await self._dispatch_application(
                 "JOIN",
@@ -477,10 +487,17 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f"{nick} parts ({reason})",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 else:
                     log_channel_event(
-                        self.network_name, channel, self.config.paths, f"{nick} parts"
+                        self.network_name,
+                        channel,
+                        self.config.paths,
+                        f"{nick} parts",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 await self._dispatch_application(
                     "PART",
@@ -512,6 +529,8 @@ class IRCClient:
                             channel_name,
                             self.config.paths,
                             f"{nick} quits ({reason})",
+                            server_time,
+                            self.config.logging.timezone,
                         )
                     else:
                         log_channel_event(
@@ -519,6 +538,8 @@ class IRCClient:
                             channel_name,
                             self.config.paths,
                             f"{nick} quits",
+                            server_time,
+                            self.config.logging.timezone,
                         )
             # Also log in PM log if there's been recent PM activity
             if reason:
@@ -527,10 +548,17 @@ class IRCClient:
                     nick,
                     self.config.paths,
                     f"{nick} quits ({reason})",
+                    server_time,
+                    self.config.logging.timezone,
                 )
             else:
                 log_pm_event(
-                    self.network_name, nick, self.config.paths, f"{nick} quits"
+                    self.network_name,
+                    nick,
+                    self.config.paths,
+                    f"{nick} quits",
+                    server_time,
+                    self.config.logging.timezone,
                 )
             await self._dispatch_application(
                 "QUIT",
@@ -564,6 +592,8 @@ class IRCClient:
                             channel_name,
                             self.config.paths,
                             f"{old_nick} is now known as {new_nick}",
+                            server_time,
+                            self.config.logging.timezone,
                         )
                 await self._dispatch_application(
                     "NICK",
@@ -589,6 +619,8 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f"{kicker} kicks {kicked} ({reason})",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 else:
                     log_channel_event(
@@ -596,6 +628,8 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f"{kicker} kicks {kicked}",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 await self._dispatch_application(
                     "KICK",
@@ -627,6 +661,8 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f"{mode_setter} sets mode {mode_str} {mode_args}",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 else:
                     log_channel_event(
@@ -634,6 +670,8 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f"{mode_setter} sets mode {mode_str}",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 await self._dispatch_application(
                     "MODE",
@@ -665,6 +703,8 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f'{topic_setter} sets topic to "{topic}"',
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 else:
                     log_channel_event(
@@ -672,6 +712,8 @@ class IRCClient:
                         channel,
                         self.config.paths,
                         f"{topic_setter} unsets topic",
+                        server_time,
+                        self.config.logging.timezone,
                     )
                 await self._dispatch_application(
                     "TOPIC",
@@ -1019,16 +1061,18 @@ class IRCClient:
         # Log channel messages
         if channel and self._channel_logging_enabled(channel):
             channel_logger = get_channel_logger(
-                self.network_name, channel, self.config.paths
+                self.network_name, channel, self.config.paths, self.config.logging.timezone
             )
             clean_message = strip_irc_formatting(message)
-            channel_logger.info("<%s> %s", nick, clean_message)
+            log_irc(channel_logger, "<%s> %s", nick, clean_message, event_time=server_time)
 
         # Log private messages
         if is_pm:
-            pm_logger = get_pm_logger(self.network_name, nick, self.config.paths)
+            pm_logger = get_pm_logger(
+                self.network_name, nick, self.config.paths, self.config.logging.timezone
+            )
             clean_message = strip_irc_formatting(message)
-            pm_logger.info("<%s> %s", nick, clean_message)
+            log_irc(pm_logger, "<%s> %s", nick, clean_message, event_time=server_time)
 
         if channel and await self._moderate_message(nick, channel, message):
             return
@@ -1085,16 +1129,18 @@ class IRCClient:
         # Log channel actions
         if channel and self._channel_logging_enabled(channel):
             channel_logger = get_channel_logger(
-                self.network_name, channel, self.config.paths
+                self.network_name, channel, self.config.paths, self.config.logging.timezone
             )
             clean_text = strip_irc_formatting(action_text)
-            channel_logger.info("* %s %s", nick, clean_text)
+            log_irc(channel_logger, "* %s %s", nick, clean_text, event_time=server_time)
 
         # Log PM actions
         if is_pm:
-            pm_logger = get_pm_logger(self.network_name, nick, self.config.paths)
+            pm_logger = get_pm_logger(
+                self.network_name, nick, self.config.paths, self.config.logging.timezone
+            )
             clean_text = strip_irc_formatting(action_text)
-            pm_logger.info("* %s %s", nick, clean_text)
+            log_irc(pm_logger, "* %s %s", nick, clean_text, event_time=server_time)
 
         if channel and await self._moderate_message(nick, channel, action_text):
             return
@@ -1134,16 +1180,18 @@ class IRCClient:
         # Log channel notices
         if channel and self._channel_logging_enabled(channel):
             channel_logger = get_channel_logger(
-                self.network_name, channel, self.config.paths
+                self.network_name, channel, self.config.paths, self.config.logging.timezone
             )
             clean_message = strip_irc_formatting(message)
-            channel_logger.info("--%s-- %s", nick, clean_message)
+            log_irc(channel_logger, "--%s-- %s", nick, clean_message, event_time=server_time)
 
         # Log PM notices (NickServ, ChanServ, etc.)
         if is_pm:
-            pm_logger = get_pm_logger(self.network_name, nick, self.config.paths)
+            pm_logger = get_pm_logger(
+                self.network_name, nick, self.config.paths, self.config.logging.timezone
+            )
             clean_message = strip_irc_formatting(message)
-            pm_logger.info("--%s-- %s", nick, clean_message)
+            log_irc(pm_logger, "--%s-- %s", nick, clean_message, event_time=server_time)
 
         user = self.state.ensure_user(nick, prefix)
         if account is not None:
