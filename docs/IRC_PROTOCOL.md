@@ -24,6 +24,7 @@ are implemented by the bot.
 | --- | --- | --- |
 | CAP 302 / cap-notify | Implemented | Multiline `CAP LS`, `ACK`, `NAK`, `NEW`, and `DEL`; requests are split below the IRC line limit. |
 | Message tags | Implemented | Escaping, valueless tags, tag/body size limits, and propagation to commands/plugins. |
+| `batch` | Implemented | Bounded lifecycle and nesting tracking; malformed, duplicate, orphaned, and excessive batches are rejected without unbounded state. |
 | `server-time` | Implemented | UTC parsing including leap seconds; exposed as `ctx.server_time`. |
 | `account-tag` | Implemented | Updates message sender identity and exposes `ctx.account`. |
 | `account-notify` | Implemented | Tracks `ACCOUNT`, including logout, and exposes `on_account`. |
@@ -38,7 +39,7 @@ are implemented by the bot.
 | SASL EXTERNAL | Implemented | TLS client certificate loading and EXTERNAL authentication. |
 | Standard replies | Implemented | `FAIL`, `WARN`, and `NOTE` are parsed structurally and logged without assuming a closed reply-code registry. |
 | WHOX | Implemented | Uses the `WHOX` ISUPPORT token to initialize account, host, real-name, and away state after joining. |
-| `batch`, `labeled-response`, `echo-message`, multiline | Not implemented | Not requested by default and no semantic processing is provided yet. |
+| `labeled-response`, `echo-message`, multiline | Not implemented | Not requested by default and no semantic processing is provided yet. |
 | SCRAM/OAUTH SASL mechanisms | Not implemented | Only PLAIN and EXTERNAL are accepted by configuration. |
 
 ## IRC base protocol and ISUPPORT

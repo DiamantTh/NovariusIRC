@@ -102,6 +102,7 @@ class NetworkConfig(ConfigModel):
             "account-notify",
             "account-tag",
             "away-notify",
+            "batch",
             "chghost",
             "extended-join",
             "invite-notify",

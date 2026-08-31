@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from novariusirc import __version__
+from novariusirc.irc.batches import BatchTracker
 from novariusirc.irc.capabilities import (
     CapabilityProfile,
     CapabilityState,
@@ -75,6 +76,7 @@ class IRCClient:
         self._features = IRCFeatures()
         self.state = IRCState(self._features)
         self._capabilities = CapabilityState()
+        self._batches = BatchTracker()
         self._capability_profile = CapabilityProfile(
             standard=tuple(config.network.ircv3_capabilities),
             drafts=tuple(config.network.ircv3_draft_capabilities),
@@ -259,6 +261,7 @@ class IRCClient:
         self.auth.set_casefold(self._features.casefold)
         self.moderation.set_casefold(self._features.casefold)
         self._capabilities.reset()
+        self._batches.clear()
         self._sasl_mechanisms.clear()
         self._cap_end_sent = False
 
@@ -345,6 +348,28 @@ class IRCClient:
         if command == "AUTHENTICATE":
             await self._handle_authenticate(params, trailing)
             return
+        if command == "BATCH":
+            if "batch" not in self._active_capabilities:
+                self.logger.warning("Ignoring BATCH without negotiated capability")
+                return
+            try:
+                batch_params = tuple(params)
+                if batch_params and batch_params[0].startswith("+"):
+                    self._batches.start(batch_params, parsed.tags.get("batch"))
+                else:
+                    self._batches.end(batch_params)
+            except ValueError as exc:
+                self.logger.warning("Ignoring malformed IRC BATCH: %s", exc)
+            return
+        batch_reference = parsed.tags.get("batch")
+        if (
+            batch_reference
+            and "batch" in self._active_capabilities
+            and self._batches.get(batch_reference) is None
+        ):
+            self.logger.warning(
+                "Message references unknown IRC BATCH %s", batch_reference
+            )
         standard_reply = parse_standard_reply(parsed)
         if standard_reply:
             detail = (
