@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import json
+import platform
 import re
+import socket
+import ssl
 from importlib.resources import files
+from importlib.util import find_spec
 from typing import Any
 
 BOT_NAME = "NovariusIRC"
@@ -38,6 +42,44 @@ def _format_native_version(build_info: dict[str, Any]) -> str:
 
 
 BUILD_INFO = _load_build_info()
+SIMPLE_VERSION = f"{BOT_NAME} {BOT_VERSION}"
 NATIVE_VERSION = _format_native_version(BUILD_INFO)
 
-__all__ = ["BOT_NAME", "BOT_VERSION", "BUILD_INFO", "NATIVE_VERSION"]
+
+def _module_available(module: str) -> bool:
+    try:
+        return find_spec(module) is not None
+    except (ImportError, ModuleNotFoundError, ValueError):
+        return False
+
+
+def detailed_version() -> str:
+    """Return local runtime diagnostics without instance configuration."""
+    features = ["TLS", "IRCv3", "SASL", "Unix control", "process workers"]
+    if socket.has_ipv6:
+        features.insert(0, "IPv6")
+    optional = (
+        f"uvloop={'yes' if _module_available('uvloop') else 'no'}, "
+        f"journald={'yes' if _module_available('systemd.journal') else 'no'}"
+    )
+    runtime = (
+        f"Runtime: {platform.python_implementation()} "
+        f"{platform.python_version()}, {ssl.OPENSSL_VERSION}"
+    )
+    return "\n".join(
+        (
+            NATIVE_VERSION,
+            runtime,
+            f"Features: {', '.join(features)}",
+            f"Optional: {optional}",
+        )
+    )
+
+__all__ = [
+    "BOT_NAME",
+    "BOT_VERSION",
+    "BUILD_INFO",
+    "NATIVE_VERSION",
+    "SIMPLE_VERSION",
+    "detailed_version",
+]

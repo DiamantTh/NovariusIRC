@@ -12,7 +12,7 @@ from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandRegistry
 from novariusirc.core.config import Config
 from novariusirc.core.moderation import ModerationManager
-from novariusirc.version import NATIVE_VERSION
+from novariusirc.version import SIMPLE_VERSION
 
 
 class Writer:
@@ -116,7 +116,7 @@ def test_ctcp_version_is_native_and_clientinfo_always_advertises_it() -> None:
     )
     assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
         (
-            f"NOTICE Nick :\x01VERSION {NATIVE_VERSION}\x01\r\n"
+            f"NOTICE Nick :\x01VERSION {SIMPLE_VERSION}\x01\r\n"
         ).encode()
     )
 
@@ -132,9 +132,19 @@ def test_ctcp_version_is_native_and_clientinfo_always_advertises_it() -> None:
     instance.config.bot.ctcp_version_extra = "https://example.test/bot"
     assert asyncio.run(instance._handle_ctcp_query("Nick", "VERSION", ""))
     assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
-        f"NOTICE Nick :\x01VERSION {NATIVE_VERSION} "
+        f"NOTICE Nick :\x01VERSION {SIMPLE_VERSION} "
         "https://example.test/bot\x01\r\n"
     ).encode()
+
+
+def test_commands_can_be_addressed_to_the_current_bot_nick() -> None:
+    instance = client()
+    instance.commands = CommandRegistry(prefix="!")
+
+    assert instance._command_message("Bot: help") == "!help"
+    assert instance._command_message("bOT, !status now") == "!status now"
+    assert instance._command_message("!help") == "!help"
+    assert instance._command_message("OtherBot: help") == "OtherBot: help"
 
 
 def test_notice_respects_wire_limit_without_splitting_utf8() -> None:

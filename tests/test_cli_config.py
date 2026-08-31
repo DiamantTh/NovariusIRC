@@ -21,12 +21,26 @@ from novariusirc.__main__ import (
 )
 from novariusirc.core.commands import CommandRegistry
 from novariusirc.core.config import Config
+from novariusirc.version import SIMPLE_VERSION, detailed_version
 
 
 def test_package_version_matches_project_metadata() -> None:
     project_file = Path(__file__).parents[1] / "pyproject.toml"
     project = tomllib.loads(project_file.read_text(encoding="utf-8"))
     assert __version__ == project["project"]["version"]
+
+
+@pytest.mark.parametrize("flag", ["-v", "-V", "--version"])
+def test_cli_version_aliases_are_identical(
+    flag: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["novariusirc", flag])
+    with pytest.raises(SystemExit) as exit_info:
+        parse_args()
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out.strip() == detailed_version()
 
 
 def test_cli_accepts_positional_and_option_config_paths(
@@ -93,6 +107,37 @@ def test_terminal_console_dispatches_owner_commands() -> None:
             "exit",
         )
     )
+
+
+def test_irc_version_is_simple_and_botinfo_is_detailed() -> None:
+    config = Config.model_validate(
+        {
+            "bot": {},
+            "network": {
+                "server": "irc.example.test",
+                "nick": "bot",
+                "user": "bot",
+                "realname": "Bot",
+            },
+        }
+    )
+    commands = CommandRegistry(prefix="!", rate_limit_seconds=0)
+    register_builtin_commands(commands, config, start_time=0)
+    terminal = TerminalClient()
+
+    assert asyncio.run(
+        dispatch_terminal_command(
+            commands, config, logging.getLogger("test.version"), terminal, "version"
+        )
+    )
+    assert terminal.messages[-1] == SIMPLE_VERSION
+
+    assert asyncio.run(
+        dispatch_terminal_command(
+            commands, config, logging.getLogger("test.botinfo"), terminal, "botinfo"
+        )
+    )
+    assert terminal.messages[-1] == " | ".join(detailed_version().splitlines())
 
 
 def test_status_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -83,8 +83,9 @@ docker build \
 ```
 
 For reproducible builds, `SOURCE_DATE_EPOCH` can additionally be supplied as a
-build argument. `novariusirc --version`, the IRC `version` command, and CTCP
-`VERSION` then use the same embedded product, version, commit, and build time.
+build argument. `novariusirc -v`, `-V`, and `--version` show the same detailed
+local build and runtime report. IRC `version` and CTCP `VERSION` remain compact;
+the explicit IRC `botinfo` command shows the extended build and feature report.
 
 Run the container. Mount the complete instance directory so relative includes,
 certificates, and external plugins stay available; keep data and logs writable:
@@ -139,9 +140,15 @@ For an environment-only container, pass `--config env` and at minimum set
 - Feed overview command is available when `rss_announcer` is enabled: `!feed list [query]` (shows channels and active limits/options).
 - Core status is available through `!status` and reports connection, network,
   active built-in modules, and feed-engine state.
+- `!version` returns the compact public version; `!botinfo` adds build, runtime,
+  feature, and optional-component information.
 - Built-in modules are configurable via `[modules].enabled` (e.g. `rss_announcer`).
 - External plugins live in `plugins/`, but are loaded only when named in `[plugins].load`. Their commands use the same aliases, role checks, help listing, and rate limiting as built-in commands.
-- Multi-bot IRC environments should use different prefixes per bot (recommended) to avoid command collisions.
+- Prefix commands intentionally remain valid when several bots share a
+  channel, even if this makes multiple bots respond. To target one instance,
+  address its current nick instead, for example `NovariusIRC: help` or
+  `NovariusIRC, status`; using its configured prefix remains optional after the
+  nick. Different prefixes are still supported but not required.
 - Moderation is a core service configured through `[moderation]`; it must not also be loaded as a module.
 
 ## License

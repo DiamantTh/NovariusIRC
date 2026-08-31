@@ -40,7 +40,7 @@ from novariusirc.irc.wire import (
     format_user,
     validate_raw_line,
 )
-from novariusirc.version import NATIVE_VERSION
+from novariusirc.version import SIMPLE_VERSION
 
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
@@ -962,7 +962,7 @@ class IRCClient:
             await self.send_notice(nick, format_ctcp("PING", parameters))
             return True
         if command == "VERSION":
-            reply = NATIVE_VERSION
+            reply = SIMPLE_VERSION
             if self.config.bot.ctcp_version_extra:
                 reply = f"{reply} {self.config.bot.ctcp_version_extra}"
             await self.send_notice(nick, format_ctcp("VERSION", reply))
@@ -1142,11 +1142,12 @@ class IRCClient:
         # Extract hostmask from prefix (nick!user@host) or fallback to nick
         hostmask = prefix if "!" in prefix else f"{nick}!unknown@unknown"
         roles = self.auth.roles_for_hostmask(nick, hostmask)
+        command_message = self._command_message(message)
         ctx = CommandContext(
             nick=nick,
             hostmask=hostmask,
             channel=channel,
-            message=message,
+            message=command_message,
             config=self.config,
             client=self,
             logger=self.logger,
@@ -1166,6 +1167,20 @@ class IRCClient:
                 account=account,
                 server_time=server_time,
             )
+
+    def _command_message(self, message: str) -> str:
+        """Normalize an explicitly nick-addressed message for command parsing."""
+        stripped = message.lstrip()
+        for separator in (":", ","):
+            addressed_nick, found, remainder = stripped.partition(separator)
+            if found and self._same_identifier(
+                addressed_nick.strip(), self._current_nick
+            ):
+                command = remainder.strip()
+                if command.startswith(self.commands.prefix):
+                    return command
+                return f"{self.commands.prefix}{command}"
+        return message
 
     async def _handle_action(
         self,

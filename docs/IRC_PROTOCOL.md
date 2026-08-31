@@ -53,9 +53,9 @@ Direct CTCP `VERSION` and `CLIENTINFO` are supported. The minimal VERSION text
 always contains the native NovariusIRC package version. `[bot]`
 `ctcp_version_extra` may append plain text but cannot disable or replace the
 native identity. The separately maintained internal IRC-core version is not
-part of CTCP. Installed release and container artifacts can also carry their
-immutable short Git commit and UTC build time. Python and operating-system
-details are not exposed.
+part of CTCP; build, Python, and operating-system details are not exposed by
+CTCP either. Operators can request extended build and feature diagnostics
+explicitly with the regular `botinfo` command.
 
 Connection loss, idle reads, and malformed oversized input trigger a clean
 reconnect. The configured retry delay grows to its final value without wrapping

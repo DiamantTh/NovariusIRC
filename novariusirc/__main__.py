@@ -31,11 +31,14 @@ from novariusirc.core.moderation import ModerationManager
 from novariusirc.core.plugins import Plugin, PluginManager
 from novariusirc.core.tasks import TaskSupervisor
 from novariusirc.core.workers import WorkerPool
-from novariusirc.version import NATIVE_VERSION
+from novariusirc.version import SIMPLE_VERSION, detailed_version
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="NovariusIRC bot")
+    parser = argparse.ArgumentParser(
+        description="NovariusIRC bot",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument(
         "config_path",
         nargs="?",
@@ -80,10 +83,11 @@ def parse_args() -> argparse.Namespace:
         help="Validate configuration and built-in modules without connecting to IRC",
     )
     parser.add_argument(
+        "-v",
         "-V",
         "--version",
         action="version",
-        version=NATIVE_VERSION,
+        version=detailed_version(),
         help="Show version and exit",
     )
     args = parser.parse_args()
@@ -206,7 +210,10 @@ def register_builtin_commands(
         await ctx.reply(_("uptime: {seconds}s").format(seconds=seconds))
 
     async def version(ctx: CommandContext, args: list[str]) -> None:
-        await ctx.reply(NATIVE_VERSION)
+        await ctx.reply(SIMPLE_VERSION)
+
+    async def botinfo(ctx: CommandContext, args: list[str]) -> None:
+        await ctx.reply(" | ".join(detailed_version().splitlines()))
 
     async def help_cmd(ctx: CommandContext, args: list[str]) -> None:
         lines = [_("Commands ({prefix}):").format(prefix=config.bot.prefix)]
@@ -217,6 +224,7 @@ def register_builtin_commands(
     commands.register("ping", ping, help_text="Health check")
     commands.register("uptime", uptime, help_text="Show bot uptime")
     commands.register("version", version, help_text="Show bot version")
+    commands.register("botinfo", botinfo, help_text="Show bot build and features")
     commands.register("help", help_cmd, help_text="Show available commands")
 
 
