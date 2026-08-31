@@ -128,7 +128,7 @@ def test_ctcp_version_and_clientinfo_are_minimal_and_configurable() -> None:
 
     instance.writer.data.clear()  # type: ignore[union-attr]
     instance.config.bot.ctcp_version_enabled = False
-    assert not asyncio.run(instance._handle_ctcp_query("Nick", "VERSION", ""))
+    assert asyncio.run(instance._handle_ctcp_query("Nick", "VERSION", ""))
     assert not instance.writer.data  # type: ignore[union-attr]
 
 

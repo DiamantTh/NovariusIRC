@@ -132,6 +132,19 @@ def test_ctcp_version_template_is_validated() -> None:
         )
 
 
+@pytest.mark.parametrize(("field", "value"), [("nick", "bad nick"), ("user", ":bad")])
+def test_registration_tokens_reject_invalid_framing(field: str, value: str) -> None:
+    network = {
+        "server": "irc.example.test",
+        "nick": "bot",
+        "user": "bot",
+        "realname": "Bot",
+    }
+    network[field] = value
+    with pytest.raises(ValueError, match="single parameters"):
+        Config.model_validate({"bot": {}, "network": network})
+
+
 def test_check_config_accepts_builtin_modules() -> None:
     config = Config.model_validate(
         {

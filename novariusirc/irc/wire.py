@@ -51,3 +51,26 @@ def format_join(channel: str) -> str:
     ):
         raise ValueError(f"Invalid IRC channel: {channel!r}")
     return validate_raw_line(f"JOIN {channel}")
+
+
+def format_nick(nick: str) -> str:
+    """Build a NICK registration line without accepting parameter injection."""
+    return validate_raw_line(f"NICK {_validate_middle_parameter(nick, 'nickname')}")
+
+
+def format_user(username: str, realname: str) -> str:
+    """Build a USER registration line with a safe trailing real name."""
+    username = _validate_middle_parameter(username, "username")
+    if not realname or any(character in realname for character in "\r\n\0"):
+        raise ValueError("Invalid IRC real name")
+    return validate_raw_line(f"USER {username} 0 * :{realname}")
+
+
+def _validate_middle_parameter(value: str, label: str) -> str:
+    if (
+        not value
+        or value.startswith(":")
+        or any(character.isspace() or character in "\r\n\0" for character in value)
+    ):
+        raise ValueError(f"Invalid IRC {label}: {value!r}")
+    return value

@@ -172,6 +172,24 @@ class NetworkConfig(ConfigModel):
             )
         return value
 
+    @field_validator("nick", "user")
+    @classmethod
+    def validate_registration_middle_parameters(cls, value: str) -> str:
+        if (
+            not value
+            or value.startswith(":")
+            or any(character.isspace() for character in value)
+        ):
+            raise ValueError("IRC nick and user must be non-empty single parameters")
+        return value
+
+    @field_validator("realname")
+    @classmethod
+    def validate_realname(cls, value: str) -> str:
+        if not value:
+            raise ValueError("IRC realname must not be empty")
+        return value
+
     @field_validator("channels")
     @classmethod
     def validate_channel_names(cls, value: list[str]) -> list[str]:

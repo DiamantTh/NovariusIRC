@@ -13,7 +13,13 @@ from .protocol import IRCFeatures, IRCMessage, irc_casefold, parse_message
 from .replies import ReplySeverity, StandardReply, parse_standard_reply
 from .state import IRCState, IRCUser
 from .transport import RateLimitedSender
-from .wire import format_join, format_text_command, validate_raw_line
+from .wire import (
+    format_join,
+    format_nick,
+    format_text_command,
+    format_user,
+    validate_raw_line,
+)
 
 __all__ = [
     "BatchTracker",
@@ -33,7 +39,9 @@ __all__ = [
     "StandardReply",
     "format_ctcp",
     "format_join",
+    "format_nick",
     "format_text_command",
+    "format_user",
     "irc_casefold",
     "parse_ctcp",
     "parse_message",

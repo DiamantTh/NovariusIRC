@@ -28,7 +28,13 @@ from novariusirc.irc.protocol import (
 from novariusirc.irc.replies import ReplySeverity, parse_standard_reply
 from novariusirc.irc.state import IRCState, normalize_account, split_source
 from novariusirc.irc.transport import RateLimitedSender
-from novariusirc.irc.wire import format_join, format_text_command, validate_raw_line
+from novariusirc.irc.wire import (
+    format_join,
+    format_nick,
+    format_text_command,
+    format_user,
+    validate_raw_line,
+)
 
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
@@ -268,9 +274,9 @@ class IRCClient:
     async def _register(self) -> None:
         if self.config.network.ircv3_enabled or self.config.auth.sasl_enabled:
             await self.send_raw("CAP LS 302", priority=True)
-        await self.send_raw(f"NICK {self.config.network.nick}", priority=True)
+        await self.send_raw(format_nick(self.config.network.nick), priority=True)
         await self.send_raw(
-            f"USER {self.config.network.user} 0 * :{self.config.network.realname}",
+            format_user(self.config.network.user, self.config.network.realname),
             priority=True,
         )
 
@@ -961,9 +967,10 @@ class IRCClient:
         if command == "PING":
             await self.send_notice(nick, format_ctcp("PING", parameters))
             return True
-        if command == "VERSION" and self.config.bot.ctcp_version_enabled:
-            reply = self.config.bot.ctcp_version_reply.format(version=__version__)
-            await self.send_notice(nick, format_ctcp("VERSION", reply))
+        if command == "VERSION":
+            if self.config.bot.ctcp_version_enabled:
+                reply = self.config.bot.ctcp_version_reply.format(version=__version__)
+                await self.send_notice(nick, format_ctcp("VERSION", reply))
             return True
         if command == "CLIENTINFO":
             commands = ["ACTION", "CLIENTINFO", "PING"]
