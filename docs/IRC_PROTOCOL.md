@@ -1,6 +1,7 @@
 # IRC and IRCv3 protocol support
 
-The protocol, capability-state, and connection-state primitives live in
+The protocol, capability-state, connection-state, and safe wire-construction
+primitives live in
 `novariusirc.irc`. They
 are intentionally independent of commands, operator roles, modules, feeds,
 and moderation. `novariusirc.core.client` remains the adapter that connects

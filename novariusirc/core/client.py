@@ -20,6 +20,7 @@ from novariusirc.irc.protocol import (
     parse_server_time,
 )
 from novariusirc.irc.state import IRCState, normalize_account, split_source
+from novariusirc.irc.wire import format_join, format_text_command, validate_raw_line
 
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
@@ -1231,11 +1232,7 @@ class IRCClient:
         sensitive: bool = False,
         priority: bool = False,
     ) -> None:
-        if any(character in message for character in ("\r", "\n", "\0")):
-            raise ValueError("IRC messages must not contain CR, LF, or NUL")
-        encoded = message.encode("utf-8")
-        if len(encoded) > 510:
-            raise ValueError("IRC message exceeds the 510-byte protocol limit")
+        validate_raw_line(message)
         if not self.writer:
             raise ConnectionError("IRC client is not connected")
 
@@ -1385,38 +1382,20 @@ class IRCClient:
     async def send_privmsg(
         self, target: str, message: str, *, sensitive: bool = False
     ) -> None:
-        if not target or any(
-            character.isspace() or character in "\r\n\0:" for character in target
-        ):
-            raise ValueError(f"Invalid IRC target: {target!r}")
-        clean_message = " ".join(message.replace("\0", "").splitlines()).strip()
-        prefix = f"PRIVMSG {target} :"
-        maximum = 510 - len(prefix.encode("utf-8"))
-        clean_message = self._truncate_utf8(clean_message, maximum)
-        await self.send_raw(prefix + clean_message, sensitive=sensitive)
+        await self.send_raw(
+            format_text_command("PRIVMSG", target, message), sensitive=sensitive
+        )
 
     async def send_notice(
         self, target: str, message: str, *, sensitive: bool = False
     ) -> None:
-        if not target or any(
-            character.isspace() or character in "\r\n\0:" for character in target
-        ):
-            raise ValueError(f"Invalid IRC target: {target!r}")
-        clean_message = " ".join(message.replace("\0", "").splitlines()).strip()
-        prefix = f"NOTICE {target} :"
-        maximum = 510 - len(prefix.encode("utf-8"))
-        clean_message = self._truncate_utf8(clean_message, maximum)
-        await self.send_raw(prefix + clean_message, sensitive=sensitive)
+        await self.send_raw(
+            format_text_command("NOTICE", target, message), sensitive=sensitive
+        )
 
     async def join_channels(self, channels: list[str]) -> None:
         for channel in channels:
-            if (
-                not channel
-                or any(character.isspace() for character in channel)
-                or any(character in channel for character in "\r\n\0,:")
-            ):
-                raise ValueError(f"Invalid IRC channel: {channel!r}")
-            await self.send_raw(f"JOIN {channel}")
+            await self.send_raw(format_join(channel))
 
     async def _handle_cap(self, params: list[str], trailing: str) -> None:
         subcommand = params[1].upper() if len(params) > 1 else ""
@@ -1551,13 +1530,6 @@ class IRCClient:
             )
         if self.config.network.channels:
             await self.join_channels(self.config.network.channels)
-
-    @staticmethod
-    def _truncate_utf8(value: str, maximum: int) -> str:
-        encoded = value.encode("utf-8")
-        if len(encoded) <= maximum:
-            return value
-        return encoded[:maximum].decode("utf-8", errors="ignore")
 
     @staticmethod
     def _text_parameter(message: IRCMessage, index: int) -> str:
