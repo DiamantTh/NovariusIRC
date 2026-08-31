@@ -11,7 +11,7 @@ from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config
 from novariusirc.core.feeds import FeedEngine
 from novariusirc.core.plugins import Plugin, PluginLoader, PluginManager
-from novariusirc.core.protocol import irc_casefold
+from novariusirc.irc.protocol import irc_casefold
 
 
 class ReplyClient:

@@ -10,8 +10,9 @@ from collections.abc import Callable
 
 import pyotp
 
+from novariusirc.irc.protocol import irc_casefold
+
 from .config import AuthConfig, RolesConfig
-from .protocol import irc_casefold
 
 
 def hostmask_match(

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from .protocol import irc_casefold
+from novariusirc.irc.protocol import irc_casefold
 
 logger = logging.getLogger(__name__)
 

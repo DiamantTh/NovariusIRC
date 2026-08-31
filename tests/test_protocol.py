@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from novariusirc.core.protocol import (
+from novariusirc.irc.protocol import (
     IRCFeatures,
     irc_casefold,
     parse_message,

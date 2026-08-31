@@ -11,6 +11,15 @@ from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
 
+from novariusirc.irc.protocol import (
+    CASEMAPPINGS,
+    IRCFeatures,
+    IRCMessage,
+    parse_message,
+    parse_server_time,
+)
+from novariusirc.irc.state import IRCState, normalize_account, split_source
+
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
 from .config import Config
@@ -25,14 +34,6 @@ from .logging import (
 )
 from .moderation import ModerationManager
 from .plugins import PluginManager
-from .protocol import (
-    CASEMAPPINGS,
-    IRCFeatures,
-    IRCMessage,
-    parse_message,
-    parse_server_time,
-)
-from .state import IRCState, normalize_account, split_source
 
 _SEND_NORMAL = 10
 _SEND_PRIORITY = 0

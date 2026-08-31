@@ -1,5 +1,10 @@
 # IRC and IRCv3 protocol support
 
+The protocol and connection-state primitives live in `novariusirc.irc`. They
+are intentionally independent of commands, operator roles, modules, feeds,
+and moderation. `novariusirc.core.client` remains the adapter that connects
+those IRC events to the bot.
+
 This matrix describes implemented behavior, not every extension an IRC server
 may advertise. Optional capabilities are requested only when both configured
 and offered by the server.

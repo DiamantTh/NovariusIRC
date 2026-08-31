@@ -101,7 +101,8 @@ For an environment-only container, pass `--config env` and at minimum set
 `SIGTERM` for a graceful stop and runs as an unprivileged user.
 
 ## Project Layout
-- `novariusirc/core`: core services (client, config, local control, auth, commands, logging, i18n, feeds, plugins, workers)
+- `novariusirc/irc`: protocol-focused IRC transport, capability and state primitives; independent of bot commands and modules
+- `novariusirc/core`: bot services (client adapter, config, local control, auth, commands, logging, i18n, feeds, plugins, workers)
 - `novariusirc/modules`: built-in modules (currently `rss_announcer`)
 - `novariusirc/__main__.py`: CLI entry point
 - `config.example.toml`: starter configuration

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from novariusirc.core.protocol import IRCFeatures
-from novariusirc.core.state import IRCState
+from novariusirc.irc.protocol import IRCFeatures
+from novariusirc.irc.state import IRCState
 
 
 def test_isupport_prefix_chanmodes_statusmsg_and_limits() -> None:
