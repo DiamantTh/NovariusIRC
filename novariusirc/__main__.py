@@ -212,9 +212,6 @@ def register_builtin_commands(
     async def version(ctx: CommandContext, args: list[str]) -> None:
         await ctx.reply(SIMPLE_VERSION)
 
-    async def botinfo(ctx: CommandContext, args: list[str]) -> None:
-        await ctx.reply(" | ".join(detailed_version().splitlines()))
-
     async def help_cmd(ctx: CommandContext, args: list[str]) -> None:
         lines = [_("Commands ({prefix}):").format(prefix=config.bot.prefix)]
         for cmd in commands.list_commands(ctx.roles):
@@ -224,7 +221,6 @@ def register_builtin_commands(
     commands.register("ping", ping, help_text="Health check")
     commands.register("uptime", uptime, help_text="Show bot uptime")
     commands.register("version", version, help_text="Show bot version")
-    commands.register("botinfo", botinfo, help_text="Show bot build and features")
     commands.register("help", help_cmd, help_text="Show available commands")
 
 
@@ -233,8 +229,10 @@ def register_runtime_commands(
     client: IRCClient,
     modules: PluginManager,
     feeds: FeedEngine,
+    start_time: float | None = None,
 ) -> None:
     """Register commands whose data exists only after core services are built."""
+    runtime_started = time.monotonic() if start_time is None else start_time
 
     async def status(ctx: CommandContext, args: list[str]) -> None:
         connection = "connected" if client.is_connected else "disconnected"
@@ -249,7 +247,19 @@ def register_runtime_commands(
             f"modules={module_names}; feeds={feed_state}"
         )
 
+    async def botinfo(ctx: CommandContext, args: list[str]) -> None:
+        connection = "connected" if client.is_connected else "disconnected"
+        uptime_seconds = max(0, int(time.monotonic() - runtime_started))
+        version_line, *diagnostics = detailed_version().splitlines()
+        identity = (
+            f"Bot: {client.current_nick}; software={version_line}; "
+            f"network={client.network_name}; status={connection}; "
+            f"uptime={uptime_seconds}s"
+        )
+        await ctx.reply(" | ".join((identity, *diagnostics)))
+
     commands.register("status", status, help_text="Show core service status")
+    commands.register("botinfo", botinfo, help_text="Show bot identity and features")
 
 
 async def async_main() -> None:
@@ -299,7 +309,7 @@ async def async_main() -> None:
 
     client = IRCClient(config, commands, auth, plugins, moderation, logger)
     plugins.set_client(client)
-    register_runtime_commands(commands, client, plugins, feeds)
+    register_runtime_commands(commands, client, plugins, feeds, start_time)
     loop = asyncio.get_running_loop()
     handled_signals = (signal.SIGINT, signal.SIGTERM)
     for handled_signal in handled_signals:

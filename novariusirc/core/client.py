@@ -120,6 +120,11 @@ class IRCClient:
         )
 
     @property
+    def current_nick(self) -> str:
+        """Return the nick currently used on the IRC connection."""
+        return self._current_nick
+
+    @property
     def active_capabilities(self) -> frozenset[str]:
         return frozenset(self._active_capabilities)
 
@@ -1142,12 +1147,12 @@ class IRCClient:
         # Extract hostmask from prefix (nick!user@host) or fallback to nick
         hostmask = prefix if "!" in prefix else f"{nick}!unknown@unknown"
         roles = self.auth.roles_for_hostmask(nick, hostmask)
-        command_message = self._command_message(message)
+        command_message = self._command_message(message, in_channel=channel is not None)
         ctx = CommandContext(
             nick=nick,
             hostmask=hostmask,
             channel=channel,
-            message=command_message,
+            message=command_message or message,
             config=self.config,
             client=self,
             logger=self.logger,
@@ -1156,7 +1161,7 @@ class IRCClient:
             account=account,
             server_time=server_time,
         )
-        handled = await self.commands.dispatch(ctx)
+        handled = command_message is not None and await self.commands.dispatch(ctx)
         if not handled:
             await self.plugins.on_message(
                 nick,
@@ -1168,8 +1173,10 @@ class IRCClient:
                 server_time=server_time,
             )
 
-    def _command_message(self, message: str) -> str:
-        """Normalize an explicitly nick-addressed message for command parsing."""
+    def _command_message(self, message: str, *, in_channel: bool) -> str | None:
+        """Require nick addressing in channels, but not in private messages."""
+        if not in_channel:
+            return message
         stripped = message.lstrip()
         for separator in (":", ","):
             addressed_nick, found, remainder = stripped.partition(separator)
@@ -1180,7 +1187,7 @@ class IRCClient:
                 if command.startswith(self.commands.prefix):
                     return command
                 return f"{self.commands.prefix}{command}"
-        return message
+        return None
 
     async def _handle_action(
         self,

@@ -38,7 +38,7 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | Konfigurations-Includes | fertig | Beispielsweise `secrets.toml`, `feeds.toml` und `moderation.toml` |
 | Relative Pfade | fertig | Werden relativ zur Instanzkonfiguration aufgelöst |
 | Validierung | fertig | Unbekannte Felder und unsichere Modul-/Pluginnamen werden abgelehnt |
-| Core-Commands | fertig | `ping`, `uptime`, `version`, `botinfo` und `help`; Präfix oder gezielte Nick-Ansprache |
+| Core-Commands | fertig | `ping`, `uptime`, `version`, `botinfo` und `help`; im Channel nur gezielte Nick-Ansprache, in Query/Local ohne Botnamen |
 | Modul-Auswahl | fertig | Über `[modules].enabled` |
 | Plugin-Auswahl | fertig | Explizite Allowlist über `[plugins].load` |
 | Plugin-Ablage | fertig | Einzelne Python-Datei oder Paket mit `__init__.py` |

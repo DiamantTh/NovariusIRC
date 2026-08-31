@@ -141,10 +141,14 @@ def test_commands_can_be_addressed_to_the_current_bot_nick() -> None:
     instance = client()
     instance.commands = CommandRegistry(prefix="!")
 
-    assert instance._command_message("Bot: help") == "!help"
-    assert instance._command_message("bOT, !status now") == "!status now"
-    assert instance._command_message("!help") == "!help"
-    assert instance._command_message("OtherBot: help") == "OtherBot: help"
+    assert instance._command_message("Bot: help", in_channel=True) == "!help"
+    assert (
+        instance._command_message("bOT, !status now", in_channel=True)
+        == "!status now"
+    )
+    assert instance._command_message("!help", in_channel=True) is None
+    assert instance._command_message("OtherBot: help", in_channel=True) is None
+    assert instance._command_message("!help", in_channel=False) == "!help"
 
 
 def test_notice_respects_wire_limit_without_splitting_utf8() -> None:

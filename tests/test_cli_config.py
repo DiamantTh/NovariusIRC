@@ -132,12 +132,29 @@ def test_irc_version_is_simple_and_botinfo_is_detailed() -> None:
     )
     assert terminal.messages[-1] == SIMPLE_VERSION
 
+    register_runtime_commands(
+        commands,
+        SimpleNamespace(
+            current_nick="RuntimeBot",
+            is_connected=True,
+            network_name="TestNet",
+        ),  # type: ignore[arg-type]
+        SimpleNamespace(active_builtin_modules=()),  # type: ignore[arg-type]
+        SimpleNamespace(  # type: ignore[arg-type]
+            config=SimpleNamespace(enabled=False), is_running=False
+        ),
+        start_time=0,
+    )
     assert asyncio.run(
         dispatch_terminal_command(
             commands, config, logging.getLogger("test.botinfo"), terminal, "botinfo"
         )
     )
-    assert terminal.messages[-1] == " | ".join(detailed_version().splitlines())
+    botinfo = terminal.messages[-1]
+    assert "Bot: RuntimeBot" in botinfo
+    assert f"software={detailed_version().splitlines()[0]}" in botinfo
+    assert "network=TestNet; status=connected" in botinfo
+    assert "Runtime:" in botinfo
 
 
 def test_status_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -288,6 +305,7 @@ def test_runtime_command_registration_includes_core_status() -> None:
     commands = CommandRegistry()
     register_builtin_commands(commands, config, start_time=0)
     assert commands.get("status") is None
+    assert commands.get("botinfo") is None
     register_runtime_commands(
         commands,
         SimpleNamespace(is_connected=False, network_name="TestNet"),  # type: ignore[arg-type]
@@ -297,6 +315,7 @@ def test_runtime_command_registration_includes_core_status() -> None:
         ),
     )
     assert commands.get("status") is not None
+    assert commands.get("botinfo") is not None
 
 
 def test_config_paths_are_relative_to_the_config_file(tmp_path: Path) -> None:

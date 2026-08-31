@@ -140,15 +140,18 @@ For an environment-only container, pass `--config env` and at minimum set
 - Feed overview command is available when `rss_announcer` is enabled: `!feed list [query]` (shows channels and active limits/options).
 - Core status is available through `!status` and reports connection, network,
   active built-in modules, and feed-engine state.
-- `!version` returns the compact public version; `!botinfo` adds build, runtime,
-  feature, and optional-component information.
+- In a private query, `!version` returns the compact public version and
+  `!botinfo` adds the current nick, network, connection state, uptime, build,
+  runtime, features, and optional-component information. In channels, address
+  the bot nick as described below.
 - Built-in modules are configurable via `[modules].enabled` (e.g. `rss_announcer`).
 - External plugins live in `plugins/`, but are loaded only when named in `[plugins].load`. Their commands use the same aliases, role checks, help listing, and rate limiting as built-in commands.
-- Prefix commands intentionally remain valid when several bots share a
-  channel, even if this makes multiple bots respond. To target one instance,
-  address its current nick instead, for example `NovariusIRC: help` or
-  `NovariusIRC, status`; using its configured prefix remains optional after the
-  nick. Different prefixes are still supported but not required.
+- Channel commands require the bot's current nick, for example
+  `NovariusIRC: help` or `NovariusIRC, status`; using its configured prefix
+  remains optional after the nick. This prevents several bots with overlapping
+  command names or prefixes from answering together. In a private query and on
+  local Terminal/Control interfaces, normal commands such as `!help` work
+  without a bot nick.
 - Moderation is a core service configured through `[moderation]`; it must not also be loaded as a module.
 
 ## License
