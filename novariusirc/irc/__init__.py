@@ -7,6 +7,11 @@ the client adapter in :mod:`novariusirc.core.client`.
 
 from .batches import BatchTracker, IRCBatch
 from .capabilities import CapabilityProfile, CapabilityState, CapabilityToken
+from .connection import (
+    IncompleteIRCLine,
+    IRCLineReader,
+    OversizedIRCLine,
+)
 from .ctcp import CTCPMessage, format_ctcp, parse_ctcp
 from .events import IRCEnvelope, IRCSource
 from .protocol import IRCFeatures, IRCMessage, irc_casefold, parse_message
@@ -30,10 +35,13 @@ __all__ = [
     "IRCBatch",
     "IRCEnvelope",
     "IRCFeatures",
+    "IRCLineReader",
     "IRCMessage",
     "IRCSource",
     "IRCState",
     "IRCUser",
+    "IncompleteIRCLine",
+    "OversizedIRCLine",
     "RateLimitedSender",
     "ReplySeverity",
     "StandardReply",

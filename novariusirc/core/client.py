@@ -17,6 +17,12 @@ from novariusirc.irc.capabilities import (
     CapabilityState,
     cap_req_lines,
 )
+from novariusirc.irc.connection import (
+    MAX_INCOMING_BYTES,
+    IncompleteIRCLine,
+    IRCLineReader,
+    OversizedIRCLine,
+)
 from novariusirc.irc.ctcp import format_ctcp, parse_ctcp
 from novariusirc.irc.events import IRCEnvelope
 from novariusirc.irc.protocol import (
@@ -50,8 +56,6 @@ from .logging import (
 )
 from .moderation import ModerationManager
 from .plugins import PluginManager
-
-_MAX_INCOMING_BYTES = 8703  # 8191 bytes of tags plus a 512-byte IRC message.
 
 
 class IRCClient:
@@ -198,7 +202,7 @@ class IRCClient:
                 port,
                 ssl=ssl_context,
                 local_addr=local_addr,
-                limit=_MAX_INCOMING_BYTES,
+                limit=MAX_INCOMING_BYTES,
             ),
             timeout=self.config.network.connect_timeout_seconds,
         )
@@ -282,32 +286,22 @@ class IRCClient:
 
     async def _listen(self) -> None:
         assert self.reader is not None
+        line_reader = IRCLineReader(
+            self.reader, idle_timeout=self.config.network.idle_timeout_seconds
+        )
         while not self.reader.at_eof():
             try:
-                raw = await asyncio.wait_for(
-                    self.reader.readline(),
-                    timeout=self.config.network.idle_timeout_seconds,
-                )
-            except TimeoutError as exc:
-                raise ConnectionError(
-                    "IRC connection received no data for "
-                    f"{self.config.network.idle_timeout_seconds:g} seconds"
-                ) from exc
-            except ValueError as exc:
-                raise ConnectionError(
-                    "Incoming IRC message exceeds the wire limit"
-                ) from exc
-            if not raw:
-                break
-            if not raw.endswith(b"\n"):
+                line = await line_reader.read()
+            except IncompleteIRCLine:
                 self.logger.warning("Ignoring incomplete IRC message at end of stream")
                 break
-            if len(raw) > _MAX_INCOMING_BYTES:
+            except OversizedIRCLine as exc:
                 self.logger.warning(
-                    "Ignoring oversized IRC message (%d bytes)", len(raw)
+                    "Ignoring oversized IRC message (%d bytes)", exc.size
                 )
                 continue
-            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line is None:
+                break
             await self._handle_line(line)
 
     async def _handle_line(self, line: str) -> None:
