@@ -2,6 +2,25 @@
 
 **Sprachen:** Deutsch · [English](CONFIGURATION.en.md)
 
+## Inhaltsverzeichnis
+
+- [Laden und prüfen](#loading)
+- [Ladereihenfolge und Includes](#includes)
+- [Bot](#bot)
+- [Netzwerk und IRCv3](#network)
+- [Authentifizierung](#auth)
+- [Rollen](#roles)
+- [Logging](#logging)
+- [Befehle, Lifecycle und Control](#commands-lifecycle-control)
+- [Eingebaute Module](#modules)
+- [Pfade und Worker](#paths-workers)
+- [Feeds](#feeds)
+  - [Feed-Definitionen](#feed-definitions)
+- [Moderation](#moderation)
+  - [Prüfungen und Verwarnungen](#moderation-checks)
+- [Externe Plugins](#plugins)
+- [Umgebungsvariablen](#environment)
+
 NovariusIRC verwendet TOML. Die Schlüsselnamen bleiben unabhängig von der
 Ausgabesprache Englisch, damit bestehende Konfigurationen, Container-Variablen
 und Werkzeuge kompatibel bleiben. Kommentare und diese Referenz sind Deutsch.
@@ -13,6 +32,7 @@ Sie beschreibt die vom aktuellen Core und den eingebauten Modulen ausgewerteten
 Werte. Die vollständige Startvorlage ist
 [`config.example.toml`](../config.example.toml).
 
+<a id="loading"></a>
 ## Laden und prüfen
 
 ```console
@@ -37,6 +57,7 @@ deshalb beim Start zu einem Fehler, statt unbemerkt ignoriert zu werden. Die
 freien Tabellen `plugins.settings` und `moderation.channels` sind die bewussten
 Ausnahmen.
 
+<a id="includes"></a>
 ## Ladereihenfolge und Includes
 
 Die effektive Konfiguration entsteht in dieser Reihenfolge:
@@ -71,6 +92,7 @@ Include-Pfade sind relativ zum Verzeichnis der Hauptdatei. Absolute Pfade sind
 ebenfalls erlaubt. Zugangsdaten gehören in eine nicht versionierte Datei nach
 Vorlage von [`secrets.example.toml`](../secrets.example.toml).
 
+<a id="bot"></a>
 ## `[bot]`
 
 Allgemeine Darstellung und Sprache des Bots.
@@ -91,6 +113,7 @@ language = "de"
 ctcp_version_extra = "Produktivinstanz"
 ```
 
+<a id="network"></a>
 ## `[network]`
 
 IRC-Verbindung, Identität und Protokollgrenzen. `server`, `nick`, `user` und
@@ -136,6 +159,7 @@ realname = "Novarius IRC Bot"
 channels = ["#bots"]
 ```
 
+<a id="auth"></a>
 ## `[auth]`
 
 Authentifizierung des Bot-Clients am IRC-Netz sowie optionale TOTP-Sitzungen für
@@ -170,6 +194,7 @@ bewusst noch nicht festgelegt und implementiert ist, darf `require_totp` im
 Produktivbetrieb derzeit nicht aktiviert werden: Die betreffende Rolle wäre
 sonst über IRC nicht erreichbar.
 
+<a id="roles"></a>
 ## `[roles]`
 
 Die Rollen `owner` und `admin` werden über IRC-Hostmasks zugeordnet. Der
@@ -202,6 +227,7 @@ Hostmasks funktionieren auch auf Netzen ohne NickServ und ohne IRCv3. Für
 privilegierte Rollen sollten stabile, serverseitig gesetzte Hosts verwendet
 werden; ein bloßer Nick ist kein verlässlicher Identitätsnachweis.
 
+<a id="logging"></a>
 ## `[logging]`
 
 | Name | Typ | Standard | Beschreibung |
@@ -223,6 +249,7 @@ enabled = true
 
 Ohne passenden Eintrag ist das inhaltliche Kanal-Logging ausgeschaltet.
 
+<a id="commands-lifecycle-control"></a>
 ## `[commands]`, `[lifecycle]` und `[control]`
 
 | Abschnitt.Name | Typ | Standard | Beschreibung |
@@ -236,6 +263,7 @@ Ohne passenden Eintrag ist das inhaltliche Kanal-Logging ausgeschaltet.
 Der Control-Endpunkt ist kein TCP-Listener und keine Shell. Er führt dieselben
 registrierten Bot-Befehle wie die Terminalsteuerung aus.
 
+<a id="modules"></a>
 ## `[modules]`
 
 | Name | Typ | Standard | Beschreibung |
@@ -247,6 +275,7 @@ registrierten Bot-Befehle wie die Terminalsteuerung aus.
 ein Core-Dienst und gehört nicht in diese Liste. Ein unbekanntes oder nicht
 importierbares Modul lässt `--check-config` fehlschlagen.
 
+<a id="paths-workers"></a>
 ## `[paths]` und `[workers]`
 
 | Abschnitt.Name | Typ | Standard | Beschreibung |
@@ -259,6 +288,7 @@ Relative Laufzeitpfade werden relativ zum Verzeichnis von `config.toml`
 aufgelöst, nicht relativ zum aktuellen Arbeitsverzeichnis. Das betrifft auch
 Control-Socket, Moderationslog, Zertifikate und Feed-TLS-Dateien.
 
+<a id="feeds"></a>
 ## `[feeds]`
 
 Globale Einstellungen des Feed-Cores. Die Abrufe werden vom eingebauten Modul
@@ -285,6 +315,7 @@ Globale Einstellungen des Feed-Cores. Die Abrufe werden vom eingebauten Modul
 
 Leere Strings bei den vier TLS-Pfaden gelten als nicht gesetzt.
 
+<a id="feed-definitions"></a>
 ### `[[feeds.feeds]]`
 
 | Name | Typ | Standard | Beschreibung |
@@ -303,6 +334,7 @@ Leere Strings bei den vier TLS-Pfaden gelten als nicht gesetzt.
 Eine vollständige Vorlage mit IRC-Formatierung steht in
 [`config/feeds.example.toml`](../config/feeds.example.toml).
 
+<a id="moderation"></a>
 ## `[moderation]`
 
 Moderation ist ein Core-Dienst. Die Prüfungen sind einzeln standardmäßig
@@ -321,6 +353,7 @@ aus. Die vollständige Vorlage steht in
 | `warnings` | Tabelle | siehe unten | Eskalationsschwellen für Verwarnungen. |
 | `channels` | Tabelle | `{}` | Rekursive Überschreibungen je Kanal. |
 
+<a id="moderation-checks"></a>
 ### Prüfungen und Verwarnungen
 
 | Abschnitt.Name | Typ | Standard | Beschreibung |
@@ -355,6 +388,7 @@ messages_per_minute = 3
 action = "mute"
 ```
 
+<a id="plugins"></a>
 ## `[plugins]`
 
 Dieser Abschnitt gehört zum Core-Lader für externe Erweiterungen. Er wird hier
@@ -368,6 +402,7 @@ der Vollständigkeit halber aufgeführt; eingebaute Funktionen gehören unter
 | `load` | Textliste | `[]` | Explizite Allowlist; Namen dürfen Buchstaben, Ziffern, `_` und `-` enthalten. |
 | `settings` | Tabelle | `{}` | Erweiterungsspezifische freie Schlüssel, gruppiert nach Name. |
 
+<a id="environment"></a>
 ## Umgebungsvariablen
 
 Diese Variablen überschreiben unterstützte TOML-Werte. Bei dateibasiertem Start

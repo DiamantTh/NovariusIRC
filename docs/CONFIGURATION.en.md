@@ -2,6 +2,25 @@
 
 **Languages:** [Deutsch](CONFIGURATION.md) · English
 
+## Table of contents
+
+- [Loading and validation](#loading)
+- [Load order and includes](#includes)
+- [Bot](#bot)
+- [Network and IRCv3](#network)
+- [Authentication](#auth)
+- [Roles](#roles)
+- [Logging](#logging)
+- [Commands, lifecycle, and control](#commands-lifecycle-control)
+- [Built-in modules](#modules)
+- [Paths and workers](#paths-workers)
+- [Feeds](#feeds)
+  - [Feed definitions](#feed-definitions)
+- [Moderation](#moderation)
+  - [Checks and warnings](#moderation-checks)
+- [External plugins](#plugins)
+- [Environment variables](#environment)
+
 NovariusIRC uses TOML. Key names remain English regardless of the bot's output
 language so existing configurations, container variables, and tooling stay
 compatible.
@@ -13,6 +32,7 @@ It covers values currently evaluated by the core and built-in modules. The
 complete starter configuration is
 [`config.example.toml`](../config.example.toml).
 
+<a id="loading"></a>
 ## Loading and validation
 
 ```console
@@ -35,6 +55,7 @@ All typed sections reject unknown keys. A typo therefore fails startup instead
 of being silently ignored. The free-form `plugins.settings` and
 `moderation.channels` tables are intentional exceptions.
 
+<a id="includes"></a>
 ## Load order and includes
 
 The effective configuration is assembled in this order:
@@ -68,6 +89,7 @@ Include paths are relative to the main configuration directory. Absolute paths
 are accepted as well. Credentials belong in an untracked file based on
 [`secrets.example.toml`](../secrets.example.toml).
 
+<a id="bot"></a>
 ## `[bot]`
 
 General bot presentation and language.
@@ -88,6 +110,7 @@ language = "en"
 ctcp_version_extra = "Production instance"
 ```
 
+<a id="network"></a>
 ## `[network]`
 
 IRC connection, identity, and protocol limits. `server`, `nick`, `user`, and
@@ -132,6 +155,7 @@ realname = "Novarius IRC Bot"
 channels = ["#bots"]
 ```
 
+<a id="auth"></a>
 ## `[auth]`
 
 Authentication of the bot client to the IRC network and optional TOTP sessions
@@ -165,6 +189,7 @@ only when a role entry sets `require_totp = true`. See
 intentionally not designed or implemented yet, do not enable `require_totp` in
 production: the matching role would otherwise be unavailable through IRC.
 
+<a id="roles"></a>
 ## `[roles]`
 
 The `owner` and `admin` roles are assigned through IRC hostmasks. The section
@@ -197,6 +222,7 @@ Hostmasks also work on networks without NickServ or IRCv3. Privileged roles
 should use stable server-assigned hosts; a nickname alone is not reliable proof
 of identity.
 
+<a id="logging"></a>
 ## `[logging]`
 
 | Name | Type | Default | Description |
@@ -217,6 +243,7 @@ enabled = true
 
 Message-level channel logging is disabled when no entry matches.
 
+<a id="commands-lifecycle-control"></a>
 ## `[commands]`, `[lifecycle]`, and `[control]`
 
 | Section.Name | Type | Default | Description |
@@ -230,6 +257,7 @@ Message-level channel logging is disabled when no entry matches.
 The control endpoint is neither a TCP listener nor a shell. It executes the
 same registered bot commands as the terminal console.
 
+<a id="modules"></a>
 ## `[modules]`
 
 | Name | Type | Default | Description |
@@ -241,6 +269,7 @@ name exists only as a compatibility notice; moderation is already a core
 service and should not be listed here. Unknown or unimportable modules make
 `--check-config` fail.
 
+<a id="paths-workers"></a>
 ## `[paths]` and `[workers]`
 
 | Section.Name | Type | Default | Description |
@@ -253,6 +282,7 @@ Relative runtime paths are resolved against the directory containing
 `config.toml`, not the current working directory. This also applies to the
 control socket, moderation log, certificates, and feed TLS files.
 
+<a id="feeds"></a>
 ## `[feeds]`
 
 Global feed-core settings. The built-in `rss_announcer` module starts polling
@@ -279,6 +309,7 @@ when listed in `[modules].enabled`.
 
 Empty strings for the four TLS paths are treated as unset.
 
+<a id="feed-definitions"></a>
 ### `[[feeds.feeds]]`
 
 | Name | Type | Default | Description |
@@ -297,6 +328,7 @@ Empty strings for the four TLS paths are treated as unset.
 See [`config/feeds.example.toml`](../config/feeds.example.toml) for a complete
 example including IRC formatting.
 
+<a id="moderation"></a>
 ## `[moderation]`
 
 Moderation is a core service. Individual checks are disabled by default, so
@@ -315,6 +347,7 @@ complete example.
 | `warnings` | table | see below | Warning escalation thresholds. |
 | `channels` | table | `{}` | Recursive per-channel overrides. |
 
+<a id="moderation-checks"></a>
 ### Checks and warnings
 
 | Section.Name | Type | Default | Description |
@@ -349,6 +382,7 @@ messages_per_minute = 3
 action = "mute"
 ```
 
+<a id="plugins"></a>
 ## `[plugins]`
 
 This section belongs to the core loader for external extensions. It is included
@@ -361,6 +395,7 @@ for completeness; built-in features belong under `[modules]`.
 | `load` | list of text | `[]` | Explicit allowlist; names may contain letters, digits, `_`, and `-`. |
 | `settings` | table | `{}` | Free-form extension settings grouped by name. |
 
+<a id="environment"></a>
 ## Environment variables
 
 These variables override supported TOML values. During file-based startup, the
