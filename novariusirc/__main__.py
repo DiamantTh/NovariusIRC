@@ -218,10 +218,10 @@ def register_builtin_commands(
             lines.append(f"{cmd.name} - {cmd.help_text}")
         await ctx.reply(" | ".join(lines))
 
-    commands.register("ping", ping, help_text="Health check")
-    commands.register("uptime", uptime, help_text="Show bot uptime")
-    commands.register("version", version, help_text="Show bot version")
-    commands.register("help", help_cmd, help_text="Show available commands")
+    commands.register("ping", ping, help_text="Health check", owner="core")
+    commands.register("uptime", uptime, help_text="Show bot uptime", owner="core")
+    commands.register("version", version, help_text="Show bot version", owner="core")
+    commands.register("help", help_cmd, help_text="Show available commands", owner="core")
 
 
 def register_runtime_commands(
@@ -258,8 +258,12 @@ def register_runtime_commands(
         )
         await ctx.reply(" | ".join((identity, *diagnostics)))
 
-    commands.register("status", status, help_text="Show core service status")
-    commands.register("botinfo", botinfo, help_text="Show bot identity and features")
+    commands.register(
+        "status", status, help_text="Show core service status", owner="core"
+    )
+    commands.register(
+        "botinfo", botinfo, help_text="Show bot identity and features", owner="core"
+    )
 
 
 async def async_main() -> None:

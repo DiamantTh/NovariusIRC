@@ -316,6 +316,17 @@ def test_runtime_command_registration_includes_core_status() -> None:
     )
     assert commands.get("status") is not None
     assert commands.get("botinfo") is not None
+    assert [
+        (command.name, command.roles, command.owner)
+        for command in commands.list_commands()
+    ] == [
+        ("botinfo", ("user",), "core"),
+        ("help", ("user",), "core"),
+        ("ping", ("user",), "core"),
+        ("status", ("user",), "core"),
+        ("uptime", ("user",), "core"),
+        ("version", ("user",), "core"),
+    ]
 
 
 def test_config_paths_are_relative_to_the_config_file(tmp_path: Path) -> None:

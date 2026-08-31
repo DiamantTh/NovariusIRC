@@ -17,7 +17,7 @@ funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
 Am 31. August 2026 wurde folgender Stand verifiziert:
 
-- 139 von 139 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 142 von 142 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
@@ -47,7 +47,7 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | Plugin-Lifecycle | grundsätzlich fertig | `on_load()` und `on_unload()` |
 | Plugin-Hooks | fertig | IRC- und IRCv3-Ereignisse werden als `CommandContext` weitergegeben |
 | Gemeinsame CommandRegistry | fertig | Core, Module und Plugins benutzen denselben Dispatcher |
-| Aliase | fertig | Werden registriert und auf Kollisionen geprüft |
+| Aliase und Commandnamen | fertig | Global eindeutig, case-insensitiv und vor jeder atomaren Registrierung auf Kollisionen geprüft |
 | Rollen | fertig | `user`, `admin` und `owner` |
 | Rate-Limit | fertig | Gilt auch für Plugincommands |
 | Plugincommands in `help` | fertig | Rollenabhängig sichtbar |

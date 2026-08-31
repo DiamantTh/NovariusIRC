@@ -97,12 +97,15 @@ class CommandRegistry:
 
         if len(set(all_names)) != len(all_names):
             raise ValueError(f"Duplicate names declared for command {command_name!r}")
-        collisions = [
-            candidate for candidate in all_names if candidate in self._commands
-        ]
+        collisions = [candidate for candidate in all_names if candidate in self._commands]
         if collisions:
+            details = ", ".join(
+                f"{candidate} (owner={self._commands[candidate].owner or 'unowned'})"
+                for candidate in collisions
+            )
             raise ValueError(
-                f"Command name already registered: {', '.join(collisions)}"
+                f"Command name already registered: {details}; "
+                f"incoming owner={owner or 'unowned'}"
             )
 
         command_entry = Command(

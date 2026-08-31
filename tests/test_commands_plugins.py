@@ -77,6 +77,54 @@ def test_aliases_roles_help_and_unregister_share_one_registry() -> None:
     assert not asyncio.run(registry.dispatch(context(client, "!hello", ["owner"])))
 
 
+def test_command_names_are_globally_unique_case_insensitively() -> None:
+    registry = CommandRegistry()
+
+    async def handler(ctx: CommandContext, args: list[str]) -> None:
+        return None
+
+    registry.register("Help", handler, owner="core")
+    with pytest.raises(
+        ValueError,
+        match=r"help \(owner=core\); incoming owner=external:demo",
+    ):
+        registry.register("hELP", handler, owner="external:demo")
+
+    assert [command.name for command in registry.list_commands()] == ["help"]
+
+
+def test_alias_collision_rejects_the_whole_registration_atomically() -> None:
+    registry = CommandRegistry()
+
+    async def handler(ctx: CommandContext, args: list[str]) -> None:
+        return None
+
+    registry.register("status", handler, aliases=("state",), owner="core")
+    with pytest.raises(ValueError, match=r"state \(owner=core\)"):
+        registry.register(
+            "inspect",
+            handler,
+            aliases=("details", "STATE"),
+            owner="external:demo",
+        )
+
+    assert registry.get("status") is not None
+    assert registry.get("state") is registry.get("status")
+    assert registry.get("inspect") is None
+    assert registry.get("details") is None
+
+
+def test_duplicate_names_within_one_command_are_rejected() -> None:
+    registry = CommandRegistry()
+
+    async def handler(ctx: CommandContext, args: list[str]) -> None:
+        return None
+
+    with pytest.raises(ValueError, match="Duplicate names declared"):
+        registry.register("feed", handler, aliases=("FEED",), owner="module:rss")
+    assert registry.list_commands() == []
+
+
 def test_external_plugins_are_explicit_and_unload_cleanly(tmp_path: Path) -> None:
     plugin_file = tmp_path / "demo.py"
     plugin_file.write_text(
