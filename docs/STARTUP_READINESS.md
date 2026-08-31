@@ -17,7 +17,7 @@ funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
 Am 31. August 2026 wurde folgender Stand verifiziert:
 
-- 101 von 101 nicht-netzwerkgebundenen Tests erfolgreich
+- 115 von 115 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
@@ -55,6 +55,9 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | Fehler beim Pluginladen | fertig | Start bricht sichtbar ab; bereits geladene Plugins werden entfernt |
 | Plugin-Unload | fertig | Commands, Aliase, Hooks und Import werden entfernt |
 | IRC-Ereignisqueue | fertig | Begrenzt und vom Protokollleser getrennt |
+| Interner IRC-Kern | erster Schnitt fertig | Protokoll, Zustand, CAP, Eingangsmetadaten, Wire-Erzeugung und Sendefluss liegen unabhängig unter `novariusirc.irc` |
+| IRCv3-Drafts | fertig abgegrenzt | `draft/*`-Capabilities stehen getrennt und bleiben bis zum expliziten Opt-in deaktiviert |
+| Account-Tag-Vertrauen | fertig | Accountdaten ändern Identität nur bei tatsächlich ausgehandeltem `account-tag` |
 | IRCv3-`server-time` im Kontext | fertig | Als zeitzonenbewusstes UTC-`datetime` verfügbar |
 | RSS-Modul | funktionsfähig | Feedregistrierung, Polling, Commands und Ankündigungen |
 | Moderation | funktionsfähig | Zentraler Core-Service; das alte Modul ist nur noch ein Kompatibilitätshinweis |
@@ -69,7 +72,8 @@ Wichtige Implementierungen:
 - `novariusirc/__main__.py`: Startreihenfolge und Shutdown
 - `novariusirc/core/plugins.py`: Module, externe Plugins und Hooks
 - `novariusirc/core/commands.py`: Registrierung, Rollen, Aliase und Dispatch
-- `novariusirc/core/client.py`: IRC-/IRCv3-Anbindung und Ereignisqueue
+- `novariusirc/irc/`: unabhängige IRC-/IRCv3-Primitiven
+- `novariusirc/core/client.py`: Bot-Adapter und Ereignisqueue
 - `docs/PLUGINS.md`: derzeitige öffentliche Pluginbeschreibung
 
 ## Noch offen
@@ -88,7 +92,7 @@ Wichtige Implementierungen:
 | erledigt | Modulstatus | `!status` zeigt Verbindungszustand, Netzwerk, aktive eingebaute Module und Feed-Zustand |
 | mittel | Reload | Keine öffentliche Schnittstelle zum Laden, Entladen oder Neuladen |
 | mittel | Einheitliche API | Eingebaute Module und externe Plugins verwenden noch verschiedene Basisklassen |
-| mittel | Account-Rollen | IRC-Services-Accounts werden erfasst, aber noch nicht zentral Rollen zugeordnet |
+| mittel | Operator-/Rechteverwaltung | `user`, `admin` und `owner` existieren; persistente interne Operatoren, DB-Rechte und einmaliges Container-Bootstrap fehlen noch |
 | Entscheidung offen | TOTP-Bedienung | Prüfung und Sitzungsverwaltung sind als optionaler Baustein vorhanden; ein Login-/Auth-Command wird erst nach Festlegung des gewünschten Bedienwegs gebaut |
 | erledigt | Logstruktur | Core-Logs sowie IRC-Channel-, PM- und Raw-Logs liegen getrennt unter `core/` beziehungsweise `irc/<network>/...` |
 | erledigt | Ereigniszeit im Log | IRCv3-`server-time` wird für Channel- und PM-Ereignisse verwendet, wenn der Server einen gültigen Zeit-Tag liefert |
@@ -102,7 +106,7 @@ Wichtige Implementierungen:
 
 Die nächsten Arbeiten können in getrennten, überschaubaren Blöcken erfolgen:
 
-1. Accountbasierte Rollen unabhängig von Hostmasks bewerten
+1. Persistente interne Operatoren und Rollen mit einmaligem ENV-Bootstrap bauen
 2. Bedienweg für den optionalen TOTP-Baustein festlegen
 3. Container-Härtung und einen eigenen Python-3.12-Container-Test ergänzen
 4. Optional SSH-Zugang zur bereits vorhandenen lokalen Command-Shell
