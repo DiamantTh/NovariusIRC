@@ -48,6 +48,16 @@ Show the configured instance status without opening an IRC connection:
 poetry run novariusirc --status --config ./config.toml
 ```
 
+For local operator control, `-t` starts the bot together with an interactive
+terminal console. It executes registered bot commands as the local owner and
+does not open a TCP listener or use DCC:
+
+```bash
+poetry run novariusirc -t --config ./config.toml
+```
+
+Use `!help`, `!status`, or `exit` in the console.
+
 ## Container
 Build a local image:
 ```bash

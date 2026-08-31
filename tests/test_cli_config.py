@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import sys
 import tomllib
 from pathlib import Path
@@ -8,8 +10,10 @@ from types import SimpleNamespace
 import pytest
 
 from novariusirc.__main__ import (
+    TerminalClient,
     check_config,
     configuration_status,
+    dispatch_terminal_command,
     parse_args,
     register_builtin_commands,
     register_runtime_commands,
@@ -36,9 +40,47 @@ def test_terminal_dcc_mode_fails_explicitly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(sys, "argv", ["novariusirc", "--terminal-dcc"])
-    with pytest.raises(SystemExit) as exc:
-        parse_args()
-    assert exc.value.code == 2
+    assert parse_args().terminal_dcc
+
+
+def test_terminal_console_dispatches_owner_commands() -> None:
+    config = Config.model_validate(
+        {
+            "bot": {},
+            "network": {
+                "server": "irc.example.test",
+                "nick": "bot",
+                "user": "bot",
+                "realname": "Bot",
+            },
+        }
+    )
+    commands = CommandRegistry(prefix="!", rate_limit_seconds=0)
+
+    async def owner_command(ctx, args) -> None:
+        await ctx.reply("terminal-ok")
+
+    commands.register("owner-command", owner_command, roles=("owner",))
+    terminal = TerminalClient()
+    assert asyncio.run(
+        dispatch_terminal_command(
+            commands,
+            config,
+            logging.getLogger("test.terminal"),
+            terminal,
+            "owner-command",
+        )
+    )
+    assert terminal.messages == ["terminal-ok"]
+    assert not asyncio.run(
+        dispatch_terminal_command(
+            commands,
+            config,
+            logging.getLogger("test.terminal"),
+            terminal,
+            "exit",
+        )
+    )
 
 
 def test_status_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:

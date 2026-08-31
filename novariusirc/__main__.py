@@ -6,10 +6,12 @@ import argparse
 import asyncio
 import contextlib
 import importlib
+import logging
 import os
 import signal
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from novariusirc import __version__
@@ -54,7 +56,7 @@ def parse_args() -> argparse.Namespace:
         "-t",
         "--terminal-dcc",
         action="store_true",
-        help="Reserved; terminal DCC mode is not implemented yet",
+        help="Run a local terminal control console alongside the bot",
     )
     parser.add_argument(
         "-f",
@@ -75,8 +77,6 @@ def parse_args() -> argparse.Namespace:
         help="Show version and exit",
     )
     args = parser.parse_args()
-    if args.terminal_dcc:
-        parser.error("--terminal-dcc is not implemented yet")
     args.config = args.config_option or args.config_path or Path("./config.toml")
     return args
 
@@ -144,6 +144,71 @@ def configuration_status(config: Config) -> list[str]:
         f"Log root: {config.paths.log_root}",
         f"Data root: {config.paths.data_root}",
     ]
+
+
+class TerminalClient:
+    """Adapter that renders command replies in the local terminal."""
+
+    def __init__(self, output: Callable[[str], None] | None = None):
+        self.messages: list[str] = []
+        self.output = output
+
+    async def send_privmsg(self, target: str, message: str) -> None:
+        self.messages.append(message)
+        if self.output:
+            self.output(message)
+
+
+async def dispatch_terminal_command(
+    commands: CommandRegistry,
+    config: Config,
+    logger: logging.Logger,
+    terminal: TerminalClient,
+    line: str,
+) -> bool:
+    """Run one local control command; return false for an exit request."""
+    line = line.strip()
+    if line.lower() in {"exit", "quit"}:
+        return False
+    if not line:
+        return True
+    message = line if line.startswith(config.bot.prefix) else f"{config.bot.prefix}{line}"
+    context = CommandContext(
+        nick="terminal",
+        hostmask="terminal!local@localhost",
+        channel=None,
+        message=message,
+        config=config,
+        client=terminal,
+        logger=logger,
+        roles=["owner"],
+    )
+    if not await commands.dispatch(context):
+        terminal.messages.append(f"Unknown command: {line}")
+        if terminal.output:
+            terminal.output(terminal.messages[-1])
+    return True
+
+
+async def run_terminal_console(
+    commands: CommandRegistry,
+    config: Config,
+    logger: logging.Logger,
+    client: IRCClient,
+) -> None:
+    """Provide a local owner console without exposing a network listener."""
+    if not sys.stdin.isatty():
+        raise RuntimeError("--terminal-dcc requires an interactive terminal")
+    terminal = TerminalClient(print)
+    print("NovariusIRC local console. Type !help, !status, or exit.")
+    while True:
+        try:
+            line = await asyncio.to_thread(input, "novariusirc> ")
+        except EOFError:
+            line = "exit"
+        if not await dispatch_terminal_command(commands, config, logger, terminal, line):
+            await client.stop()
+            return
 
 
 def configure_event_loop() -> None:
@@ -220,6 +285,8 @@ async def async_main() -> None:
             return
         print("Configuration check passed.")
         return
+    if args.terminal_dcc and not sys.stdin.isatty():
+        raise RuntimeError("--terminal-dcc requires an interactive terminal")
     init_i18n(config.bot.language)
     logger = setup_logging(config.logging, config.paths)
     setup_moderation_logging(config.moderation.log_file)
@@ -260,7 +327,19 @@ async def async_main() -> None:
             await plugins.load_plugins(Path(config.plugins.directory))
         await plugins.start()
         await feeds.start()
-        await client.run()
+        if args.terminal_dcc:
+            terminal_task = asyncio.create_task(
+                run_terminal_console(commands, config, logger, client),
+                name="terminal-control-console",
+            )
+            try:
+                await client.run()
+            finally:
+                terminal_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await terminal_task
+        else:
+            await client.run()
     finally:
         for handled_signal in handled_signals:
             with contextlib.suppress(NotImplementedError):
