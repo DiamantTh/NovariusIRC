@@ -35,11 +35,7 @@ def test_unix_control_socket_dispatches_owner_commands(tmp_path) -> None:
         await server.start()
         try:
             assert stat.S_IMODE(socket_path.stat().st_mode) == 0o600
-            assert await run_control_command(socket_path, "owner-command") == [
-                "NovariusIRC local control. Type !help, !status, or exit.",
-                "socket-ok",
-                "Goodbye.",
-            ]
+            assert await run_control_command(socket_path, "owner-command") == ["socket-ok"]
         finally:
             await server.stop()
         assert not socket_path.exists()

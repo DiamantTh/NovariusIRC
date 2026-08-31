@@ -153,7 +153,12 @@ async def run_control_command(socket_path: str | Path, command: str) -> list[str
     try:
         writer.write(f"{command}\nexit\n".encode())
         await writer.drain()
-        return [line.decode("utf-8").rstrip("\r\n") async for line in reader]
+        lines = [line.decode("utf-8").rstrip("\r\n") async for line in reader]
+        return [
+            line
+            for line in lines
+            if line not in {"NovariusIRC local control. Type !help, !status, or exit.", "Goodbye."}
+        ]
     finally:
         writer.close()
         await writer.wait_closed()
