@@ -42,6 +42,7 @@ ircv3_capabilities = [
     "message-tags",
     "multi-prefix",
     "server-time",
+    "standard-replies",
     "userhost-in-names",
 ]
 # Work-in-progress features are opt-in and must retain their draft/ name.

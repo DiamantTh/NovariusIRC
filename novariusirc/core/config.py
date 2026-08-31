@@ -108,6 +108,7 @@ class NetworkConfig(ConfigModel):
             "message-tags",
             "multi-prefix",
             "server-time",
+            "standard-replies",
             "userhost-in-names",
         ]
     )

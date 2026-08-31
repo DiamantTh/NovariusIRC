@@ -24,6 +24,7 @@ from novariusirc.irc.protocol import (
     IRCMessage,
     parse_message,
 )
+from novariusirc.irc.replies import ReplySeverity, parse_standard_reply
 from novariusirc.irc.state import IRCState, normalize_account, split_source
 from novariusirc.irc.transport import RateLimitedSender
 from novariusirc.irc.wire import format_join, format_text_command, validate_raw_line
@@ -343,6 +344,19 @@ class IRCClient:
             return
         if command == "AUTHENTICATE":
             await self._handle_authenticate(params, trailing)
+            return
+        standard_reply = parse_standard_reply(parsed)
+        if standard_reply:
+            detail = (
+                f"{standard_reply.command} {standard_reply.code}: "
+                f"{standard_reply.description}"
+            )
+            if standard_reply.severity == ReplySeverity.FAILURE:
+                self.logger.error("IRC failure reply: %s", detail)
+            elif standard_reply.severity == ReplySeverity.WARNING:
+                self.logger.warning("IRC warning reply: %s", detail)
+            else:
+                self.logger.info("IRC note reply: %s", detail)
             return
         if command in {"903", "907"}:
             if command == "907":

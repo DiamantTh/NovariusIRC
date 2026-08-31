@@ -36,6 +36,7 @@ are implemented by the bot.
 | `message-tags` / `TAGMSG` | Implemented | Exposes tag-only messages through `on_tagmsg`. |
 | SASL PLAIN | Implemented | 400-byte chunking, mechanism discovery, success/failure numerics, secret-safe logging. |
 | SASL EXTERNAL | Implemented | TLS client certificate loading and EXTERNAL authentication. |
+| Standard replies | Implemented | `FAIL`, `WARN`, and `NOTE` are parsed structurally and logged without assuming a closed reply-code registry. |
 | WHOX | Implemented | Uses the `WHOX` ISUPPORT token to initialize account, host, real-name, and away state after joining. |
 | `batch`, `labeled-response`, `echo-message`, multiline | Not implemented | Not requested by default and no semantic processing is provided yet. |
 | SCRAM/OAUTH SASL mechanisms | Not implemented | Only PLAIN and EXTERNAL are accepted by configuration. |
