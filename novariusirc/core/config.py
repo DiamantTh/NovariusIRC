@@ -18,6 +18,7 @@ DEFAULT_INCLUDE_FILES = ["secrets.toml"]
 
 ENV_BOT_PREFIX = "NOVARIUSIRC_PREFIX"
 ENV_BOT_LANGUAGE = "NOVARIUSIRC_LANG"
+ENV_BOT_NAME = "NOVARIUSIRC_BOT_NAME"
 
 ENV_NETWORK_SERVER = "NOVARIUSIRC_SERVER"
 ENV_NETWORK_PORT = "NOVARIUSIRC_PORT"
@@ -45,12 +46,26 @@ ENV_AUTH_CERTFP_KEY_FILE = "NOVARIUSIRC_CERTFP_KEY_FILE"
 ENV_PATHS_LOG_ROOT = "NOVARIUSIRC_LOG_ROOT"
 ENV_PATHS_DATA_ROOT = "NOVARIUSIRC_DATA_ROOT"
 
+ENV_DATABASE_ENABLED = "NOVARIUSIRC_DATABASE_ENABLED"
+ENV_DATABASE_BACKEND = "NOVARIUSIRC_DATABASE_BACKEND"
+ENV_DATABASE_PATH = "NOVARIUSIRC_DATABASE_PATH"
+ENV_DATABASE_DSN = "NOVARIUSIRC_DATABASE_DSN"
+
+
+def safe_filename_component(value: str) -> str:
+    """Return a stable, conservative filename component for an instance name."""
+    component = re.sub(r"[^A-Za-z0-9_-]+", "_", value.strip()).strip("_-")
+    if not component:
+        raise ValueError("bot name must contain a filename-safe letter or number")
+    return component[:64]
+
 
 class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
 
 class BotConfig(ConfigModel):
+    name: str | None = None
     prefix: str = "!"
     language: str = Field(default_factory=detect_environment_language)
     ctcp_version_extra: str = ""
@@ -73,7 +88,21 @@ class BotConfig(ConfigModel):
             raise ValueError("CTCP VERSION extra text is too long")
         return value
 
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value or any(character in value for character in "\r\n\0"):
+            raise ValueError("bot name must be non-empty and contain no control characters")
+        safe_filename_component(value)
+        return value
+
     def resolve_env(self) -> None:
+        env_val = os.getenv(ENV_BOT_NAME)
+        if env_val:
+            self.name = env_val
         env_val = os.getenv(ENV_BOT_PREFIX)
         if env_val:
             self.prefix = env_val
@@ -529,6 +558,36 @@ class PathsConfig(ConfigModel):
             self.data_root = env_val
 
 
+class DatabaseConfig(ConfigModel):
+    enabled: bool = False
+    backend: str = "sqlite"
+    path: str | None = None
+    dsn: str | None = None
+    connect_timeout_seconds: float = Field(default=10.0, gt=0)
+    busy_timeout_seconds: float = Field(default=5.0, ge=0)
+
+    @field_validator("backend")
+    @classmethod
+    def normalize_backend(cls, value: str) -> str:
+        from .database import normalize_backend_name
+
+        return normalize_backend_name(value)
+
+    def resolve_env(self) -> None:
+        env_val = os.getenv(ENV_DATABASE_ENABLED)
+        if env_val:
+            self.enabled = env_val.strip().lower() in {"1", "true", "yes", "on"}
+        env_val = os.getenv(ENV_DATABASE_BACKEND)
+        if env_val:
+            self.backend = env_val
+        env_val = os.getenv(ENV_DATABASE_PATH)
+        if env_val:
+            self.path = env_val
+        env_val = os.getenv(ENV_DATABASE_DSN)
+        if env_val:
+            self.dsn = env_val
+
+
 class IncludesConfig(ConfigModel):
     files: list[str] = Field(default_factory=lambda: list(DEFAULT_INCLUDE_FILES))
 
@@ -561,6 +620,7 @@ class Config(ConfigModel):
     moderation: ModerationConfig = Field(default_factory=ModerationConfig)
     workers: WorkerConfig = Field(default_factory=WorkerConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
 
     @staticmethod
     def _merge(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
@@ -593,6 +653,13 @@ class Config(ConfigModel):
             and (not self.auth.certfp_enabled or not self.auth.certfp_cert_file)
         ):
             raise ValueError("SASL EXTERNAL requires CertFP and certfp_cert_file")
+        if self.database.enabled:
+            if self.database.backend == "sqlite" and self.database.dsn:
+                raise ValueError("SQLite uses database.path, not database.dsn")
+            if self.database.backend != "sqlite" and not self.database.dsn:
+                raise ValueError(
+                    f"Database backend {self.database.backend} requires database.dsn"
+                )
 
     def resolve_relative_paths(self, base_dir: Path) -> None:
         def resolve(value: str) -> str:
@@ -606,6 +673,14 @@ class Config(ConfigModel):
         self.paths.log_root = resolve(log_root)
         self.logging.log_dir = self.paths.log_root
         self.paths.data_root = resolve(self.paths.data_root)
+        if self.bot.name is None:
+            self.bot.name = self.network.nick
+        if self.database.backend == "sqlite":
+            database_path = self.database.path
+            if not database_path:
+                filename = f"{safe_filename_component(self.bot.name)}.sqlite3"
+                database_path = str(Path(self.paths.data_root) / filename)
+            self.database.path = resolve(database_path)
         self.control.socket_path = resolve(self.control.socket_path)
         self.moderation.log_file = resolve(self.moderation.log_file)
         for attribute in ("certfp_cert_file", "certfp_key_file"):
@@ -685,6 +760,8 @@ class Config(ConfigModel):
         config.network.resolve_env()
         config.network = NetworkConfig.model_validate(config.network.model_dump())
         config.paths.resolve_env()
+        config.database.resolve_env()
+        config.database = DatabaseConfig.model_validate(config.database.model_dump())
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
             config.auth.sasl_username = config.network.nick
@@ -733,6 +810,8 @@ class Config(ConfigModel):
         config.network.resolve_env()
         config.network = NetworkConfig.model_validate(config.network.model_dump())
         config.paths.resolve_env()
+        config.database.resolve_env()
+        config.database = DatabaseConfig.model_validate(config.database.model_dump())
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
             config.auth.sasl_username = config.network.nick

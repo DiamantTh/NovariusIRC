@@ -42,6 +42,15 @@ create log directories, start feeds, or open a network connection:
 poetry run novariusirc --check-config --config ./config.toml
 ```
 
+The optional database layer currently provides the complete SQLite lifecycle.
+After enabling `[database]`, initialize it explicitly; normal startup never
+silently recreates a missing database:
+
+```bash
+poetry run novariusirc --init-database --config ./config.toml
+poetry run novariusirc --check-database --config ./config.toml
+```
+
 Show the configured instance status without opening an IRC connection:
 
 ```bash
@@ -117,6 +126,7 @@ For an environment-only container, pass `--config env` and at minimum set
 ## Project Layout
 - `novariusirc/irc`: protocol-focused IRC transport, capability and state primitives; independent of bot commands and modules
 - `novariusirc/core`: bot services (client adapter, config, local control, auth, commands, logging, i18n, feeds, plugins, workers)
+- `novariusirc/core/database.py`: database backend registry and SQLite lifecycle
 - `novariusirc/modules`: built-in modules (currently `rss_announcer`)
 - `novariusirc/__main__.py`: CLI entry point
 - `config.example.toml`: starter configuration

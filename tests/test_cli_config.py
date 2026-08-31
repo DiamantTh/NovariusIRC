@@ -167,6 +167,14 @@ def test_check_config_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> Non
     assert parse_args().check_config
 
 
+@pytest.mark.parametrize("flag", ["--init-database", "--check-database"])
+def test_database_cli_flags_are_parsed(
+    flag: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["novariusirc", flag])
+    assert getattr(parse_args(), flag.removeprefix("--").replace("-", "_"))
+
+
 def test_draft_capabilities_require_explicit_namespace() -> None:
     base = {
         "bot": {},

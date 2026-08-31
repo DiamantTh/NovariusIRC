@@ -14,6 +14,7 @@
 - [Befehle, Lifecycle und Control](#commands-lifecycle-control)
 - [Eingebaute Module](#modules)
 - [Pfade und Worker](#paths-workers)
+- [Datenbank](#database)
 - [Feeds](#feeds)
   - [Feed-Definitionen](#feed-definitions)
 - [Moderation](#moderation)
@@ -99,6 +100,7 @@ Allgemeine Darstellung und Sprache des Bots.
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
+| `name` | Text | konfigurierter IRC-Nick | Stabiler Instanzname für Daten- und Backup-Dateien; unabhängig vom Nick zur Laufzeit. |
 | `prefix` | Text | `!` | Präfix für Befehle in Query und lokaler Steuerung. Im Kanal wird zuerst der Bot-Nick mit `:` oder `,` adressiert; danach ist das Präfix optional. |
 | `language` | Text | aus Umgebung, sonst `en` | Ausgabesprache: `de`, `en` oder `ja`. Locale-Formen wie `de_DE.UTF-8` werden normalisiert. |
 | `ctcp_version_extra` | Text | leer | Optionaler Zusatz zu CTCP `VERSION`; Produktname und Paketversion bleiben unverändert. Steuerzeichen und mehr als 300 UTF-8-Bytes sind unzulässig. |
@@ -288,6 +290,35 @@ Relative Laufzeitpfade werden relativ zum Verzeichnis von `config.toml`
 aufgelöst, nicht relativ zum aktuellen Arbeitsverzeichnis. Das betrifft auch
 Control-Socket, Moderationslog, Zertifikate und Feed-TLS-Dateien.
 
+<a id="database"></a>
+## `[database]`
+
+Die Datenbankschicht ist optional. SQLite ist das erste vollständig nutzbare
+Backend. PostgreSQL, MariaDB, MySQL und Microsoft SQL Server sind bereits als
+eindeutige Backendnamen registriert, benötigen aber noch ihre Adapter und
+werden bis dahin mit einem klaren Fehler abgelehnt.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `false` | Persistente Datenbankschicht aktivieren. |
+| `backend` | Auswahl | `sqlite` | `sqlite`, `postgresql`, `mariadb`, `mysql` oder `mssql`; Aliase werden normalisiert. |
+| `path` | Pfad oder leer | `<data_root>/<bot.name>.sqlite3` | SQLite-Datei. Der Botname wird für Dateisysteme sicher normalisiert. |
+| `dsn` | Text oder leer | leer | Verbindungs-DSN für Serverdatenbanken; vorzugsweise über ENV setzen. Für SQLite unzulässig. |
+| `connect_timeout_seconds` | Zahl | `10.0` | Verbindungszeitlimit für Serverdatenbanken, größer null. |
+| `busy_timeout_seconds` | Zahl | `5.0` | SQLite-Wartezeit bei konkurrierenden Sperren, mindestens null. |
+
+Eine aktivierte SQLite-Datenbank muss ausdrücklich angelegt werden:
+
+```console
+novariusirc --init-database --config ./config.toml
+novariusirc --check-database --config ./config.toml
+```
+
+Die Initialisierung aktiviert Foreign Keys, WAL, `synchronous = FULL`, legt die
+Migrationstabellen an und speichert den stabilen Botnamen. Eine unbekannte
+bestehende SQLite-Datei wird nicht übernommen. Fehlt eine zuvor initialisierte
+Datei, bricht der Bot ab, statt unbemerkt eine leere Datenbank zu erzeugen.
+
 <a id="feeds"></a>
 ## `[feeds]`
 
@@ -413,6 +444,7 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | --- | --- | --- |
 | `NOVARIUSIRC_PREFIX` | `bot.prefix` | Nichtleerer Text. |
 | `NOVARIUSIRC_LANG` | `bot.language` | `de`, `en`, `ja` oder passende Locale-Form. |
+| `NOVARIUSIRC_BOT_NAME` | `bot.name` | Stabiler Name für Daten- und Backup-Dateien. |
 | `NOVARIUSIRC_SERVER` | `network.server` | Beim ENV-only-Start Pflicht. |
 | `NOVARIUSIRC_PORT` | `network.port` | Nur rein numerische Werte werden übernommen. |
 | `NOVARIUSIRC_TLS` | `network.tls` | Wahr bei `1`, `true`, `yes` oder `on`; sonst falsch. |
@@ -436,6 +468,10 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | `NOVARIUSIRC_TOTP_SECRET` | `auth.totp_secret` | Globales Base32-Secret. |
 | `NOVARIUSIRC_LOG_ROOT` | `paths.log_root` | Log-Stammverzeichnis. |
 | `NOVARIUSIRC_DATA_ROOT` | `paths.data_root` | Daten-Stammverzeichnis. |
+| `NOVARIUSIRC_DATABASE_ENABLED` | `database.enabled` | Boolean-Syntax wie bei TLS. |
+| `NOVARIUSIRC_DATABASE_BACKEND` | `database.backend` | Registrierter Backendname oder Alias. |
+| `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite-Dateipfad. |
+| `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Verbindungs-DSN einer Serverdatenbank; Geheimwert. |
 
 ENV-only benötigt mindestens `NOVARIUSIRC_SERVER` und `NOVARIUSIRC_NICK`:
 

@@ -23,6 +23,7 @@ from novariusirc.core.control import (
     dispatch_local_command,
     run_control_command,
 )
+from novariusirc.core.database import DatabaseError, create_database
 from novariusirc.core.feeds import FeedEngine
 from novariusirc.core.i18n import init_i18n
 from novariusirc.core.logging import setup_logging, setup_moderation_logging
@@ -82,6 +83,16 @@ def parse_args() -> argparse.Namespace:
         help="Validate configuration and built-in modules without connecting to IRC",
     )
     parser.add_argument(
+        "--init-database",
+        action="store_true",
+        help="Initialize the configured database and exit",
+    )
+    parser.add_argument(
+        "--check-database",
+        action="store_true",
+        help="Check the configured database integrity and schema, then exit",
+    )
+    parser.add_argument(
         "-v",
         "-V",
         "--version",
@@ -134,6 +145,26 @@ def check_config(config: Config) -> list[str]:
             f"{Path(config.control.socket_path).parent}"
         )
 
+    if config.database.enabled:
+        try:
+            database = create_database(config.database, config.bot.name or config.network.nick)
+            if config.database.backend == "sqlite":
+                assert config.database.path is not None
+                if Path(config.database.path).exists():
+                    database.check()
+                elif not writable_parent(config.database.path):
+                    errors.append(
+                        f"database directory cannot be created or written: "
+                        f"{Path(config.database.path).parent}"
+                    )
+                else:
+                    errors.append(
+                        "database is not initialized; run --init-database: "
+                        f"{config.database.path}"
+                    )
+        except DatabaseError as exc:
+            errors.append(str(exc))
+
     for name in config.modules.enabled:
         try:
             module = importlib.import_module(f"novariusirc.modules.{name}")
@@ -154,11 +185,17 @@ def configuration_status(config: Config) -> list[str]:
     channels = ", ".join(config.network.channels) or "none"
     modules = ", ".join(config.modules.enabled) or "none"
     feeds = "enabled" if config.feeds.enabled else "disabled"
+    database = (
+        f"{config.database.backend} ({config.database.path})"
+        if config.database.enabled and config.database.backend == "sqlite"
+        else (config.database.backend if config.database.enabled else "disabled")
+    )
     return [
         f"Network: {config.network.server}:{config.network.port} ({security})",
         f"Channels: {channels}",
         f"Built-in modules: {modules}",
         f"Feeds: {feeds} ({len(config.feeds.feeds)} configured)",
+        f"Database: {database}",
         f"Log root: {config.paths.log_root}",
         f"Data root: {config.paths.data_root}",
     ]
@@ -293,6 +330,20 @@ def register_runtime_commands(
 async def async_main() -> None:
     args = parse_args()
     config = load_config(args.config)
+    if args.init_database or args.check_database:
+        if not config.database.enabled:
+            raise RuntimeError("Database is disabled in [database]")
+        database = create_database(config.database, config.bot.name or config.network.nick)
+        status = (
+            database.initialize(create=True)
+            if args.init_database
+            else database.check()
+        )
+        print(
+            f"Database {status.integrity}: backend={status.backend}; "
+            f"schema={status.schema_version}; location={status.location}"
+        )
+        return
     if args.check_config or args.status:
         errors = check_config(config)
         if errors:
@@ -317,6 +368,16 @@ async def async_main() -> None:
     init_i18n(config.bot.language)
     logger = setup_logging(config.logging, config.paths)
     setup_moderation_logging(config.moderation.log_file)
+
+    if config.database.enabled:
+        database = create_database(config.database, config.bot.name or config.network.nick)
+        status = database.check()
+        logger.info(
+            "Database ready: backend=%s schema=%s location=%s",
+            status.backend,
+            status.schema_version,
+            status.location,
+        )
 
     if args.foreground:
         logger.info("Starting in foreground mode")

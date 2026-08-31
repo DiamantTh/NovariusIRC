@@ -14,6 +14,7 @@
 - [Commands, lifecycle, and control](#commands-lifecycle-control)
 - [Built-in modules](#modules)
 - [Paths and workers](#paths-workers)
+- [Database](#database)
 - [Feeds](#feeds)
   - [Feed definitions](#feed-definitions)
 - [Moderation](#moderation)
@@ -96,6 +97,7 @@ General bot presentation and language.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
+| `name` | text | configured IRC nick | Stable instance name for data and backup files, independent of the runtime nick. |
 | `prefix` | text | `!` | Command prefix in queries and local control. In channels, address the bot nick with `:` or `,`; the prefix after it is optional. |
 | `language` | text | environment, then `en` | Output language: `de`, `en`, or `ja`. Locale forms such as `de_DE.UTF-8` are normalized. |
 | `ctcp_version_extra` | text | empty | Optional suffix for CTCP `VERSION`; it cannot replace the product name or package version. Control characters and values exceeding 300 UTF-8 bytes are rejected. |
@@ -282,6 +284,35 @@ Relative runtime paths are resolved against the directory containing
 `config.toml`, not the current working directory. This also applies to the
 control socket, moderation log, certificates, and feed TLS files.
 
+<a id="database"></a>
+## `[database]`
+
+The database layer is optional. SQLite is the first fully operational backend.
+PostgreSQL, MariaDB, MySQL, and Microsoft SQL Server are already registered as
+unambiguous backend names, but still require their adapters and are rejected
+with an explicit error until those are available.
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `false` | Enable the persistent database layer. |
+| `backend` | choice | `sqlite` | `sqlite`, `postgresql`, `mariadb`, `mysql`, or `mssql`; aliases are normalized. |
+| `path` | path or empty | `<data_root>/<bot.name>.sqlite3` | SQLite file. The bot name is normalized for safe filesystem use. |
+| `dsn` | text or empty | empty | Connection DSN for server databases; preferably supplied through the environment. Invalid for SQLite. |
+| `connect_timeout_seconds` | number | `10.0` | Connection timeout for server databases, greater than zero. |
+| `busy_timeout_seconds` | number | `5.0` | SQLite lock wait time, at least zero. |
+
+An enabled SQLite database must be created explicitly:
+
+```console
+novariusirc --init-database --config ./config.toml
+novariusirc --check-database --config ./config.toml
+```
+
+Initialization enables foreign keys, WAL, `synchronous = FULL`, creates the
+migration tables, and records the stable bot name. An unknown existing SQLite
+file is not adopted. If an initialized database disappears, the bot stops
+instead of silently creating an empty replacement.
+
 <a id="feeds"></a>
 ## `[feeds]`
 
@@ -406,6 +437,7 @@ the base structure is validated before overrides are applied.
 | --- | --- | --- |
 | `NOVARIUSIRC_PREFIX` | `bot.prefix` | Non-empty text. |
 | `NOVARIUSIRC_LANG` | `bot.language` | `de`, `en`, `ja`, or a matching locale form. |
+| `NOVARIUSIRC_BOT_NAME` | `bot.name` | Stable name for data and backup files. |
 | `NOVARIUSIRC_SERVER` | `network.server` | Required in environment-only mode. |
 | `NOVARIUSIRC_PORT` | `network.port` | Only all-numeric values are applied. |
 | `NOVARIUSIRC_TLS` | `network.tls` | True for `1`, `true`, `yes`, or `on`; false otherwise. |
@@ -429,6 +461,10 @@ the base structure is validated before overrides are applied.
 | `NOVARIUSIRC_TOTP_SECRET` | `auth.totp_secret` | Global Base32 secret. |
 | `NOVARIUSIRC_LOG_ROOT` | `paths.log_root` | Log root directory. |
 | `NOVARIUSIRC_DATA_ROOT` | `paths.data_root` | Data root directory. |
+| `NOVARIUSIRC_DATABASE_ENABLED` | `database.enabled` | Boolean syntax as for TLS. |
+| `NOVARIUSIRC_DATABASE_BACKEND` | `database.backend` | Registered backend name or alias. |
+| `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite file path. |
+| `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Server-database connection DSN; secret value. |
 
 Environment-only startup requires at least `NOVARIUSIRC_SERVER` and
 `NOVARIUSIRC_NICK`:

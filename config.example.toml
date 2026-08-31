@@ -1,4 +1,6 @@
 [bot]
+# Stabiler Instanzname für Daten- und Backup-Dateien; unabhängig vom IRC-Nick
+name = "NovariusBot"
 prefix = "!"
 # Sprache: en, de, ja; ohne Angabe Erkennung aus Umgebung/Locale, Rückfall en
 language = "en"
@@ -132,6 +134,16 @@ enabled = ["rss_announcer"]
 [paths]
 log_root = "./logs"
 data_root = "./data"
+
+[database]
+# SQLite ist bereits nutzbar. Weitere bekannte Backendnamen werden erst nach
+# Installation ihres jeweiligen Adapters aktiviert.
+enabled = false
+backend = "sqlite"
+# Ohne Pfadangabe: <data_root>/<bot.name>.sqlite3
+# path = "./data/NovariusBot.sqlite3"
+connect_timeout_seconds = 10
+busy_timeout_seconds = 5
 
 [workers]
 # Anzahl Prozesse im Worker-Pool (CPU-lastige Tasks)

@@ -17,7 +17,7 @@ funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
 Am 1. September 2026 wurde folgender Stand verifiziert:
 
-- 153 von 153 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 163 von 163 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
@@ -39,6 +39,7 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | Konfigurationsreferenz | fertig | Alle Core-/Modulparameter, Standardwerte, Grenzen und ENV-Overrides unter `docs/CONFIGURATION.md` |
 | Installierte Beispielkonfiguration | fertig | Hauptdatei und explizit verlangte Fragmente werden gemeinsam angelegt und als Gesamtinstanz getestet |
 | Relative Pfade | fertig | Werden relativ zur Instanzkonfiguration aufgelöst |
+| Datenbank-Grundlage | erster Betriebsblock fertig | Stabiler Botname, bekannte Backendnamen, explizite SQLite-Initialisierung, Schema- und Integritätsprüfung |
 | Validierung | fertig | Unbekannte Felder und unsichere Modul-/Pluginnamen werden abgelehnt |
 | Core-Commands | fertig | `ping`, `uptime`, `version`, `botinfo` und `help`; im Channel nur gezielte Nick-Ansprache, in Query/Local ohne Botnamen |
 | Core-/Modul-I18n | fertig grundgelegt | Gettext-Kataloge für `de`, `en` und `ja`, ENV-/Locale-Erkennung, englischer Fallback und kontextbezogene Command-/RSS-Ausgaben |
