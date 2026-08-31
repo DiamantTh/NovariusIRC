@@ -19,7 +19,8 @@ install:
 	@NOVARIUSIRC_PREFIX=$(PREFIX) ./install.sh
 
 build:
-	poetry build
+	python3 scripts/generate_build_info.py
+	poetry build; status=$$?; rm -f novariusirc/_build_info.json; exit $$status
 
 clean:
 	rm -rf dist/ build/ *.egg-info

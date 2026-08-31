@@ -73,6 +73,19 @@ Build a local image:
 docker build -t novariusirc:local .
 ```
 
+Embed the source revision as immutable build information (the UTC build time is
+generated inside the build):
+
+```bash
+docker build \
+  --build-arg NOVARIUSIRC_BUILD_COMMIT="$(git rev-parse HEAD)" \
+  -t novariusirc:local .
+```
+
+For reproducible builds, `SOURCE_DATE_EPOCH` can additionally be supplied as a
+build argument. `novariusirc --version`, the IRC `version` command, and CTCP
+`VERSION` then use the same embedded product, version, commit, and build time.
+
 Run the container. Mount the complete instance directory so relative includes,
 certificates, and external plugins stay available; keep data and logs writable:
 ```bash

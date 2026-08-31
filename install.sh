@@ -35,6 +35,9 @@ source "$VENV_DIR/bin/activate"
 
 # Poetry Build
 echo "📦 Baue Wheel-Paket..."
+BUILD_INFO_FILE="novariusirc/_build_info.json"
+trap 'rm -f "$BUILD_INFO_FILE"' EXIT
+python3 scripts/generate_build_info.py
 poetry build -f wheel
 
 # Neueste Wheel-Datei finden

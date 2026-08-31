@@ -25,6 +25,7 @@ novariusirc = "novariusirc.__main__:main"
 
 [tool.poetry]
 packages = [{ include = "novariusirc" }]
+include = [{ path = "novariusirc/_build_info.json", format = ["sdist", "wheel"] }]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"

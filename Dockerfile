@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim AS builder
 
+ARG NOVARIUSIRC_BUILD_COMMIT=""
+ARG SOURCE_DATE_EPOCH=""
+
 ENV POETRY_VERSION=2.4.1 \
     POETRY_EXPORT_VERSION=1.10.0 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -24,7 +27,9 @@ RUN /opt/poetry/bin/poetry export \
     /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 COPY novariusirc ./novariusirc
-RUN /opt/venv/bin/pip install --no-cache-dir --no-deps .
+COPY scripts ./scripts
+RUN python scripts/generate_build_info.py --commit "$NOVARIUSIRC_BUILD_COMMIT" && \
+    /opt/venv/bin/pip install --no-cache-dir --no-deps .
 
 FROM python:3.12-slim AS runtime
 
