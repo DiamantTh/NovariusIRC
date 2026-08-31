@@ -10,7 +10,6 @@ from collections.abc import Coroutine
 from datetime import datetime
 from pathlib import Path
 
-from novariusirc import __version__
 from novariusirc.irc.batches import BatchTracker
 from novariusirc.irc.capabilities import (
     CapabilityProfile,
@@ -34,7 +33,6 @@ from novariusirc.irc.protocol import (
 from novariusirc.irc.replies import ReplySeverity, parse_standard_reply
 from novariusirc.irc.state import IRCState, normalize_account, split_source
 from novariusirc.irc.transport import RateLimitedSender
-from novariusirc.irc.version import IRC_CORE_VERSION
 from novariusirc.irc.wire import (
     format_join,
     format_nick,
@@ -42,6 +40,7 @@ from novariusirc.irc.wire import (
     format_user,
     validate_raw_line,
 )
+from novariusirc.version import NATIVE_VERSION
 
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
@@ -963,18 +962,13 @@ class IRCClient:
             await self.send_notice(nick, format_ctcp("PING", parameters))
             return True
         if command == "VERSION":
-            if self.config.bot.ctcp_version_enabled:
-                reply = self.config.bot.ctcp_version_reply.format(
-                    version=__version__,
-                    bot_version=__version__,
-                    core_version=IRC_CORE_VERSION,
-                )
-                await self.send_notice(nick, format_ctcp("VERSION", reply))
+            reply = NATIVE_VERSION
+            if self.config.bot.ctcp_version_extra:
+                reply = f"{reply} {self.config.bot.ctcp_version_extra}"
+            await self.send_notice(nick, format_ctcp("VERSION", reply))
             return True
         if command == "CLIENTINFO":
-            commands = ["ACTION", "CLIENTINFO", "PING"]
-            if self.config.bot.ctcp_version_enabled:
-                commands.append("VERSION")
+            commands = ["ACTION", "CLIENTINFO", "PING", "VERSION"]
             await self.send_notice(
                 nick, format_ctcp("CLIENTINFO", " ".join(commands))
             )

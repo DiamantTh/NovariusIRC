@@ -13,7 +13,6 @@ import sys
 import time
 from pathlib import Path
 
-from novariusirc import __version__
 from novariusirc.core.auth import AuthManager
 from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandContext, CommandRegistry
@@ -32,6 +31,7 @@ from novariusirc.core.moderation import ModerationManager
 from novariusirc.core.plugins import Plugin, PluginManager
 from novariusirc.core.tasks import TaskSupervisor
 from novariusirc.core.workers import WorkerPool
+from novariusirc.version import NATIVE_VERSION
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,7 +83,7 @@ def parse_args() -> argparse.Namespace:
         "-V",
         "--version",
         action="version",
-        version=f"NovariusIRC {__version__}",
+        version=NATIVE_VERSION,
         help="Show version and exit",
     )
     args = parser.parse_args()
@@ -206,7 +206,7 @@ def register_builtin_commands(
         await ctx.reply(_("uptime: {seconds}s").format(seconds=seconds))
 
     async def version(ctx: CommandContext, args: list[str]) -> None:
-        await ctx.reply(f"NovariusIRC {__version__}")
+        await ctx.reply(NATIVE_VERSION)
 
     async def help_cmd(ctx: CommandContext, args: list[str]) -> None:
         lines = [_("Commands ({prefix}):").format(prefix=config.bot.prefix)]

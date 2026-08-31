@@ -124,24 +124,12 @@ def test_draft_capabilities_require_explicit_namespace() -> None:
         Config.model_validate(base)
 
 
-def test_ctcp_version_template_is_validated() -> None:
-    with pytest.raises(ValueError, match="placeholders"):
+@pytest.mark.parametrize("extra", ["bad\ntext", "bad\x01text", "x" * 301])
+def test_ctcp_version_extra_is_validated(extra: str) -> None:
+    with pytest.raises(ValueError, match="extra text"):
         Config.model_validate(
             {
-                "bot": {"ctcp_version_reply": "Bot {platform}"},
-                "network": {
-                    "server": "irc.example.test",
-                    "nick": "bot",
-                    "user": "bot",
-                    "realname": "Bot",
-                },
-            }
-        )
-
-    with pytest.raises(ValueError, match="placeholders"):
-        Config.model_validate(
-            {
-                "bot": {"ctcp_version_reply": "Bot {bot_version.__class__}"},
+                "bot": {"ctcp_version_extra": extra},
                 "network": {
                     "server": "irc.example.test",
                     "nick": "bot",
@@ -152,10 +140,10 @@ def test_ctcp_version_template_is_validated() -> None:
         )
 
 
-def test_ctcp_version_template_keeps_legacy_version_alias() -> None:
+def test_ctcp_version_extra_is_trimmed() -> None:
     config = Config.model_validate(
         {
-            "bot": {"ctcp_version_reply": "Bot {version}"},
+            "bot": {"ctcp_version_extra": "  stable build  "},
             "network": {
                 "server": "irc.example.test",
                 "nick": "bot",
@@ -164,7 +152,7 @@ def test_ctcp_version_template_keeps_legacy_version_alias() -> None:
             },
         }
     )
-    assert config.bot.ctcp_version_reply == "Bot {version}"
+    assert config.bot.ctcp_version_extra == "stable build"
 
 
 @pytest.mark.parametrize(("field", "value"), [("nick", "bad nick"), ("user", ":bad")])

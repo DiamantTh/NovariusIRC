@@ -7,13 +7,12 @@ from typing import Any
 
 import pytest
 
-from novariusirc import __version__
 from novariusirc.core.auth import AuthManager
 from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandRegistry
 from novariusirc.core.config import Config
 from novariusirc.core.moderation import ModerationManager
-from novariusirc.irc.version import IRC_CORE_VERSION
+from novariusirc.version import NATIVE_VERSION
 
 
 class Writer:
@@ -110,15 +109,14 @@ def test_ctcp_ping_to_bot_is_echoed_in_notice() -> None:
     )
 
 
-def test_ctcp_version_and_clientinfo_are_minimal_and_configurable() -> None:
+def test_ctcp_version_is_native_and_clientinfo_always_advertises_it() -> None:
     instance = client()
     asyncio.run(
         instance._handle_line(":Nick!user@host PRIVMSG bot :\x01VERSION\x01")
     )
     assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
         (
-            f"NOTICE Nick :\x01VERSION NovariusIRC bot {__version__} / "
-            f"IRC core {IRC_CORE_VERSION}\x01\r\n"
+            f"NOTICE Nick :\x01VERSION {NATIVE_VERSION}\x01\r\n"
         ).encode()
     )
 
@@ -131,9 +129,12 @@ def test_ctcp_version_and_clientinfo_are_minimal_and_configurable() -> None:
     )
 
     instance.writer.data.clear()  # type: ignore[union-attr]
-    instance.config.bot.ctcp_version_enabled = False
+    instance.config.bot.ctcp_version_extra = "https://example.test/bot"
     assert asyncio.run(instance._handle_ctcp_query("Nick", "VERSION", ""))
-    assert not instance.writer.data  # type: ignore[union-attr]
+    assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
+        f"NOTICE Nick :\x01VERSION {NATIVE_VERSION} "
+        "https://example.test/bot\x01\r\n"
+    ).encode()
 
 
 def test_notice_respects_wire_limit_without_splitting_utf8() -> None:

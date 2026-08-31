@@ -7,7 +7,6 @@ import os
 import re
 import tomllib
 from pathlib import Path
-from string import Formatter
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -52,37 +51,16 @@ class ConfigModel(BaseModel):
 class BotConfig(ConfigModel):
     prefix: str = "!"
     language: str = "en"
-    ctcp_version_enabled: bool = True
-    ctcp_version_reply: str = (
-        "NovariusIRC bot {bot_version} / IRC core {core_version}"
-    )
+    ctcp_version_extra: str = ""
 
-    @field_validator("ctcp_version_reply")
+    @field_validator("ctcp_version_extra")
     @classmethod
-    def validate_ctcp_version_reply(cls, value: str) -> str:
+    def validate_ctcp_version_extra(cls, value: str) -> str:
+        value = value.strip()
         if any(character in value for character in "\r\n\0\x01"):
-            raise ValueError("CTCP VERSION reply contains a forbidden character")
-        if len(value.encode("utf-8")) > 400:
-            raise ValueError("CTCP VERSION reply is too long")
-        allowed_fields = {"version", "bot_version", "core_version"}
-        try:
-            fields = list(Formatter().parse(value))
-        except ValueError as exc:
-            raise ValueError(
-                "CTCP VERSION reply may only use {version}, {bot_version}, "
-                "and {core_version} placeholders"
-            ) from exc
-        if any(
-            field_name not in allowed_fields
-            or format_spec
-            or conversion is not None
-            for _, field_name, format_spec, conversion in fields
-            if field_name is not None
-        ):
-            raise ValueError(
-                "CTCP VERSION reply may only use {version}, {bot_version}, "
-                "and {core_version} placeholders"
-            )
+            raise ValueError("CTCP VERSION extra text contains a forbidden character")
+        if len(value.encode("utf-8")) > 300:
+            raise ValueError("CTCP VERSION extra text is too long")
         return value
 
     def resolve_env(self) -> None:
