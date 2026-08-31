@@ -1,52 +1,52 @@
-# Moderation configuration for NovariusIRC
-# All settings are optional - defaults are used if not specified
+# Moderationskonfiguration für NovariusIRC
+# Alle Einstellungen sind optional; fehlende Werte erhalten ihre Standardwerte.
 
-# GLOBAL DEFAULTS (applied to all channels unless overridden)
+# GLOBALE STANDARDWERTE (gelten ohne kanalspezifische Überschreibung)
 [moderation]
 enabled = true
 log_file = "logs/moderation/moderation.log"
 
-# Default rate limiting (can be overridden per channel)
+# Standardmäßige Nachrichtenbegrenzung
 [moderation.rate_limit]
 enabled = false
 messages_per_minute = 5
 action = "warn"
 
-# Default spam detection
+# Standardmäßige Erkennung wiederholter Nachrichten
 [moderation.spam]
 enabled = false
 threshold = 3
 action = "mute"
 duration_seconds = 300
 
-# Default caps lock detection
+# Standardmäßige Erkennung übermäßiger Großschreibung
 [moderation.caps]
 enabled = false
 threshold_percent = 80
 action = "warn"
 
-# Default badword filtering
+# Standardmäßiger Wort-/RegExp-Filter
 [moderation.badwords]
 enabled = false
 action = "warn"
 list = []
 
-# Default warning system
+# Standardmäßiges Verwarnungssystem
 [moderation.warnings]
 enabled = true
 to_kick = 3
 to_ban = 5
 
 # ============================================================
-# CHANNEL-SPECIFIC OVERRIDES
-# Each channel can override any/all of the above settings
+# KANALSPEZIFISCHE ÜBERSCHREIBUNGEN
+# Jeder Kanal kann einzelne oder alle globalen Einstellungen überschreiben.
 # ============================================================
 
-# Strict moderation channel
+# Streng moderierter Kanal
 [moderation.channels."#strict"]
 enabled = true
 
-# Enable all checks in #strict
+# Alle Prüfungen in #strict aktivieren
 [moderation.channels."#strict".rate_limit]
 enabled = true
 messages_per_minute = 3
@@ -77,7 +77,7 @@ enabled = true
 to_kick = 2
 to_ban = 3
 
-# Chill/casual channel - minimal moderation
+# Lockerer Kanal mit minimaler Moderation
 [moderation.channels."#chill"]
 enabled = true
 
@@ -95,10 +95,10 @@ enabled = false
 
 [moderation.channels."#chill".warnings]
 enabled = false
-to_kick = 999  # Never auto-kick
-to_ban = 999   # Never auto-ban
+to_kick = 999  # Praktisch kein automatischer Kick
+to_ban = 999   # Praktisch kein automatischer Ban
 
-# Announcements channel - only anti-spam
+# Ankündigungskanal nur mit Spam-Schutz
 [moderation.channels."#announce"]
 enabled = true
 

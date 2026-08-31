@@ -1,0 +1,410 @@
+# Konfigurationsreferenz
+
+NovariusIRC verwendet TOML. Die Schlüsselnamen bleiben unabhängig von der
+Ausgabesprache Englisch, damit bestehende Konfigurationen, Container-Variablen
+und Werkzeuge kompatibel bleiben. Kommentare und diese Referenz sind Deutsch.
+
+Diese Seite folgt dem praktischen Aufbau der
+[InspIRCd-Konfigurationsdokumentation](https://docs.inspircd.org/4/configuration/):
+Jeder Abschnitt nennt Zweck, Parameter, Standardwerte und ein kurzes Beispiel.
+Sie beschreibt die vom aktuellen Core und den eingebauten Modulen ausgewerteten
+Werte. Die vollständige Startvorlage ist
+[`config.example.toml`](../config.example.toml).
+
+## Laden und prüfen
+
+```console
+novariusirc --check-config --config ./config.toml
+novariusirc --status --config ./config.toml
+novariusirc --config ./config.toml
+```
+
+`--check-config` verbindet sich nicht mit IRC. Es prüft die TOML-Struktur,
+Pflichtwerte, Wertebereiche, referenzierte TLS-Dateien, beschreibbare
+Laufzeitpfade und importierbare eingebaute Module.
+
+Als `--config` sind zulässig:
+
+- eine TOML-Datei;
+- ein Verzeichnis, in dem dann `config.toml` gesucht wird;
+- `env`, `environment` oder `-` für einen Start ausschließlich über
+  Umgebungsvariablen.
+
+Alle typisierten Abschnitte verbieten unbekannte Schlüssel. Ein Tippfehler führt
+deshalb beim Start zu einem Fehler, statt unbemerkt ignoriert zu werden. Die
+freien Tabellen `plugins.settings` und `moderation.channels` sind die bewussten
+Ausnahmen.
+
+## Ladereihenfolge und Includes
+
+Die effektive Konfiguration entsteht in dieser Reihenfolge:
+
+1. `config.toml` wird geladen.
+2. Include-Dateien werden in ihrer angegebenen Reihenfolge rekursiv
+   zusammengeführt. Ein späterer Wert überschreibt einen früheren; Listen werden
+   vollständig ersetzt.
+3. Unterstützte Umgebungsvariablen überschreiben einzelne Werte.
+4. Abhängigkeiten zwischen Einstellungen und Laufzeitpfade werden geprüft.
+
+Ohne explizite Include-Angabe wird eine vorhandene `secrets.toml` neben der
+Hauptdatei optional geladen. Sobald Includes ausdrücklich angegeben sind, muss
+jede genannte Datei existieren.
+
+```toml
+[includes]
+files = ["secrets.toml", "feeds.toml", "moderation.toml"]
+```
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `files` | Textliste | `["secrets.toml"]` | Zusammenzuführende Dateien in Ladereihenfolge; doppelte Namen werden entfernt. |
+
+Alternativ ist die Kurzform auf oberster Ebene möglich:
+
+```toml
+include = ["secrets.toml", "feeds.toml"]
+```
+
+Include-Pfade sind relativ zum Verzeichnis der Hauptdatei. Absolute Pfade sind
+ebenfalls erlaubt. Zugangsdaten gehören in eine nicht versionierte Datei nach
+Vorlage von [`secrets.example.toml`](../secrets.example.toml).
+
+## `[bot]`
+
+Allgemeine Darstellung und Sprache des Bots.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `prefix` | Text | `!` | Präfix für Befehle in Query und lokaler Steuerung. Im Kanal wird zuerst der Bot-Nick mit `:` oder `,` adressiert; danach ist das Präfix optional. |
+| `language` | Text | aus Umgebung, sonst `en` | Ausgabesprache: `de`, `en` oder `ja`. Locale-Formen wie `de_DE.UTF-8` werden normalisiert. |
+| `ctcp_version_extra` | Text | leer | Optionaler Zusatz zu CTCP `VERSION`; Produktname und Paketversion bleiben unverändert. Steuerzeichen und mehr als 300 UTF-8-Bytes sind unzulässig. |
+
+Wird `language` weggelassen, gilt die Reihenfolge `NOVARIUSIRC_LANG`,
+`LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`, danach Englisch.
+
+```toml
+[bot]
+prefix = "!"
+language = "de"
+ctcp_version_extra = "Produktivinstanz"
+```
+
+## `[network]`
+
+IRC-Verbindung, Identität und Protokollgrenzen. `server`, `nick`, `user` und
+`realname` sind in einer dateibasierten Konfiguration Pflichtwerte.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `server` | Text | Pflicht | DNS-Name oder IP-Adresse des IRC-Servers. |
+| `port` | Ganzzahl | `6667` | TCP-Port von 1 bis 65535. Für TLS wird üblicherweise 6697 verwendet. |
+| `tls` | Boolean | `false` | Verschlüsselte TLS-Verbindung aktivieren. SASL und CertFP verlangen derzeit TLS. |
+| `bind_ip` | Text oder leer | leer | Lokale Quell-IP für den Verbindungsaufbau. |
+| `bind_hostname` | Text oder leer | leer | Lokaler Quell-Hostname; alternativ zu `bind_ip`. |
+| `nick` | Text | Pflicht | Gewünschter IRC-Nickname, ohne Leer- oder Steuerzeichen. |
+| `user` | Text | Pflicht | Benutzername für `USER`, ohne Leer- oder Steuerzeichen. |
+| `realname` | Text | Pflicht | Nichtleerer Realname/GECOS-Text. |
+| `channels` | Textliste | `[]` | Beim Verbindungsaufbau zu betretende Kanäle. |
+| `name` | Text oder leer | aus `005 NETWORK` | Manueller interner Netzwerkname. |
+| `allow_unusual_channel_names` | Boolean | `false` | Erlaubt nach dem Präfix weitere Zeichen als Unicode-Buchstaben, Ziffern, `-` und `_`. |
+| `reconnect_delays` | Ganzzahlliste | `[10, 20, 40, 80]` | Positive Wartezeiten in Sekunden für aufeinanderfolgende Neuverbindungen. |
+| `connect_timeout_seconds` | Zahl | `30.0` | Zeitlimit für den TCP-/TLS-Verbindungsaufbau; muss größer null sein. |
+| `registration_timeout_seconds` | Zahl | `60.0` | Zeitlimit bis zur abgeschlossenen IRC-Registrierung. |
+| `idle_timeout_seconds` | Zahl | `300.0` | Maximale Zeit ohne empfangene IRC-Daten vor einem Verbindungsabbruch. |
+| `ircv3_enabled` | Boolean | `true` | IRCv3-CAP-Aushandlung aktivieren. Der Bot bleibt mit älteren IRCds kompatibel. |
+| `ircv3_capabilities` | Textliste | siehe Vorlage | Stabile gewünschte Capabilities. Nur vom Server angebotene Werte werden angefordert. `sasl` gehört nicht in diese Liste. |
+| `ircv3_draft_capabilities` | Textliste | `[]` | Explizite Opt-ins, deren Namen mit `draft/` beginnen müssen. |
+| `send_rate_per_second` | Zahl | `1.0` | Nachhaltige Rate ausgehender IRC-Zeilen pro Sekunde. |
+| `send_burst` | Ganzzahl | `4` | Kurzzeitig erlaubtes Sende-Burstvolumen, mindestens 1. |
+| `send_queue_size` | Ganzzahl | `256` | Maximale Anzahl wartender ausgehender IRC-Zeilen. |
+| `event_queue_size` | Ganzzahl | `256` | Maximale Anzahl wartender Anwendungsereignisse. |
+
+Standardpräfixe für Kanäle sind `#`, `&`, `+` und `!`. Leerzeichen, Kommas,
+Doppelpunkte sowie CR, LF und NUL bleiben auch im Kompatibilitätsmodus
+unzulässig.
+
+```toml
+[network]
+server = "irc.example.net"
+port = 6697
+tls = true
+nick = "NovariusBot"
+user = "novarius"
+realname = "Novarius IRC Bot"
+channels = ["#bots"]
+```
+
+## `[auth]`
+
+Authentifizierung des Bot-Clients am IRC-Netz sowie optionale TOTP-Sitzungen für
+rollenbasierte Bot-Befehle. Alle Verfahren sind standardmäßig deaktiviert oder
+wirkungslos, bis sie ausdrücklich konfiguriert werden.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `sasl_enabled` | Boolean | `false` | SASL während der IRCv3-Registrierung aktivieren. |
+| `sasl_mechanism` | Text | `PLAIN` | Unterstützt werden `PLAIN` und `EXTERNAL`. |
+| `sasl_username` | Text oder leer | Bot-Nick bei aktiviertem SASL | SASL-Authentifizierungsname. |
+| `sasl_password` | Text oder leer | leer | Passwort für SASL PLAIN. |
+| `nickserv_enabled` | Boolean | `false` | Identifizierung per Nachricht an einen Services-Nick aktivieren. |
+| `nickserv_service` | Text | `NickServ` | Zielname des Services. |
+| `nickserv_username` | Text oder leer | Bot-Nick bei Aktivierung | NickServ-Kontoname. |
+| `nickserv_password` | Text oder leer | leer | NickServ-Passwort. |
+| `certfp_enabled` | Boolean | `false` | TLS-Clientzertifikat beim IRC-Verbindungsaufbau laden. |
+| `certfp_cert_file` | Pfad oder leer | leer | PEM-Zertifikat; für SASL EXTERNAL erforderlich. |
+| `certfp_key_file` | Pfad oder leer | leer | Separater privater Schlüssel; leer, wenn er im PEM enthalten ist. |
+| `totp_secret` | Text oder leer | leer | Globales Base32-TOTP-Secret als Rückfallwert. Aktiviert TOTP nicht automatisch. |
+| `session_timeout_seconds` | Ganzzahl | `1800` | Gültigkeitsdauer einer erfolgreich eröffneten TOTP-Sitzung. |
+| `totp_digest` | Auswahl | `sha256` | `sha1`, `sha256` oder `sha512`. |
+| `totp_digits` | Ganzzahl | `8` | Länge des Codes von 6 bis 12 Stellen. |
+| `totp_interval` | Ganzzahl | `30` | Länge eines TOTP-Zeitfensters in Sekunden, mindestens 1. |
+| `totp_valid_window` | Ganzzahl | `4` | Zusätzlich akzeptierte Zeitfenster vor und nach dem aktuellen Fenster. |
+
+SASL PLAIN benötigt Benutzername, Passwort und `network.tls = true`. SASL
+EXTERNAL benötigt TLS, aktiviertes CertFP und eine Zertifikatsdatei. TOTP ist
+nur erforderlich, wenn ein Rollen-Eintrag `require_totp = true` setzt. Weitere
+Hinweise stehen in [`TOTP_SETUP.md`](TOTP_SETUP.md). Da der IRC-Login-Befehl
+bewusst noch nicht festgelegt und implementiert ist, darf `require_totp` im
+Produktivbetrieb derzeit nicht aktiviert werden: Die betreffende Rolle wäre
+sonst über IRC nicht erreichbar.
+
+## `[roles]`
+
+Die Rollen `owner` und `admin` werden über IRC-Hostmasks zugeordnet. Der
+Abschnitt enthält zwei Rollenlisten:
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `owners` | Rollenliste | `[]` | Einträge mit vollständigen Bot-Rechten. |
+| `admins` | Rollenliste | `[]` | Einträge mit erweiterten, aber nicht vollständigen Rechten. |
+
+Jeder Rollen-Eintrag besitzt folgende Felder:
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `hostmask` | Text | Pflicht | Muster `nick!user@host`; `*` und `?` sind Wildcards. |
+| `require_totp` | Boolean | `false` | Rolle erst nach einer gültigen TOTP-Sitzung vergeben. |
+| `totp_secret` | Text oder leer | globales Secret | Individuelles Base32-Secret für diesen Eintrag. |
+
+```toml
+[roles]
+owners = [
+  { hostmask = "owner!*@trusted.example", require_totp = false },
+]
+admins = [
+  { hostmask = "*!staff@*.example", require_totp = true },
+]
+```
+
+Hostmasks funktionieren auch auf Netzen ohne NickServ und ohne IRCv3. Für
+privilegierte Rollen sollten stabile, serverseitig gesetzte Hosts verwendet
+werden; ein bloßer Nick ist kein verlässlicher Identitätsnachweis.
+
+## `[logging]`
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `level` | Text | `INFO` | Python-Loglevel, beim Laden in Großbuchstaben umgewandelt. |
+| `log_dir` | Pfad | `logs` | Kompatibler Logpfad. Ein abweichender Wert wird verwendet, solange `paths.log_root` beim Standard `./logs` bleibt. |
+| `timezone` | Text | `Europe/Berlin` | IANA-Zeitzone für lesbare IRC-Logs. |
+| `journald_enabled` | Boolean | `false` | Zusätzlich an systemd-journald senden, wenn die optionale Anbindung verfügbar ist. |
+| `channel_logging` | Tabellenliste | `[]` | Explizite Auswahl der Kanäle, deren Nachrichten protokolliert werden. |
+
+Ein Eintrag der Tabellenliste besitzt `channel` als Pflichtwert und `enabled`
+mit Standard `true`:
+
+```toml
+[[logging.channel_logging]]
+channel = "#bots"
+enabled = true
+```
+
+Ohne passenden Eintrag ist das inhaltliche Kanal-Logging ausgeschaltet.
+
+## `[commands]`, `[lifecycle]` und `[control]`
+
+| Abschnitt.Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `commands.rate_limit_seconds` | Zahl | `2.0` | Mindestabstand für denselben Befehl desselben Benutzers; `0` deaktiviert die Begrenzung. |
+| `lifecycle.module_start_timeout_seconds` | Zahl | `30.0` | Zeitlimit zum Start eines eingebauten Moduls. |
+| `lifecycle.module_stop_timeout_seconds` | Zahl | `30.0` | Zeitlimit zum Stoppen eines eingebauten Moduls. |
+| `control.enabled` | Boolean | `false` | Lokalen Unix-Control-Socket aktivieren. |
+| `control.socket_path` | Pfad | `./run/novariusirc.sock` | Socket-Datei; sie wird mit Modus `0600` angelegt. |
+
+Der Control-Endpunkt ist kein TCP-Listener und keine Shell. Er führt dieselben
+registrierten Bot-Befehle wie die Terminalsteuerung aus.
+
+## `[modules]`
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Textliste | `["rss_announcer"]` | Namen eingebauter Python-Module, in Startreihenfolge. Doppelte Namen werden entfernt. |
+
+`rss_announcer` ist das aktive eingebaute Funktionsmodul. Der alte Name
+`moderation` existiert nur als Kompatibilitätshinweis; Moderation ist bereits
+ein Core-Dienst und gehört nicht in diese Liste. Ein unbekanntes oder nicht
+importierbares Modul lässt `--check-config` fehlschlagen.
+
+## `[paths]` und `[workers]`
+
+| Abschnitt.Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `paths.log_root` | Pfad | `./logs` | Stammverzeichnis für Logdateien. |
+| `paths.data_root` | Pfad | `./data` | Stammverzeichnis für persistente Laufzeitdaten, etwa Feed-Zustände. |
+| `workers.processes` | Ganzzahl | `2` | Prozessanzahl des Pools für CPU-lastige Aufgaben, mindestens 1. |
+
+Relative Laufzeitpfade werden relativ zum Verzeichnis von `config.toml`
+aufgelöst, nicht relativ zum aktuellen Arbeitsverzeichnis. Das betrifft auch
+Control-Socket, Moderationslog, Zertifikate und Feed-TLS-Dateien.
+
+## `[feeds]`
+
+Globale Einstellungen des Feed-Cores. Die Abrufe werden vom eingebauten Modul
+`rss_announcer` gestartet, wenn es in `[modules].enabled` enthalten ist.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `true` | Feed-Verarbeitung global aktivieren. |
+| `max_feeds` | Ganzzahl | `32` | Maximale Zahl registrierter Feeds. |
+| `max_items_per_feed` | Ganzzahl | `64` | Maximale Zahl gemerkter Eintrags-IDs je Feed. |
+| `max_items_per_poll` | Ganzzahl | `2` | Globale Obergrenze neuer Meldungen je automatischem Abruf. |
+| `max_items_per_manual` | Ganzzahl | `4` | Globale Obergrenze je manuell ausgelöstem Abruf. |
+| `refresh_interval` | Ganzzahl | `300` | Abstand automatischer Abrufe in Sekunden. |
+| `http_timeout` | Ganzzahl | `10` | HTTP-Zeitlimit in Sekunden. |
+| `max_body_size` | Ganzzahl | `262144` | Maximale Antwortgröße in Bytes, mindestens 1024. |
+| `user_agents` | Textliste | `[]` | Eigene HTTP-User-Agents. Leer verwendet `NovariusIRC/feeds`. |
+| `user_agent_rotate` | Auswahl | `list` | `list` rotiert, `random` wählt zufällig, `fixed` nutzt den ersten Eintrag. |
+| `tls_allow_legacy` | Boolean | `false` | Aktiviert die OpenSSL-Option für veraltete Serververbindungen. Nur für notwendige Altserver verwenden. |
+| `tls_ca_file` | Pfad oder leer | leer | Eigene CA-Bundle-Datei. |
+| `tls_ca_dir` | Pfad oder leer | leer | Verzeichnis eigener CA-Zertifikate. |
+| `tls_cert_file` | Pfad oder leer | leer | TLS-Clientzertifikat für Feed-Server. |
+| `tls_key_file` | Pfad oder leer | leer | Zugehöriger privater Schlüssel. |
+| `feeds` | Tabellenliste | `[]` | Einzelne Feed-Definitionen. |
+
+Leere Strings bei den vier TLS-Pfaden gelten als nicht gesetzt.
+
+### `[[feeds.feeds]]`
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `name` | Text | Pflicht | Anzeigename und interne Bezeichnung. |
+| `url` | Text | Pflicht | HTTP(S)-Adresse des RSS-/Atom-Feeds. |
+| `channel` | Text oder leer | leer | Einzelnes Ziel; wird zusätzlich in `channels` übernommen. |
+| `channels` | Textliste | `[]` | Ein oder mehrere Zielkanäle. Mindestens `channel` oder `channels` ist Pflicht. |
+| `enabled` | Boolean | `true` | Einzelnen Feed aktivieren oder pausieren. |
+| `template` | Text oder leer | eingebaut | Ausgabevorlage mit `{feed}`, `{title}`, `{summary}`, `{link}` und `{published}`. |
+| `min_interval_seconds` | Ganzzahl oder leer | leer | Mindestabstand der Meldungen dieses Feeds; mindestens 0. |
+| `per_channel_interval` | Tabelle | `{}` | Mindestabstand je Zielkanal, z. B. `{ "#news" = 900 }`. |
+| `max_items_per_poll` | Ganzzahl oder leer | global | Obergrenze je automatischem Abruf. |
+| `max_items_per_manual` | Ganzzahl oder leer | global | Obergrenze je manuellem Abruf. |
+
+Eine vollständige Vorlage mit IRC-Formatierung steht in
+[`config/feeds.example.toml`](../config/feeds.example.toml).
+
+## `[moderation]`
+
+Moderation ist ein Core-Dienst. Die Prüfungen sind einzeln standardmäßig
+deaktiviert; `moderation.enabled = true` allein führt daher noch keine Aktion
+aus. Die vollständige Vorlage steht in
+[`config/moderation.example.toml`](../config/moderation.example.toml).
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `true` | Core-Moderation global zulassen. |
+| `log_file` | Pfad | `logs/moderation/moderation.log` | Eigenes rotierendes Entscheidungslog. |
+| `rate_limit` | Tabelle | siehe unten | Begrenzung der Nachrichtenrate. |
+| `spam` | Tabelle | siehe unten | Erkennung direkt wiederholter Nachrichten. |
+| `caps` | Tabelle | siehe unten | Erkennung übermäßiger Großschreibung. |
+| `badwords` | Tabelle | siehe unten | RegExp-basierter Inhaltsfilter. |
+| `warnings` | Tabelle | siehe unten | Eskalationsschwellen für Verwarnungen. |
+| `channels` | Tabelle | `{}` | Rekursive Überschreibungen je Kanal. |
+
+### Prüfungen und Verwarnungen
+
+| Abschnitt.Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `rate_limit.enabled` | Boolean | `false` | Nachrichtenrate prüfen. |
+| `rate_limit.messages_per_minute` | Ganzzahl | `5` | Zulässige Nachrichten pro Minute, mindestens 1. |
+| `rate_limit.action` | Auswahl | `warn` | Aktion bei Überschreitung. |
+| `spam.enabled` | Boolean | `false` | Direkt wiederholte identische Nachrichten erkennen. |
+| `spam.threshold` | Ganzzahl | `3` | Anzahl identischer Nachrichten, mindestens 2. |
+| `spam.action` | Auswahl | `mute` | Aktion bei Erkennung. |
+| `spam.duration_seconds` | Ganzzahl | `300` | Dauer eines Mutes in Sekunden. |
+| `caps.enabled` | Boolean | `false` | Großbuchstabenanteil prüfen; Meldungen mit weniger als fünf Buchstaben werden übersprungen. |
+| `caps.threshold_percent` | Ganzzahl | `80` | Grenzwert von 1 bis 100 Prozent. |
+| `caps.action` | Auswahl | `warn` | Aktion bei Erkennung. |
+| `badwords.enabled` | Boolean | `false` | Reguläre Ausdrücke gegen Nachrichtentext prüfen. |
+| `badwords.list` | Textliste | `[]` | Python-RegExp-Muster, ohne Beachtung der Groß-/Kleinschreibung. |
+| `badwords.action` | Auswahl | `warn` | Aktion bei Treffer. |
+| `warnings.enabled` | Boolean | `true` | Verwarnungen automatisch eskalieren. |
+| `warnings.to_kick` | Ganzzahl | `3` | Ab dieser Verwarnungszahl kicken. |
+| `warnings.to_ban` | Ganzzahl | `5` | Ab dieser Verwarnungszahl bannen; nicht kleiner als `to_kick`. |
+
+Zulässige Aktionen sind `warn`, `mute`, `kick` und `ban`. `mute` verwendet den
+Quiet-Modus `+q`, `ban` setzt `+b` und kickt anschließend. Ob `+q` unterstützt
+wird und welche Rechte der Bot braucht, hängt vom IRCd ab.
+
+Kanalwerte überschreiben die globalen Werte rekursiv:
+
+```toml
+[moderation.channels."#strict".rate_limit]
+enabled = true
+messages_per_minute = 3
+action = "mute"
+```
+
+## `[plugins]`
+
+Dieser Abschnitt gehört zum Core-Lader für externe Erweiterungen. Er wird hier
+der Vollständigkeit halber aufgeführt; eingebaute Funktionen gehören unter
+`[modules]`.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `true` | Laden externer Erweiterungen global zulassen. |
+| `directory` | Pfad | `plugins` | Verzeichnis relativ zu `config.toml`. |
+| `load` | Textliste | `[]` | Explizite Allowlist; Namen dürfen Buchstaben, Ziffern, `_` und `-` enthalten. |
+| `settings` | Tabelle | `{}` | Erweiterungsspezifische freie Schlüssel, gruppiert nach Name. |
+
+## Umgebungsvariablen
+
+Diese Variablen überschreiben unterstützte TOML-Werte. Bei dateibasiertem Start
+müssen die vier Pflichtfelder in `[network]` trotzdem syntaktisch vorhanden
+sein, da die Grundstruktur vor den Overrides validiert wird.
+
+| Variable | Konfigurationswert | Hinweis |
+| --- | --- | --- |
+| `NOVARIUSIRC_PREFIX` | `bot.prefix` | Nichtleerer Text. |
+| `NOVARIUSIRC_LANG` | `bot.language` | `de`, `en`, `ja` oder passende Locale-Form. |
+| `NOVARIUSIRC_SERVER` | `network.server` | Beim ENV-only-Start Pflicht. |
+| `NOVARIUSIRC_PORT` | `network.port` | Nur rein numerische Werte werden übernommen. |
+| `NOVARIUSIRC_TLS` | `network.tls` | Wahr bei `1`, `true`, `yes` oder `on`; sonst falsch. |
+| `NOVARIUSIRC_NICK` | `network.nick` | Beim ENV-only-Start Pflicht. |
+| `NOVARIUSIRC_USER` | `network.user` | ENV-only: standardmäßig der Nick. |
+| `NOVARIUSIRC_REALNAME` | `network.realname` | ENV-only: standardmäßig der Nick. |
+| `NOVARIUSIRC_CHANNELS` | `network.channels` | Kommagetrennte Liste. |
+| `NOVARIUSIRC_BIND_IP` | `network.bind_ip` | Lokale Quell-IP. |
+| `NOVARIUSIRC_BIND_HOSTNAME` | `network.bind_hostname` | Lokaler Quell-Hostname. |
+| `NOVARIUSIRC_SASL_ENABLED` | `auth.sasl_enabled` | Boolean-Syntax wie bei TLS. |
+| `NOVARIUSIRC_SASL_MECHANISM` | `auth.sasl_mechanism` | `PLAIN` oder `EXTERNAL`. |
+| `NOVARIUSIRC_SASL_USERNAME` | `auth.sasl_username` | SASL-Kontoname. |
+| `NOVARIUSIRC_SASL_PASSWORD` | `auth.sasl_password` | Geheimwert. |
+| `NOVARIUSIRC_NICKSERV_ENABLED` | `auth.nickserv_enabled` | Boolean-Syntax wie bei TLS. |
+| `NOVARIUSIRC_NICKSERV_SERVICE` | `auth.nickserv_service` | Services-Zielname. |
+| `NOVARIUSIRC_NICKSERV_USERNAME` | `auth.nickserv_username` | Services-Kontoname. |
+| `NOVARIUSIRC_NICKSERV_PASSWORD` | `auth.nickserv_password` | Geheimwert. |
+| `NOVARIUSIRC_CERTFP_ENABLED` | `auth.certfp_enabled` | Boolean-Syntax wie bei TLS. |
+| `NOVARIUSIRC_CERTFP_CERT_FILE` | `auth.certfp_cert_file` | Zertifikatspfad. |
+| `NOVARIUSIRC_CERTFP_KEY_FILE` | `auth.certfp_key_file` | Schlüsselpfad. |
+| `NOVARIUSIRC_TOTP_SECRET` | `auth.totp_secret` | Globales Base32-Secret. |
+| `NOVARIUSIRC_LOG_ROOT` | `paths.log_root` | Log-Stammverzeichnis. |
+| `NOVARIUSIRC_DATA_ROOT` | `paths.data_root` | Daten-Stammverzeichnis. |
+
+ENV-only benötigt mindestens `NOVARIUSIRC_SERVER` und `NOVARIUSIRC_NICK`:
+
+```console
+NOVARIUSIRC_SERVER=irc.example.net \
+NOVARIUSIRC_NICK=NovariusBot \
+NOVARIUSIRC_TLS=true \
+novariusirc --config env
+```

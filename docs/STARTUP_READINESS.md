@@ -17,7 +17,7 @@ funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
 Am 1. September 2026 wurde folgender Stand verifiziert:
 
-- 152 von 152 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 153 von 153 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
@@ -36,6 +36,8 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | --- | --- | --- |
 | Konfiguration laden | fertig | Datei, Konfigurationsverzeichnis oder reiner Env-Modus |
 | Konfigurations-Includes | fertig | Beispielsweise `secrets.toml`, `feeds.toml` und `moderation.toml` |
+| Konfigurationsreferenz | fertig | Alle Core-/Modulparameter, Standardwerte, Grenzen und ENV-Overrides unter `docs/CONFIGURATION.md` |
+| Installierte Beispielkonfiguration | fertig | Hauptdatei und explizit verlangte Fragmente werden gemeinsam angelegt und als Gesamtinstanz getestet |
 | Relative Pfade | fertig | Werden relativ zur Instanzkonfiguration aufgelöst |
 | Validierung | fertig | Unbekannte Felder und unsichere Modul-/Pluginnamen werden abgelehnt |
 | Core-Commands | fertig | `ping`, `uptime`, `version`, `botinfo` und `help`; im Channel nur gezielte Nick-Ansprache, in Query/Local ohne Botnamen |

@@ -58,6 +58,8 @@ if [ ! -d "$EXAMPLE_INSTANCE" ]; then
     mkdir -p "$EXAMPLE_INSTANCE"
     cp config.example.toml "$EXAMPLE_INSTANCE/config.toml"
     cp secrets.example.toml "$EXAMPLE_INSTANCE/secrets.toml"
+    cp config/feeds.example.toml "$EXAMPLE_INSTANCE/feeds.toml"
+    cp config/moderation.example.toml "$EXAMPLE_INSTANCE/moderation.toml"
     cp -r config/ "$EXAMPLE_INSTANCE/" 2>/dev/null || true
     cp -r plugins/ "$EXAMPLE_INSTANCE/" 2>/dev/null || true
 fi

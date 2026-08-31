@@ -1,13 +1,13 @@
 [bot]
 prefix = "!"
-# Sprache: en, de, ja; ohne Angabe Erkennung aus ENV/Locale, Fallback en
+# Sprache: en, de, ja; ohne Angabe Erkennung aus Umgebung/Locale, Rückfall en
 language = "en"
-# CTCP VERSION always reports the native NovariusIRC package version. Optional
-# plain text is appended, but cannot replace the product name or version.
+# CTCP VERSION meldet immer die native NovariusIRC-Paketversion. Optionaler
+# Klartext wird angehängt, kann Produktname und Version aber nicht ersetzen.
 ctcp_version_extra = ""
 
 # Include-Dateien relativ zu diesem config.toml (oder absoluter Pfad)
-# Unterstützt auch top-level: include = ["secrets.toml", "feeds.toml"]
+# Unterstützt auch auf oberster Ebene: include = ["secrets.toml", "feeds.toml"]
 # Vorlagen liegen unter config/*.example.toml und können an beliebigen Ort kopiert werden.
 [includes]
 files = ["secrets.toml", "feeds.toml", "moderation.toml"]
@@ -24,12 +24,12 @@ tls = true
 nick = "NovariusBot"
 user = "novarius"
 realname = "Novarius IRC Bot"
-# name = "libera"  # Optional: Override für Netzwerknamen (auto-detect via 005 NETWORK=)
+# name = "libera"  # Optional: Netzwerkname statt Erkennung über 005 NETWORK=
 channels = ["#novariusirc"]
 # Standard: Unicode-Buchstaben/-Zahlen sowie - und _ nach dem IRC-Channelpräfix.
-# Nur fuer alte oder ungewoehnliche IRCds: allow_unusual_channel_names = true
-# IRCv3 CAP wird standardmaessig ausgehandelt. Nur angebotene Features werden
-# angefordert; unbekannte Features werden nicht blind aktiviert.
+# Nur für alte oder ungewöhnliche IRCds: allow_unusual_channel_names = true
+# IRCv3 CAP wird standardmäßig ausgehandelt. Nur angebotene Fähigkeiten werden
+# angefordert; unbekannte Fähigkeiten werden nicht blind aktiviert.
 ircv3_enabled = true
 ircv3_capabilities = [
     "account-notify",
@@ -45,19 +45,19 @@ ircv3_capabilities = [
     "standard-replies",
     "userhost-in-names",
 ]
-# Work-in-progress features are opt-in and must retain their draft/ name.
-# Empty by default because draft semantics may change incompatibly.
+# Unfertige IRCv3-Erweiterungen sind Opt-in und behalten ihren draft/-Namen.
+# Standardmäßig leer, da sich Draft-Semantik inkompatibel ändern kann.
 ircv3_draft_capabilities = []
-# Example only after the corresponding extension is implemented:
+# Beispiel erst verwenden, wenn die Erweiterung implementiert ist:
 # ircv3_draft_capabilities = ["draft/chathistory"]
-# Schutz gegen haengende Verbindungen und ausgehende Floods.
+# Schutz gegen hängende Verbindungen und ausgehende Floods.
 connect_timeout_seconds = 30
 registration_timeout_seconds = 60
 idle_timeout_seconds = 300
 send_rate_per_second = 1.0
 send_burst = 4
 send_queue_size = 256
-# Begrenzte Queue fuer Commands und Plugin-Hooks; der IRC-Leseloop bleibt frei.
+# Begrenzte Warteschlange für Befehle und Erweiterungs-Hooks; der IRC-Leseloop bleibt frei.
 event_queue_size = 256
 
 [auth]
@@ -80,14 +80,14 @@ certfp_enabled = false
 # certfp_key_file = "./certs/irc-client.key"
 
 [roles]
-# Owners haben volle Bot-Rechte (z.B. reload, shutdown)
+# Eigentümer haben volle Bot-Rechte (z. B. reload, shutdown)
 # Hostmask-Pattern: nick!user@host oder Wildcards (*!*@*.trusted.net)
 owners = [
     { hostmask = "owner!*@*.trusted.net" },
     { hostmask = "admin!~user@secure.host.tld" }
 ]
 
-# Admins haben erweiterte Rechte (z.B. kick, ban, aber kein shutdown)
+# Administratoren haben erweiterte Rechte (z. B. kick, ban, aber kein shutdown)
 admins = [
     { hostmask = "moderator!*@*.staff.example.net" },
     { hostmask = "*!*@vhost/staff/*" },
@@ -102,11 +102,11 @@ timezone = "Europe/Berlin"
 journald_enabled = false
 
 [commands]
-# Simple anti-spam for command usage (seconds between same command per user)
+# Einfacher Befehlsschutz: Mindestabstand je Benutzer und Befehl in Sekunden
 rate_limit_seconds = 2.0
 
 [lifecycle]
-# Timeout fuer Start und Stop eingebauter Module. Bei einem Startfehler werden
+# Zeitlimit für Start und Stop eingebauter Module. Bei einem Startfehler werden
 # bereits gestartete Module in umgekehrter Reihenfolge wieder gestoppt.
 module_start_timeout_seconds = 30
 module_stop_timeout_seconds = 30
@@ -120,13 +120,13 @@ socket_path = "./run/novariusirc.sock"
 [plugins]
 enabled = true
 directory = "plugins"
-# Externe Plugins werden nur geladen, wenn sie hier explizit aufgefuehrt sind.
+# Externe Plugins werden nur geladen, wenn sie hier explizit aufgeführt sind.
 # Der Name verweist auf plugins/<name>.py oder plugins/<name>/__init__.py.
 load = []
 # Beispiel: load = ["example_greetings"]
 
 [modules]
-# Builtin-Module explizit aktivieren/deaktivieren
+# Eingebaute Module explizit aktivieren oder deaktivieren
 enabled = ["rss_announcer"]
 
 [paths]

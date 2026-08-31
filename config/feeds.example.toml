@@ -1,4 +1,4 @@
-# Feeds configuration (optional; place next to config.toml as feeds.toml)
+# Feed-Konfiguration (optional; als feeds.toml neben config.toml ablegen)
 [feeds]
 enabled = true
 max_feeds = 32
@@ -9,8 +9,8 @@ refresh_interval = 300
 http_timeout = 10
 max_body_size = 262144
 
-# User-Agent rotation (based on legacy Tcl defaults)
-user_agent_rotate = "list" # list|random|fixed
+# User-Agent-Auswahl: der Reihe nach, zufällig oder immer der erste Eintrag
+user_agent_rotate = "list" # list | random | fixed
 user_agents = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5_0)",
@@ -19,15 +19,15 @@ user_agents = [
   "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro)",
 ]
 
-# TLS settings (optional)
+# TLS-Einstellungen für Feed-Abrufe (optional)
 tls_allow_legacy = false
 tls_ca_file = ""
 tls_ca_dir = ""
 tls_cert_file = ""
 tls_key_file = ""
 
-# Feed definitions (array of tables)
-# Set enabled = false to pause a feed without deleting its entry.
+# Feed-Definitionen als TOML-Tabellenliste
+# Mit enabled = false lässt sich ein Feed ohne Löschen pausieren.
 [[feeds.feeds]]
 name = "Example"
 url = "https://example.com/feed.xml"
@@ -37,12 +37,12 @@ min_interval_seconds = 300
 per_channel_interval = { "#novariusirc" = 300, "#news" = 900 }
 max_items_per_poll = 2
 max_items_per_manual = 4
-# IRC formatting examples (kombinierbar):
+# IRC-Formatierungsbeispiele (kombinierbar):
 # - Fett: \x02Text\x02
 # - Kursiv: \x1DText\x1D
 # - Unterstrich: \x1FText\x1F
 # - Farbe: \x03<fg>[,<bg>]Text\x03  (z.B. \x0304 rot)
-# - Reset: \x0F
+# - Zurücksetzen: \x0F
 # - Beispiel 01: \x02\x0300,04[Chip.de]\x03\x02 {title} {link}  (weiß auf rot, fett)
 # - Beispiel 02: \x1D\x0303,00[News]\x03\x1D {title}  (grün auf schwarz, kursiv)
 # - Beispiel 03: \x02\x1F\x0302[Important]\x03\x1F\x02 {title}  (blau, fett+unterstrich)
@@ -75,7 +75,7 @@ max_items_per_poll = 1
 max_items_per_manual = 3
 template = "\u0002[MS Security]\u0002 {title} - {link}"
 
-# ATOM example
+# Atom-Beispiel
 [[feeds.feeds]]
 name = "GitHub Releases"
 url = "https://github.com/ORG/REPO/releases.atom"

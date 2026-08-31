@@ -366,6 +366,23 @@ def test_all_example_toml_files_parse() -> None:
             tomllib.load(handle)
 
 
+def test_complete_example_configuration_validates(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    copies = {
+        root / "config.example.toml": tmp_path / "config.toml",
+        root / "secrets.example.toml": tmp_path / "secrets.toml",
+        root / "config" / "feeds.example.toml": tmp_path / "feeds.toml",
+        root / "config" / "moderation.example.toml": tmp_path / "moderation.toml",
+    }
+    for source, destination in copies.items():
+        destination.write_bytes(source.read_bytes())
+
+    config = Config.load(tmp_path / "config.toml")
+
+    assert config.network.nick == "NovariusBot"
+    assert len(config.feeds.feeds) == 3
+
+
 def test_unknown_typed_config_fields_are_rejected() -> None:
     with pytest.raises(ValueError, match="extra_forbidden"):
         Config.model_validate(
