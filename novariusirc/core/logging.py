@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 import re
 import sys
-from datetime import UTC, datetime
-from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
+from datetime import date, datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -33,42 +33,48 @@ def strip_irc_formatting(text: str) -> str:
     return IRC_FORMAT_REGEX.sub("", text)
 
 
-class IRCLogHandler(TimedRotatingFileHandler):
-    """Custom handler that writes date header on file rotation."""
+class DailyLogHandler(logging.Handler):
+    """Write each record to the calendar-day file of its event timestamp."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._current_date = datetime.now(UTC).date()
-        self._write_header_on_next = self._should_write_header()
-
-    def _should_write_header(self) -> bool:
-        """Check if file is empty or doesn't exist."""
-        try:
-            return (
-                not Path(self.baseFilename).exists()
-                or Path(self.baseFilename).stat().st_size == 0
-            )
-        except OSError:
-            return True
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        timezone: str,
+        retention_days: int,
+        write_header: bool = True,
+    ):
+        super().__init__()
+        self.directory = directory
+        self.timezone = ZoneInfo(timezone)
+        self.retention_days = retention_days
+        self.write_header = write_header
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Emit log record with date header if file is new."""
-        # Check if day changed (rotation happened)
-        current_date = datetime.now(UTC).date()
-        if current_date != self._current_date:
-            self._current_date = current_date
-            self._write_header_on_next = True
+        try:
+            event_time = datetime.fromtimestamp(record.created, self.timezone)
+            log_date = event_time.date()
+            path = self.directory / f"{log_date:%Y-%m-%d}.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            needs_header = self.write_header and (
+                not path.exists() or path.stat().st_size == 0
+            )
+            with path.open("a", encoding="utf-8") as handle:
+                if needs_header:
+                    handle.write(f"# Log started: {log_date}\n")
+                handle.write(self.format(record) + "\n")
+            self._remove_expired_files(log_date)
+        except OSError:
+            self.handleError(record)
 
-        # Write header if needed
-        if self._write_header_on_next:
+    def _remove_expired_files(self, current_date) -> None:
+        for path in self.directory.glob("????-??-??.log"):
             try:
-                with open(self.baseFilename, "a", encoding="utf-8") as f:
-                    f.write(f"# Log started: {current_date}\n")
-                self._write_header_on_next = False
-            except OSError:
-                self.handleError(record)
-
-        super().emit(record)
+                file_date = date.fromisoformat(path.stem)
+                if (current_date - file_date).days > self.retention_days:
+                    path.unlink()
+            except (OSError, ValueError):
+                continue
 
 
 class IRCFormatter(logging.Formatter):
@@ -158,9 +164,11 @@ def _safe_component(value: str, fallback: str) -> str:
     return sanitized or fallback
 
 
-def channel_log_path(network_name: str, channel: str, paths: PathsConfig) -> Path:
+def channel_log_path(
+    network_name: str, channel: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
+) -> Path:
     sanitized_channel = _safe_component(channel, "channel")
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    today = datetime.now(ZoneInfo(timezone)).strftime("%Y-%m-%d")
     root = Path(paths.log_root).expanduser()
     return (
         root
@@ -175,14 +183,13 @@ def channel_log_path(network_name: str, channel: str, paths: PathsConfig) -> Pat
 def get_channel_logger(
     network_name: str, channel: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
 ) -> logging.Logger:
-    logger_name = f"channel.{network_name}.{channel}"
+    logger_name = f"channel.{Path(paths.log_root).resolve()}.{network_name}.{channel}"
     logger = logging.getLogger(logger_name)
     if logger.handlers:
         return logger
 
-    path = channel_log_path(network_name, channel, paths)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handler = IRCLogHandler(path, when="midnight", backupCount=14)
+    path = channel_log_path(network_name, channel, paths, timezone)
+    handler = DailyLogHandler(path.parent, timezone=timezone, retention_days=14)
     handler.setFormatter(
         IRCFormatter(
             fmt="[%(asctime)s] %(message)s", datefmt="%H:%M:%S", timezone=timezone
@@ -194,9 +201,11 @@ def get_channel_logger(
     return logger
 
 
-def pm_log_path(network_name: str, nick: str, paths: PathsConfig) -> Path:
+def pm_log_path(
+    network_name: str, nick: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
+) -> Path:
     """Get log path for private messages."""
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    today = datetime.now(ZoneInfo(timezone)).strftime("%Y-%m-%d")
     root = Path(paths.log_root).expanduser()
     return (
         root
@@ -212,14 +221,13 @@ def get_pm_logger(
     network_name: str, nick: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
 ) -> logging.Logger:
     """Get logger for private messages (PRIVMSG + NOTICE to bot)."""
-    logger_name = f"pm.{network_name}.{nick}"
+    logger_name = f"pm.{Path(paths.log_root).resolve()}.{network_name}.{nick}"
     logger = logging.getLogger(logger_name)
     if logger.handlers:
         return logger
 
-    path = pm_log_path(network_name, nick, paths)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handler = IRCLogHandler(path, when="midnight", backupCount=14)
+    path = pm_log_path(network_name, nick, paths, timezone)
+    handler = DailyLogHandler(path.parent, timezone=timezone, retention_days=14)
     handler.setFormatter(
         IRCFormatter(
             fmt="[%(asctime)s] %(message)s", datefmt="%H:%M:%S", timezone=timezone
@@ -231,9 +239,11 @@ def get_pm_logger(
     return logger
 
 
-def raw_log_path(network_name: str, paths: PathsConfig) -> Path:
+def raw_log_path(
+    network_name: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
+) -> Path:
     """Get log path for raw IRC protocol lines."""
-    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    today = datetime.now(ZoneInfo(timezone)).strftime("%Y-%m-%d")
     root = Path(paths.log_root).expanduser()
     return (
         root
@@ -244,18 +254,25 @@ def raw_log_path(network_name: str, paths: PathsConfig) -> Path:
     )
 
 
-def get_raw_logger(network_name: str, paths: PathsConfig) -> logging.Logger:
+def get_raw_logger(
+    network_name: str, paths: PathsConfig, timezone: str = "Europe/Berlin"
+) -> logging.Logger:
     """Get logger for raw IRC protocol (only active when DEBUG level)."""
-    logger_name = f"raw.{network_name}"
+    logger_name = f"raw.{Path(paths.log_root).resolve()}.{network_name}"
     logger = logging.getLogger(logger_name)
     if logger.handlers:
         return logger
 
-    path = raw_log_path(network_name, paths)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handler = TimedRotatingFileHandler(path, when="midnight", backupCount=7)
+    path = raw_log_path(network_name, paths, timezone)
+    handler = DailyLogHandler(
+        path.parent, timezone=timezone, retention_days=7, write_header=False
+    )
     handler.setFormatter(
-        logging.Formatter(fmt="%(asctime)s %(message)s", datefmt="%Y-%m-%dT%H:%M:%S")
+        IRCFormatter(
+            fmt="%(asctime)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+            timezone=timezone,
+        )
     )
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)

@@ -240,6 +240,48 @@ def test_config_requires_opt_in_for_unusual_channel_names() -> None:
     assert Config.model_validate(base).network.channels == ["#legacy/channel"]
 
 
+def test_environment_channel_override_uses_the_same_policy(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[bot]
+
+[network]
+server = "irc.example.test"
+nick = "bot"
+user = "bot"
+realname = "Bot"
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NOVARIUSIRC_CHANNELS", "#legacy/channel")
+    with pytest.raises(ValueError, match="allow_unusual_channel_names"):
+        Config.load(config_file)
+
+
+def test_explicit_missing_include_is_reported(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[bot]
+
+[includes]
+files = ["missing.toml"]
+
+[network]
+server = "irc.example.test"
+nick = "bot"
+user = "bot"
+realname = "Bot"
+""".strip(),
+        encoding="utf-8",
+    )
+    with pytest.raises(FileNotFoundError, match="Included configuration file not found"):
+        Config.load(config_file)
+
+
 def test_sasl_cannot_be_configured_as_an_optional_ircv3_capability() -> None:
     with pytest.raises(ValueError, match=r"configured through \[auth\]"):
         Config.model_validate(

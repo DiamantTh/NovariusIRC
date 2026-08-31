@@ -17,7 +17,7 @@ from novariusirc.core.logging import (
 
 def test_log_paths_use_the_documented_layout(tmp_path: Path) -> None:
     paths = PathsConfig(log_root=str(tmp_path))
-    today = datetime.now(UTC).strftime("%Y-%m-%d") + ".log"
+    today = datetime.now().astimezone().strftime("%Y-%m-%d") + ".log"
 
     assert channel_log_path("TestNet", "#room", paths) == (
         tmp_path / "irc" / "TestNet" / "channels" / "room" / today
@@ -51,5 +51,26 @@ def test_irc_log_uses_server_time_in_the_configured_timezone(tmp_path: Path) -> 
         event_time=datetime(2026, 1, 1, 12, 34, 56, tzinfo=UTC),
     )
 
-    log_file = channel_log_path("TestNet", "#room", paths)
+    log_file = (
+        channel_log_path("TestNet", "#room", paths).parent / "2026-01-01.log"
+    )
     assert "[13:34:56] <Alice> hello" in log_file.read_text(encoding="utf-8")
+
+
+def test_irc_log_selects_a_file_per_local_event_day(tmp_path: Path) -> None:
+    paths = PathsConfig(log_root=str(tmp_path))
+    logger = get_channel_logger("TestNet", "#room", paths, timezone="Europe/Berlin")
+    log_irc(
+        logger,
+        "first",
+        event_time=datetime(2025, 12, 31, 23, 30, tzinfo=UTC),
+    )
+    log_irc(
+        logger,
+        "second",
+        event_time=datetime(2026, 1, 1, 23, 30, tzinfo=UTC),
+    )
+
+    directory = channel_log_path("TestNet", "#room", paths).parent
+    assert "first" in (directory / "2026-01-01.log").read_text(encoding="utf-8")
+    assert "second" in (directory / "2026-01-02.log").read_text(encoding="utf-8")

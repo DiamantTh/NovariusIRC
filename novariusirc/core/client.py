@@ -304,7 +304,9 @@ class IRCClient:
 
         # Raw IRC logging (only when DEBUG level)
         if self.logger.isEnabledFor(logging.DEBUG):
-            raw_logger = get_raw_logger(self.network_name, self.config.paths)
+            raw_logger = get_raw_logger(
+                self.network_name, self.config.paths, self.config.logging.timezone
+            )
             raw_logger.debug("<< %s", line)
 
         try:
@@ -1270,7 +1272,9 @@ class IRCClient:
 
         # Raw IRC logging (only when DEBUG level)
         if self.logger.isEnabledFor(logging.DEBUG):
-            raw_logger = get_raw_logger(self.network_name, self.config.paths)
+            raw_logger = get_raw_logger(
+                self.network_name, self.config.paths, self.config.logging.timezone
+            )
             raw_logger.debug(">> %s", logged_message)
 
         async with self._write_lock:

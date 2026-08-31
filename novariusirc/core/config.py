@@ -553,8 +553,9 @@ class Config(ConfigModel):
                 setattr(self.feeds, attribute, resolve(value))
 
     @staticmethod
-    def _normalize_include_files(raw: dict[str, Any]) -> list[str]:
+    def _normalize_include_files(raw: dict[str, Any]) -> tuple[list[str], bool]:
         include_files: list[str] = []
+        explicitly_configured = "include" in raw or "includes" in raw
 
         include_value = raw.get("include")
         if isinstance(include_value, str):
@@ -582,7 +583,7 @@ class Config(ConfigModel):
             filename = filename.strip()
             if filename and filename not in deduped:
                 deduped.append(filename)
-        return deduped
+        return deduped, explicitly_configured
 
     @classmethod
     def load_from_env(cls) -> Config:
@@ -617,6 +618,7 @@ class Config(ConfigModel):
             raise ValueError(f"Invalid configuration: {exc}") from exc
         config.bot.resolve_env()
         config.network.resolve_env()
+        config.network = NetworkConfig.model_validate(config.network.model_dump())
         config.paths.resolve_env()
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
@@ -646,14 +648,17 @@ class Config(ConfigModel):
 
         # Load configured fragments from the same directory
         config_dir = base_file.parent
-        include_files = cls._normalize_include_files(raw)
+        include_files, includes_are_explicit = cls._normalize_include_files(raw)
         raw.pop("include", None)
         for filename in include_files:
             extra_file = config_dir / filename
-            if extra_file.exists():
-                with extra_file.open("rb") as fh:
-                    extra_raw = tomllib.load(fh)
-                raw = cls._merge(raw, extra_raw)
+            if not extra_file.exists():
+                if includes_are_explicit:
+                    raise FileNotFoundError(f"Included configuration file not found: {extra_file}")
+                continue
+            with extra_file.open("rb") as fh:
+                extra_raw = tomllib.load(fh)
+            raw = cls._merge(raw, extra_raw)
 
         try:
             config = cls.model_validate(raw)
@@ -661,6 +666,7 @@ class Config(ConfigModel):
             raise ValueError(f"Invalid configuration: {exc}") from exc
         config.bot.resolve_env()
         config.network.resolve_env()
+        config.network = NetworkConfig.model_validate(config.network.model_dump())
         config.paths.resolve_env()
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
