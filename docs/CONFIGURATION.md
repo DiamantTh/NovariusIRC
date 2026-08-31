@@ -1,5 +1,7 @@
 # Konfigurationsreferenz
 
+**Sprachen:** Deutsch · [English](CONFIGURATION.en.md)
+
 NovariusIRC verwendet TOML. Die Schlüsselnamen bleiben unabhängig von der
 Ausgabesprache Englisch, damit bestehende Konfigurationen, Container-Variablen
 und Werkzeuge kompatibel bleiben. Kommentare und diese Referenz sind Deutsch.

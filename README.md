@@ -121,7 +121,7 @@ For an environment-only container, pass `--config env` and at minimum set
 - `novariusirc/__main__.py`: CLI entry point
 - `config.example.toml`: starter configuration
 - `config/*.example.toml`: optional feature snippets (feeds, moderation, workers)
-- `docs/CONFIGURATION.md`: complete German configuration and environment reference
+- `docs/CONFIGURATION.md` / `docs/CONFIGURATION.en.md`: complete German and English configuration reference
 - `LICENSE`: GNU AGPLv3 license text
 - `VALUES.md`: non-binding project values and public-code position
 - `docs/LICENSING.md`: license history and reason for the change
@@ -141,7 +141,8 @@ For an environment-only container, pass `--config env` and at minimum set
 - IRC connection settings and secrets can be overridden via env vars (e.g. `NOVARIUSIRC_SERVER`, `NOVARIUSIRC_NICK`, `NOVARIUSIRC_SASL_PASSWORD`).
 - All supported TOML sections, parameters, defaults, limits, includes, and
   environment overrides are documented in
-  [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+  [Deutsch](docs/CONFIGURATION.md) and
+  [English](docs/CONFIGURATION.en.md).
 - Env-only startup is supported; set `NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK` (others optional) or pass `--config env`.
 - Feed engine caches ETag/Last-Modified, tracks seen item ids per feed, supports custom templates (`{feed}`, `{title}`, `{summary}`, `{link}`, `{published}`), per-feed enable/disable, and User-Agent rotation/TLS settings (see `config/feeds.example.toml`).
 - Feed overview command is available when `rss_announcer` is enabled: `!feed list [query]` (shows channels and active limits/options).
