@@ -325,6 +325,13 @@ class LifecycleConfig(ConfigModel):
     module_stop_timeout_seconds: float = Field(default=30.0, gt=0)
 
 
+class ControlConfig(ConfigModel):
+    """Settings for the optional local Unix control endpoint."""
+
+    enabled: bool = False
+    socket_path: str = "./run/novariusirc.sock"
+
+
 class PluginsConfig(ConfigModel):
     enabled: bool = True
     directory: str = "plugins"
@@ -491,6 +498,7 @@ class Config(ConfigModel):
     roles: RolesConfig = Field(default_factory=RolesConfig)
     commands: CommandsConfig = Field(default_factory=CommandsConfig)
     lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
+    control: ControlConfig = Field(default_factory=ControlConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     feeds: FeedsConfig = Field(default_factory=FeedsConfig)
@@ -542,6 +550,7 @@ class Config(ConfigModel):
         self.paths.log_root = resolve(log_root)
         self.logging.log_dir = self.paths.log_root
         self.paths.data_root = resolve(self.paths.data_root)
+        self.control.socket_path = resolve(self.control.socket_path)
         self.moderation.log_file = resolve(self.moderation.log_file)
         for attribute in ("certfp_cert_file", "certfp_key_file"):
             value = getattr(self.auth, attribute)

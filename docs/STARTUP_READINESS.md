@@ -90,7 +90,7 @@ Wichtige Implementierungen:
 | erledigt | Ereigniszeit im Log | IRCv3-`server-time` wird für Channel- und PM-Ereignisse verwendet, wenn der Server einen gültigen Zeit-Tag liefert |
 | erledigt | Zeitzone | `Europe/Berlin` ist konfigurierbar und für IRC-Textlogs aktiv; `tzdata` stellt die Daten auch in Minimalcontainern bereit |
 | erledigt | Channelnamen | Konservative Unicode-Policy mit expliziter Kompatibilitätsfreigabe für ungewöhnliche Zeichen |
-| niedrig | Control-Shell | Unix-Socket, SSH-Anmeldung und reine Botcommand-Shell sind nur vorgemerkt |
+| teilweise erledigt | Control-Shell | Lokaler Unix-Socket mit Dateirechten `0600` und reiner Botcommand-Shell; SSH-Anmeldung ist weiterhin nur vorgemerkt |
 | erledigt | Terminal-/Statusmodus | `-s`/`--status` zeigt die lokale Instanzkonfiguration ohne IRC-Verbindung; `-t` startet eine lokale, nicht über DCC oder TCP erreichbare Owner-Konsole |
 | grundsätzlich | Plugin-Vertrauen | Externe Plugins laufen als vertrauenswürdiger Code im Botprozess |
 
@@ -106,7 +106,7 @@ Die nächsten Arbeiten können in getrennten, überschaubaren Blöcken erfolgen:
 6. `plugins list`, `status`, `reload` und passende Hilfe
 7. Accountbasierte Rollen und eingebauter TOTP-Login
 8. Container-Härtung und eigener Python-3.12-Container-Test
-9. Später eine Control-Shell über Unix-Socket beziehungsweise SSH
+9. Später optional SSH-Zugang zur bereits vorhandenen lokalen Command-Shell
 
 Für einen ersten realen Belastungstest fehlen keine fundamentalen
 Startbestandteile. Er setzt eine gültige Instanzkonfiguration mit echten
@@ -196,22 +196,24 @@ umfangreichere Kalender- und Intervallfunktionen.
 
 ### Control-Shell
 
-Die moderne Alternative zu Eggdrops DCC-Partyline soll keine Betriebssystem-
-Shell sein. Vorgemerkt ist eine authentifizierte Shell, die ausschließlich
-registrierte Botcommands ausführt:
+Die moderne Alternative zu Eggdrops DCC-Partyline ist keine Betriebssystem-
+Shell. Der lokale Unix-Socket ist optional über `[control]` aktivierbar,
+erhält die Dateirechte `0600` und führt ausschließlich registrierte
+Botcommands als lokaler Owner aus:
 
 ```text
-SSH oder Unix-Socket
+Unix-Socket (umgesetzt), später optional SSH
         ↓
 CommandRegistry
         ↓
 Botantwort
 ```
 
-SSH-Schlüssel und optional sicher gehashte Passwörter wären mögliche
-Anmeldearten. SFTP, SCP, Portweiterleitung, beliebige Prozesse und eine echte
-BusyBox-Shell sollen darüber nicht verfügbar sein. AsyncSSH wurde nur als
-mögliche spätere Abhängigkeit betrachtet und noch nicht aufgenommen.
+Der lokale Aufruf erfolgt über `novariusirc --ctl "!status" --config ...`.
+SSH-Schlüssel und optional sicher gehashte Passwörter wären für einen späteren
+SSH-Zugang mögliche Anmeldearten. SFTP, SCP, Portweiterleitung, beliebige
+Prozesse und eine echte BusyBox-Shell sollen darüber nicht verfügbar sein.
+AsyncSSH wurde nicht aufgenommen.
 
 Eine tatsächliche Wartungsshell gehört ausschließlich in die abgeschottete
 Containerumgebung und wäre beispielsweise über `podman exec` erreichbar.

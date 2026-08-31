@@ -43,6 +43,11 @@ def test_terminal_dcc_mode_fails_explicitly(
     assert parse_args().terminal_dcc
 
 
+def test_ctl_command_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["novariusirc", "--ctl", "status"])
+    assert parse_args().ctl == "status"
+
+
 def test_terminal_console_dispatches_owner_commands() -> None:
     config = Config.model_validate(
         {
@@ -199,6 +204,7 @@ realname = "Bot"
     assert Path(config.plugins.directory) == tmp_path / "plugins"
     assert Path(config.paths.log_root) == tmp_path / "logs"
     assert Path(config.paths.data_root) == tmp_path / "data"
+    assert Path(config.control.socket_path) == tmp_path / "run" / "novariusirc.sock"
 
 
 def test_missing_config_path_is_not_silently_treated_as_env(tmp_path: Path) -> None:

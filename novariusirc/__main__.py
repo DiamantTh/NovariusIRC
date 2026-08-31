@@ -11,7 +11,6 @@ import os
 import signal
 import sys
 import time
-from collections.abc import Callable
 from pathlib import Path
 
 from novariusirc import __version__
@@ -19,6 +18,12 @@ from novariusirc.core.auth import AuthManager
 from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config, load_config
+from novariusirc.core.control import (
+    LocalCommandClient,
+    UnixControlServer,
+    dispatch_local_command,
+    run_control_command,
+)
 from novariusirc.core.feeds import FeedEngine
 from novariusirc.core.i18n import gettext_lazy as _
 from novariusirc.core.i18n import init_i18n
@@ -57,6 +62,11 @@ def parse_args() -> argparse.Namespace:
         "--terminal-dcc",
         action="store_true",
         help="Run a local terminal control console alongside the bot",
+    )
+    parser.add_argument(
+        "--ctl",
+        metavar="COMMAND",
+        help="Send one command to the configured local Unix control socket",
     )
     parser.add_argument(
         "-f",
@@ -115,6 +125,11 @@ def check_config(config: Config) -> list[str]:
     ):
         if not writable_parent(path):
             errors.append(f"{label} cannot be created or written: {path}")
+    if config.control.enabled and not writable_parent(config.control.socket_path):
+        errors.append(
+            "control socket directory cannot be created or written: "
+            f"{Path(config.control.socket_path).parent}"
+        )
 
     for name in config.modules.enabled:
         try:
@@ -146,48 +161,8 @@ def configuration_status(config: Config) -> list[str]:
     ]
 
 
-class TerminalClient:
-    """Adapter that renders command replies in the local terminal."""
-
-    def __init__(self, output: Callable[[str], None] | None = None):
-        self.messages: list[str] = []
-        self.output = output
-
-    async def send_privmsg(self, target: str, message: str) -> None:
-        self.messages.append(message)
-        if self.output:
-            self.output(message)
-
-
-async def dispatch_terminal_command(
-    commands: CommandRegistry,
-    config: Config,
-    logger: logging.Logger,
-    terminal: TerminalClient,
-    line: str,
-) -> bool:
-    """Run one local control command; return false for an exit request."""
-    line = line.strip()
-    if line.lower() in {"exit", "quit"}:
-        return False
-    if not line:
-        return True
-    message = line if line.startswith(config.bot.prefix) else f"{config.bot.prefix}{line}"
-    context = CommandContext(
-        nick="terminal",
-        hostmask="terminal!local@localhost",
-        channel=None,
-        message=message,
-        config=config,
-        client=terminal,
-        logger=logger,
-        roles=["owner"],
-    )
-    if not await commands.dispatch(context):
-        terminal.messages.append(f"Unknown command: {line}")
-        if terminal.output:
-            terminal.output(terminal.messages[-1])
-    return True
+TerminalClient = LocalCommandClient
+dispatch_terminal_command = dispatch_local_command
 
 
 async def run_terminal_console(
@@ -206,7 +181,7 @@ async def run_terminal_console(
             line = await asyncio.to_thread(input, "novariusirc> ")
         except EOFError:
             line = "exit"
-        if not await dispatch_terminal_command(commands, config, logger, terminal, line):
+        if not await dispatch_local_command(commands, config, logger, terminal, line):
             await client.stop()
             return
 
@@ -285,6 +260,12 @@ async def async_main() -> None:
             return
         print("Configuration check passed.")
         return
+    if args.ctl:
+        if not config.control.enabled:
+            raise RuntimeError("Local control socket is disabled in [control]")
+        for line in await run_control_command(config.control.socket_path, args.ctl):
+            print(line)
+        return
     if args.terminal_dcc and not sys.stdin.isatty():
         raise RuntimeError("--terminal-dcc requires an interactive terminal")
     init_i18n(config.bot.language)
@@ -306,6 +287,7 @@ async def async_main() -> None:
     tasks = TaskSupervisor(logger)
     plugins = PluginManager(config, commands, feeds, auth, logger, tasks)
     moderation = ModerationManager(config.moderation.model_dump())
+    control = UnixControlServer(config.control.socket_path, commands, config, logger)
 
     client = IRCClient(config, commands, auth, plugins, moderation, logger)
     plugins.set_client(client)
@@ -327,6 +309,8 @@ async def async_main() -> None:
             await plugins.load_plugins(Path(config.plugins.directory))
         await plugins.start()
         await feeds.start()
+        if config.control.enabled:
+            await control.start()
         if args.terminal_dcc:
             terminal_task = asyncio.create_task(
                 run_terminal_console(commands, config, logger, client),
@@ -345,6 +329,7 @@ async def async_main() -> None:
             with contextlib.suppress(NotImplementedError):
                 loop.remove_signal_handler(handled_signal)
         await client.stop()
+        await control.stop()
         await feeds.stop()
         await plugins.stop()
         await tasks.shutdown(timeout=config.lifecycle.module_stop_timeout_seconds)

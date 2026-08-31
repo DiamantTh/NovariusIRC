@@ -58,6 +58,15 @@ poetry run novariusirc -t --config ./config.toml
 
 Use `!help`, `!status`, or `exit` in the console.
 
+For non-interactive local operations, enable the Unix socket in `[control]`.
+It is created with `0600` permissions and runs the same registered commands as
+the terminal console; it is neither a TCP service nor an operating-system
+shell. With the bot running, send one command through it:
+
+```bash
+poetry run novariusirc --ctl "!status" --config ./config.toml
+```
+
 ## Container
 Build a local image:
 ```bash

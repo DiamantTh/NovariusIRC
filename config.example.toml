@@ -101,6 +101,12 @@ rate_limit_seconds = 2.0
 module_start_timeout_seconds = 30
 module_stop_timeout_seconds = 30
 
+[control]
+# Ausschließlich ein lokaler Unix-Socket, kein TCP-Listener. Die Socket-Datei
+# erhält Rechte 0600 und darf deshalb nur für den lokalen Prozessbenutzer liegen.
+enabled = false
+socket_path = "./run/novariusirc.sock"
+
 [plugins]
 enabled = true
 directory = "plugins"
