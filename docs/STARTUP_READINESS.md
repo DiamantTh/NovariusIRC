@@ -17,7 +17,7 @@ funktionsfähig, aber noch keine vollständig verwaltbare Pluginplattform.
 
 Am 31. August 2026 wurde folgender Stand verifiziert:
 
-- 128 von 128 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 130 von 130 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund
 - Poetry-Projektmetadaten gültig
 - CLI-Hilfe und Versionsausgabe funktionieren
@@ -60,7 +60,7 @@ gegen ein reales IRC-Netz ist dadurch nicht ersetzt.
 | Account-Tag-Vertrauen | fertig | Accountdaten ändern Identität nur bei tatsächlich ausgehandeltem `account-tag` |
 | IRCv3-Batches | fertig | Begrenzte, verschachtelbare BATCH-Lebenszyklen mit Prüfung unbekannter und doppelter Referenzen |
 | IRCv3-Standardantworten | fertig | `FAIL`, `WARN` und `NOTE` werden strukturiert ausgewertet und protokolliert |
-| CTCP-Basis | fertig | `ACTION`, `PING`, `CLIENTINFO` und konfigurierbares minimales `VERSION` |
+| CTCP-Basis | fertig | `ACTION`, `PING`, `CLIENTINFO` und konfigurierbares minimales `VERSION` mit getrennten Bot- und IRC-Core-Versionen |
 | IRC-Eingangsgrenzen | fertig | Eigenständiger Reader mit Idle-Timeout sowie Behandlung unvollständiger und übergroßer Frames |
 | IRCv3-`server-time` im Kontext | fertig | Als zeitzonenbewusstes UTC-`datetime` verfügbar |
 | RSS-Modul | funktionsfähig | Feedregistrierung, Polling, Commands und Ankündigungen |

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from novariusirc import __version__
 from novariusirc.__main__ import (
     TerminalClient,
     check_config,
@@ -20,6 +21,12 @@ from novariusirc.__main__ import (
 )
 from novariusirc.core.commands import CommandRegistry
 from novariusirc.core.config import Config
+
+
+def test_package_version_matches_project_metadata() -> None:
+    project_file = Path(__file__).parents[1] / "pyproject.toml"
+    project = tomllib.loads(project_file.read_text(encoding="utf-8"))
+    assert __version__ == project["project"]["version"]
 
 
 def test_cli_accepts_positional_and_option_config_paths(
@@ -118,7 +125,7 @@ def test_draft_capabilities_require_explicit_namespace() -> None:
 
 
 def test_ctcp_version_template_is_validated() -> None:
-    with pytest.raises(ValueError, match="version.*placeholder"):
+    with pytest.raises(ValueError, match="placeholders"):
         Config.model_validate(
             {
                 "bot": {"ctcp_version_reply": "Bot {platform}"},
@@ -130,6 +137,34 @@ def test_ctcp_version_template_is_validated() -> None:
                 },
             }
         )
+
+    with pytest.raises(ValueError, match="placeholders"):
+        Config.model_validate(
+            {
+                "bot": {"ctcp_version_reply": "Bot {bot_version.__class__}"},
+                "network": {
+                    "server": "irc.example.test",
+                    "nick": "bot",
+                    "user": "bot",
+                    "realname": "Bot",
+                },
+            }
+        )
+
+
+def test_ctcp_version_template_keeps_legacy_version_alias() -> None:
+    config = Config.model_validate(
+        {
+            "bot": {"ctcp_version_reply": "Bot {version}"},
+            "network": {
+                "server": "irc.example.test",
+                "nick": "bot",
+                "user": "bot",
+                "realname": "Bot",
+            },
+        }
+    )
+    assert config.bot.ctcp_version_reply == "Bot {version}"
 
 
 @pytest.mark.parametrize(("field", "value"), [("nick", "bad nick"), ("user", ":bad")])

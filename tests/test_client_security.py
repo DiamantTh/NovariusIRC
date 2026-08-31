@@ -13,6 +13,7 @@ from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandRegistry
 from novariusirc.core.config import Config
 from novariusirc.core.moderation import ModerationManager
+from novariusirc.irc.version import IRC_CORE_VERSION
 
 
 class Writer:
@@ -115,7 +116,10 @@ def test_ctcp_version_and_clientinfo_are_minimal_and_configurable() -> None:
         instance._handle_line(":Nick!user@host PRIVMSG bot :\x01VERSION\x01")
     )
     assert bytes(instance.writer.data) == (  # type: ignore[union-attr]
-        f"NOTICE Nick :\x01VERSION NovariusIRC {__version__}\x01\r\n".encode()
+        (
+            f"NOTICE Nick :\x01VERSION NovariusIRC bot {__version__} / "
+            f"IRC core {IRC_CORE_VERSION}\x01\r\n"
+        ).encode()
     )
 
     instance.writer.data.clear()  # type: ignore[union-attr]

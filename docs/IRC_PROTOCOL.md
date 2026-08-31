@@ -51,7 +51,9 @@ rate-limited output queue. Direct CTCP `PING` requests are echoed through a
 size-limited `NOTICE`; CTCP `ACTION` is exposed to plugins as an action event.
 Direct CTCP `VERSION` and `CLIENTINFO` are supported. The minimal VERSION text
 is configurable through `[bot]` and can be disabled without affecting CTCP
-PING or ACTION.
+PING or ACTION. Its default reports the actual NovariusIRC bot version and the
+separately maintained internal IRC-core version, without Python or operating-
+system fingerprinting.
 
 Connection loss, idle reads, and malformed oversized input trigger a clean
 reconnect. The configured retry delay grows to its final value without wrapping

@@ -18,6 +18,7 @@ from .protocol import IRCFeatures, IRCMessage, irc_casefold, parse_message
 from .replies import ReplySeverity, StandardReply, parse_standard_reply
 from .state import IRCState, IRCUser
 from .transport import RateLimitedSender
+from .version import IRC_CORE_VERSION
 from .wire import (
     format_join,
     format_nick,
@@ -27,6 +28,7 @@ from .wire import (
 )
 
 __all__ = [
+    "IRC_CORE_VERSION",
     "BatchTracker",
     "CTCPMessage",
     "CapabilityProfile",

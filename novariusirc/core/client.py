@@ -34,6 +34,7 @@ from novariusirc.irc.protocol import (
 from novariusirc.irc.replies import ReplySeverity, parse_standard_reply
 from novariusirc.irc.state import IRCState, normalize_account, split_source
 from novariusirc.irc.transport import RateLimitedSender
+from novariusirc.irc.version import IRC_CORE_VERSION
 from novariusirc.irc.wire import (
     format_join,
     format_nick,
@@ -963,7 +964,11 @@ class IRCClient:
             return True
         if command == "VERSION":
             if self.config.bot.ctcp_version_enabled:
-                reply = self.config.bot.ctcp_version_reply.format(version=__version__)
+                reply = self.config.bot.ctcp_version_reply.format(
+                    version=__version__,
+                    bot_version=__version__,
+                    core_version=IRC_CORE_VERSION,
+                )
                 await self.send_notice(nick, format_ctcp("VERSION", reply))
             return True
         if command == "CLIENTINFO":
