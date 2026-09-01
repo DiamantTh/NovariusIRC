@@ -164,9 +164,9 @@ channels = ["#bots"]
 <a id="auth"></a>
 ## `[auth]`
 
-Authentifizierung des Bot-Clients am IRC-Netz sowie optionale TOTP-Sitzungen für
-rollenbasierte Bot-Befehle. Alle Verfahren sind standardmäßig deaktiviert oder
-wirkungslos, bis sie ausdrücklich konfiguriert werden.
+Authentifizierung des Bot-Clients am IRC-Netz. Alle Verfahren sind
+standardmäßig deaktiviert oder wirkungslos, bis sie ausdrücklich konfiguriert
+werden.
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
@@ -181,20 +181,9 @@ wirkungslos, bis sie ausdrücklich konfiguriert werden.
 | `certfp_enabled` | Boolean | `false` | TLS-Clientzertifikat beim IRC-Verbindungsaufbau laden. |
 | `certfp_cert_file` | Pfad oder leer | leer | PEM-Zertifikat; für SASL EXTERNAL erforderlich. |
 | `certfp_key_file` | Pfad oder leer | leer | Separater privater Schlüssel; leer, wenn er im PEM enthalten ist. |
-| `totp_secret` | Text oder leer | leer | Globales Base32-TOTP-Secret als Rückfallwert. Aktiviert TOTP nicht automatisch. |
-| `session_timeout_seconds` | Ganzzahl | `1800` | Gültigkeitsdauer einer erfolgreich eröffneten TOTP-Sitzung. |
-| `totp_digest` | Auswahl | `sha256` | `sha1`, `sha256` oder `sha512`. |
-| `totp_digits` | Ganzzahl | `8` | Länge des Codes von 6 bis 12 Stellen. |
-| `totp_interval` | Ganzzahl | `30` | Länge eines TOTP-Zeitfensters in Sekunden, mindestens 1. |
-| `totp_valid_window` | Ganzzahl | `4` | Zusätzlich akzeptierte Zeitfenster vor und nach dem aktuellen Fenster. |
 
 SASL PLAIN benötigt Benutzername, Passwort und `network.tls = true`. SASL
-EXTERNAL benötigt TLS, aktiviertes CertFP und eine Zertifikatsdatei. TOTP ist
-nur erforderlich, wenn ein Rollen-Eintrag `require_totp = true` setzt. Weitere
-Hinweise stehen in [`TOTP_SETUP.md`](TOTP_SETUP.md). Da der IRC-Login-Befehl
-bewusst noch nicht festgelegt und implementiert ist, darf `require_totp` im
-Produktivbetrieb derzeit nicht aktiviert werden: Die betreffende Rolle wäre
-sonst über IRC nicht erreichbar.
+EXTERNAL benötigt TLS, aktiviertes CertFP und eine Zertifikatsdatei.
 
 <a id="roles"></a>
 ## `[roles]`
@@ -212,16 +201,14 @@ Jeder Rollen-Eintrag besitzt folgende Felder:
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
 | `hostmask` | Text | Pflicht | Muster `nick!user@host`; `*` und `?` sind Wildcards. |
-| `require_totp` | Boolean | `false` | Rolle erst nach einer gültigen TOTP-Sitzung vergeben. |
-| `totp_secret` | Text oder leer | globales Secret | Individuelles Base32-Secret für diesen Eintrag. |
 
 ```toml
 [roles]
 owners = [
-  { hostmask = "owner!*@trusted.example", require_totp = false },
+  { hostmask = "owner!*@trusted.example" },
 ]
 admins = [
-  { hostmask = "*!staff@*.example", require_totp = true },
+  { hostmask = "*!staff@*.example" },
 ]
 ```
 
@@ -465,7 +452,6 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | `NOVARIUSIRC_CERTFP_ENABLED` | `auth.certfp_enabled` | Boolean-Syntax wie bei TLS. |
 | `NOVARIUSIRC_CERTFP_CERT_FILE` | `auth.certfp_cert_file` | Zertifikatspfad. |
 | `NOVARIUSIRC_CERTFP_KEY_FILE` | `auth.certfp_key_file` | Schlüsselpfad. |
-| `NOVARIUSIRC_TOTP_SECRET` | `auth.totp_secret` | Globales Base32-Secret. |
 | `NOVARIUSIRC_LOG_ROOT` | `paths.log_root` | Log-Stammverzeichnis. |
 | `NOVARIUSIRC_DATA_ROOT` | `paths.data_root` | Daten-Stammverzeichnis. |
 | `NOVARIUSIRC_DATABASE_ENABLED` | `database.enabled` | Boolean-Syntax wie bei TLS. |

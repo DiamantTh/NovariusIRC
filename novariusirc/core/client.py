@@ -623,7 +623,6 @@ class IRCClient:
                     channels=channels,
                 ),
             )
-            self.auth.end_totp_session(nick)
             self.state.quit(nick)
         if command == "NICK" and prefix:
             old_nick, _, _ = split_source(prefix)
@@ -632,7 +631,6 @@ class IRCClient:
                 channels = self.state.channels_for(old_nick)
                 if self._same_identifier(old_nick, self._current_nick):
                     self._current_nick = new_nick
-                self.auth.rename_nick(old_nick, new_nick)
                 self.moderation.rename_user(old_nick, new_nick)
                 renamed_user = self.state.rename(old_nick, new_nick, prefix)
                 # Log in all active channels

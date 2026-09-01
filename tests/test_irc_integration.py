@@ -186,7 +186,6 @@ def test_client_negotiates_ircv3_and_handles_server_features() -> None:
             ModerationManager(),
             logger,
         )
-        auth.sessions.start("Other")
 
         async with server:
             with pytest.raises(ConnectionError, match="server closed the connection"):
@@ -215,7 +214,6 @@ def test_client_negotiates_ircv3_and_handles_server_features() -> None:
         channel = client.state.get_channel("#ROOM")
         assert client.state.get_user("Renamed") is None
         assert client.state.get_user("Other") is None
-        assert not auth.sessions.is_active("Other")
         assert channel is not None
         assert channel.names_complete
         assert not channel.members

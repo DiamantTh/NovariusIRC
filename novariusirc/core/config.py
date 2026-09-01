@@ -38,7 +38,6 @@ ENV_AUTH_NICKSERV_USERNAME = "NOVARIUSIRC_NICKSERV_USERNAME"
 ENV_AUTH_NICKSERV_PASSWORD = "NOVARIUSIRC_NICKSERV_PASSWORD"
 ENV_AUTH_NICKSERV_ENABLED = "NOVARIUSIRC_NICKSERV_ENABLED"
 ENV_AUTH_NICKSERV_SERVICE = "NOVARIUSIRC_NICKSERV_SERVICE"
-ENV_AUTH_TOTP_SECRET = "NOVARIUSIRC_TOTP_SECRET"
 ENV_AUTH_CERTFP_ENABLED = "NOVARIUSIRC_CERTFP_ENABLED"
 ENV_AUTH_CERTFP_CERT_FILE = "NOVARIUSIRC_CERTFP_CERT_FILE"
 ENV_AUTH_CERTFP_KEY_FILE = "NOVARIUSIRC_CERTFP_KEY_FILE"
@@ -303,22 +302,6 @@ class AuthConfig(ConfigModel):
     certfp_cert_file: str | None = None
     certfp_key_file: str | None = None
 
-    totp_secret: str | None = None
-    session_timeout_seconds: int = 1800  # 30 Minuten default
-
-    # TOTP-Parameter (RFC 6238)
-    totp_digest: Literal["sha1", "sha256", "sha512"] = "sha256"
-    totp_digits: int = 8  # Code-Länge (6-12)
-    totp_interval: int = Field(default=30, ge=1)
-    totp_valid_window: int = Field(default=4, ge=0)
-
-    @field_validator("totp_digits")
-    @classmethod
-    def validate_totp_digits(cls, value: int) -> int:
-        if not 6 <= value <= 12:
-            raise ValueError("totp_digits must be between 6 and 12")
-        return value
-
     def resolve_secrets(self) -> None:
         env_val = os.getenv(ENV_AUTH_SASL_ENABLED)
         if env_val:
@@ -349,9 +332,6 @@ class AuthConfig(ConfigModel):
         env_val = os.getenv(ENV_AUTH_NICKSERV_PASSWORD)
         if env_val:
             self.nickserv_password = env_val
-        env_val = os.getenv(ENV_AUTH_TOTP_SECRET)
-        if env_val:
-            self.totp_secret = env_val
         env_val = os.getenv(ENV_AUTH_CERTFP_ENABLED)
         if env_val:
             self.certfp_enabled = env_val.strip().lower() in {"1", "true", "yes", "on"}
@@ -365,8 +345,6 @@ class AuthConfig(ConfigModel):
 
 class RoleEntry(ConfigModel):
     hostmask: str  # Pattern: nick!user@host oder *!*@*.trusted.net
-    require_totp: bool = False
-    totp_secret: str | None = None  # Individuelles TOTP-Secret (überschreibt global)
 
 
 class RolesConfig(ConfigModel):

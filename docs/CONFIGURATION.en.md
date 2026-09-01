@@ -160,9 +160,8 @@ channels = ["#bots"]
 <a id="auth"></a>
 ## `[auth]`
 
-Authentication of the bot client to the IRC network and optional TOTP sessions
-for role-protected bot commands. All methods are disabled or ineffective until
-explicitly configured.
+Authentication of the bot client to the IRC network. All methods are disabled
+or ineffective until explicitly configured.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -177,19 +176,9 @@ explicitly configured.
 | `certfp_enabled` | Boolean | `false` | Load a TLS client certificate for the IRC connection. |
 | `certfp_cert_file` | path or empty | empty | PEM certificate; required for SASL EXTERNAL. |
 | `certfp_key_file` | path or empty | empty | Separate private key; leave empty if included in the PEM file. |
-| `totp_secret` | text or empty | empty | Global Base32 TOTP fallback secret. It does not enable TOTP by itself. |
-| `session_timeout_seconds` | integer | `1800` | Lifetime of a successfully established TOTP session. |
-| `totp_digest` | choice | `sha256` | `sha1`, `sha256`, or `sha512`. |
-| `totp_digits` | integer | `8` | Code length from 6 through 12 digits. |
-| `totp_interval` | integer | `30` | TOTP window length in seconds, at least 1. |
-| `totp_valid_window` | integer | `4` | Additional accepted windows before and after the current window. |
 
 SASL PLAIN requires a username, password, and `network.tls = true`. SASL
-EXTERNAL requires TLS, enabled CertFP, and a certificate file. TOTP is required
-only when a role entry sets `require_totp = true`. See
-[`TOTP_SETUP.md`](TOTP_SETUP.md) for details. Because the IRC login command is
-intentionally not designed or implemented yet, do not enable `require_totp` in
-production: the matching role would otherwise be unavailable through IRC.
+EXTERNAL requires TLS, enabled CertFP, and a certificate file.
 
 <a id="roles"></a>
 ## `[roles]`
@@ -207,16 +196,14 @@ Each role entry supports:
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `hostmask` | text | required | `nick!user@host` pattern; `*` and `?` are wildcards. |
-| `require_totp` | Boolean | `false` | Grant the role only during an active TOTP session. |
-| `totp_secret` | text or empty | global secret | Individual Base32 secret for this entry. |
 
 ```toml
 [roles]
 owners = [
-  { hostmask = "owner!*@trusted.example", require_totp = false },
+  { hostmask = "owner!*@trusted.example" },
 ]
 admins = [
-  { hostmask = "*!staff@*.example", require_totp = true },
+  { hostmask = "*!staff@*.example" },
 ]
 ```
 
@@ -458,7 +445,6 @@ the base structure is validated before overrides are applied.
 | `NOVARIUSIRC_CERTFP_ENABLED` | `auth.certfp_enabled` | Boolean syntax as for TLS. |
 | `NOVARIUSIRC_CERTFP_CERT_FILE` | `auth.certfp_cert_file` | Certificate path. |
 | `NOVARIUSIRC_CERTFP_KEY_FILE` | `auth.certfp_key_file` | Private-key path. |
-| `NOVARIUSIRC_TOTP_SECRET` | `auth.totp_secret` | Global Base32 secret. |
 | `NOVARIUSIRC_LOG_ROOT` | `paths.log_root` | Log root directory. |
 | `NOVARIUSIRC_DATA_ROOT` | `paths.data_root` | Data root directory. |
 | `NOVARIUSIRC_DATABASE_ENABLED` | `database.enabled` | Boolean syntax as for TLS. |
