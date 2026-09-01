@@ -54,7 +54,9 @@ IRC-Netz und dessen Services.
 
 ### P0 – Release-Absicherung
 
-1. Testmatrix für Python 3.12 und das Container-Image automatisieren.
+1. Reproduzierbare lokale Prüfungen für Python 3.12 und das Container-Image
+   dokumentieren. Es werden bewusst keine Forgejo-Runner oder Push-/PR-Jobs
+   betrieben.
 2. Sauberen Upgrade-Test ergänzen: alte Datenbank sichern, migrieren, starten,
    prüfen und wiederherstellen.
 3. Release-Notizen, unterstützte Upgradepfade und ein reproduzierbares
