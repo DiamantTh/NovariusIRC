@@ -221,6 +221,9 @@ def test_owner_bootstrap_runs_once_and_role_bindings_authorize_identities(
     assert "admin" in auth.roles_for_identity(
         "untrusted", "untrusted!u@host", certfp="ab:cd"
     )
+    for binding in database.list_role_bindings():
+        database.remove_role_binding(binding.id)
+    assert database.bootstrap_owner_bindings([("hostmask", "Other!*@example")]) == []
 
 
 def test_backup_uses_sqlite_snapshot_and_records_data_files(tmp_path: Path) -> None:

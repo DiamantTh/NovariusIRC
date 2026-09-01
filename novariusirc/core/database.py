@@ -47,6 +47,7 @@ BACKENDS = (
 )
 ROLE_NAMES = frozenset(("user", "admin", "owner"))
 BINDING_TYPES = frozenset(("hostmask", "account", "certfp"))
+OWNER_BOOTSTRAP_METADATA_KEY = "owner_bootstrap_completed_at"
 
 
 def normalize_backend_name(value: str) -> str:
@@ -295,7 +296,7 @@ class SQLiteDatabase:
     def bootstrap_owner_bindings(
         self, bindings: list[tuple[str, str]]
     ) -> list[RoleBinding]:
-        """Seed owners exactly once, without replacing existing DB authority."""
+        """Seed owners once; later starts never reapply environment input."""
         normalized = [
             self._validate_role_binding("owner", binding_type, binding_value)
             for binding_type, binding_value in bindings
@@ -306,10 +307,23 @@ class SQLiteDatabase:
         engine = self._engine()
         try:
             with engine.begin() as connection:
+                completed = connection.execute(
+                    select(instance_metadata.c.value).where(
+                        instance_metadata.c.key == OWNER_BOOTSTRAP_METADATA_KEY
+                    )
+                ).scalar_one_or_none()
+                if completed is not None:
+                    return []
                 existing = connection.execute(
                     select(role_bindings.c.id).where(role_bindings.c.role_name == "owner")
                 ).first()
                 if existing is not None:
+                    connection.execute(
+                        instance_metadata.insert().values(
+                            key=OWNER_BOOTSTRAP_METADATA_KEY,
+                            value=datetime.now(UTC).isoformat(),
+                        )
+                    )
                     return []
                 created: list[RoleBinding] = []
                 for binding_type, binding_value in deduplicated:
@@ -332,6 +346,12 @@ class SQLiteDatabase:
                             binding_value=binding_value,
                         )
                     )
+                connection.execute(
+                    instance_metadata.insert().values(
+                        key=OWNER_BOOTSTRAP_METADATA_KEY,
+                        value=datetime.now(UTC).isoformat(),
+                    )
+                )
                 return created
         except SQLAlchemyError as exc:
             raise DatabaseError(f"could not bootstrap owner bindings: {exc}") from exc

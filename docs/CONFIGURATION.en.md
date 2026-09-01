@@ -219,10 +219,11 @@ of identity.
 <a id="owner-bootstrap"></a>
 ## `[owner_bootstrap]`
 
-These values create owner bindings once when an enabled database does not yet
-contain an owner. They are evaluated by `--init-database` and normal startup,
-then never act as a second authority source. This is intended especially for
-the first container installation.
+These values create owner bindings once during the first initialization of an
+enabled database. The database then records that bootstrap is complete and
+never uses them as a second authority source again—even if all owner bindings
+are later removed. This is intended especially for the first container
+installation.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |

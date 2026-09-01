@@ -224,10 +224,11 @@ werden; ein bloßer Nick ist kein verlässlicher Identitätsnachweis.
 <a id="owner-bootstrap"></a>
 ## `[owner_bootstrap]`
 
-Diese Werte erzeugen einmalig Owner-Bindungen, wenn eine aktivierte Datenbank
-noch keinen Owner enthält. Sie werden beim `--init-database` und beim normalen
-Start ausgewertet, danach nie als zweite Autoritätsquelle verwendet. Damit
-eignet sich der Abschnitt besonders für die erste Container-Installation.
+Diese Werte erzeugen einmalig Owner-Bindungen bei der ersten Initialisierung
+einer aktivierten Datenbank. Danach merkt die Datenbank den abgeschlossenen
+Bootstrap und verwendet diese Werte nie wieder als zweite Autoritätsquelle –
+auch nicht, falls später alle Owner-Bindungen entfernt werden. Damit eignet sich
+der Abschnitt besonders für die erste Container-Installation.
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
