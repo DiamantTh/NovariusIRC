@@ -11,25 +11,25 @@ ENV POETRY_VERSION=2.4.1 \
 
 WORKDIR /app
 
-RUN python -m venv /opt/poetry && python -m venv /opt/venv
+RUN python -m venv /opt/poetry && python -m venv /app/venv
 
 RUN /opt/poetry/bin/pip install --upgrade pip && \
     /opt/poetry/bin/pip install \
         "poetry==$POETRY_VERSION" \
         "poetry-plugin-export==$POETRY_EXPORT_VERSION" && \
-    /opt/venv/bin/pip install --upgrade pip
+    /app/venv/bin/pip install --upgrade pip
 
 COPY pyproject.toml poetry.lock README.md LICENSE ./
 RUN /opt/poetry/bin/poetry export \
         -f requirements.txt \
         --output requirements.txt \
         --without-hashes && \
-    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+    /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 COPY novariusirc ./novariusirc
 COPY scripts ./scripts
 RUN python scripts/generate_build_info.py --commit "$NOVARIUSIRC_BUILD_COMMIT" && \
-    /opt/venv/bin/pip install --no-cache-dir --no-deps .
+    /app/venv/bin/pip install --no-cache-dir --no-deps .
 
 FROM python:3.12-slim AS runtime
 
@@ -42,21 +42,29 @@ RUN apt-get update && \
     apt-get install --no-install-recommends -y bzip3 && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+ARG NOVARIUSIRC_UID=10001
+ARG NOVARIUSIRC_GID=10001
 
-COPY config.example.toml ./config.example.toml
-COPY config ./config
-COPY plugins ./plugins
+# Keep the container layout equivalent to an installation prefix: /app/bin,
+# /app/venv and /app/instances.  Only /app/instances is persistent state.
+COPY --from=builder /app/venv /app/venv
+COPY config.example.toml /opt/novariusirc-instance-template/config.toml
+COPY secrets.example.toml /opt/novariusirc-instance-template/secrets.toml
+COPY config /opt/novariusirc-instance-template/config
+COPY plugins /opt/novariusirc-instance-template/plugins
+COPY scripts/container-entrypoint.sh /app/bin/container-entrypoint
 
-RUN addgroup --system novariusirc && \
-    adduser --system --ingroup novariusirc --home /app novariusirc && \
-    mkdir -p /app/logs /app/data && \
-    chown -R novariusirc:novariusirc /app
+RUN addgroup --system --gid "$NOVARIUSIRC_GID" novariusirc && \
+    adduser --system --uid "$NOVARIUSIRC_UID" --ingroup novariusirc --home /app novariusirc && \
+    mkdir -p /app/bin /app/instances/example && \
+    ln -s /app/venv/bin/novariusirc /app/bin/novariusirc && \
+    cp -a /opt/novariusirc-instance-template/. /app/instances/example/ && \
+    chmod 0755 /app/bin/container-entrypoint && \
+    chown -R novariusirc:novariusirc /app /opt/novariusirc-instance-template
 
 USER novariusirc
 
 STOPSIGNAL SIGINT
 
-ENTRYPOINT ["novariusirc"]
-CMD ["--config", "/app/config.toml"]
+ENTRYPOINT ["/app/bin/container-entrypoint"]
+CMD []

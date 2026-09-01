@@ -14,13 +14,18 @@ DEFAULT_OUTPUT = PROJECT_ROOT / "novariusirc" / "_build_info.json"
 
 
 def git_commit() -> str | None:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        check=False,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except FileNotFoundError:
+        # Minimal build images intentionally do not need Git.  Callers can
+        # still pass the revision explicitly with --commit.
+        return None
     commit = result.stdout.strip().lower()
     return commit if result.returncode == 0 else None
 

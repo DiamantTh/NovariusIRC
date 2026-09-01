@@ -47,8 +47,8 @@ Control-Socket und – falls aktiv – `backups.directory` haben.
 
 ## systemd
 
-Beispiel für eine Instanz unter `/srv/novariusirc/example` als Nutzer
-`novariusirc`:
+Beispiel für eine Instanz unter
+`/home/novariusirc/NovariusIRC/instances/example` als Nutzer `novariusirc`:
 
 ```ini
 [Unit]
@@ -60,9 +60,9 @@ Wants=network-online.target
 Type=simple
 User=novariusirc
 Group=novariusirc
-WorkingDirectory=/srv/novariusirc/example
+WorkingDirectory=/home/novariusirc/NovariusIRC/instances/example
 Environment=NOVARIUSIRC_OWNER_HOSTMASK=owner!*@trusted.example
-ExecStart=/usr/local/bin/novariusirc --config /srv/novariusirc/example/config.toml
+ExecStart=/home/novariusirc/NovariusIRC/bin/novariusirc --config /home/novariusirc/NovariusIRC/instances/example/config.toml
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
@@ -79,28 +79,40 @@ Unit-Datei.
 
 ## Container
 
-Die Konfiguration darf für manuelle Änderungen beschreibbar gemountet werden;
-der Bot liest sie nur und schreibt sie nie selbst. Daten, Logs, Backups und der
-Unix-Control-Socket brauchen ebenfalls beschreibbare Mounts. Bei Podman mit
-SELinux `:Z` ergänzen.
+Das Image benutzt dieselbe Präfixstruktur wie der Installer, nur unter `/app`:
+`/app/bin`, `/app/venv` und `/app/instances`. Dauerhafte Instanzen liegen
+vollständig unter `/app/instances`; relative Pfade in einer Instanz bleiben
+damit zusammen. Der Bot erzeugt beim ersten Start einer leeren Instanz deren
+Vorlage selbst.
+
+`compose.yml` ist absichtlich hostneutral und nutzt ein benanntes Volume. Es
+funktioniert direkt als Portainer-Stack aus dem Repository sowie mit Docker
+oder Podman Compose:
+
+```console
+podman compose up --build
+```
+
+Ein Bind-Mount oder ein Kubernetes-PVC darf stattdessen nach
+`/app/instances` zeigen. Der Quellpfad ist dabei eine Entscheidung des
+jeweiligen Hosts und steht deshalb nicht in der versionierten Compose-Datei.
+Bei einem Bind-Mount müssen die Dateien für UID/GID `10001` schreibbar sein;
+bei Podman mit SELinux `:Z` ergänzen.
+
+Beispiel für einen direkten, hostseitig gewählten Bind-Mount:
 
 ```console
 podman run --rm --name example-novariusirc \
-  -v ./instance:/app/instance:Z \
-  -v ./data:/app/data:Z \
-  -v ./logs:/app/logs:Z \
-  -v ./backups:/app/backups:Z \
-  -v ./run:/app/run:Z \
-  -e NOVARIUSIRC_DATA_ROOT=/app/data \
-  -e NOVARIUSIRC_LOG_ROOT=/app/logs \
+  -v /chosen/instance-root:/app/instances:Z \
+  -e NOVARIUSIRC_INSTANCE=example \
   -e NOVARIUSIRC_OWNER_HOSTMASK='owner!*@trusted.example' \
-  novariusirc:local --config /app/instance/config.toml
+  novariusirc:local
 ```
 
 Das mitgelieferte Runtime-Image enthält bzip3. Bei einem eigenen Image muss
 `compression = "none"` gewählt werden, falls bzip3 dort fehlt.
 
-Docker-Umgebungsvariablen sind für Laufzeitwerte und Secrets vorgesehen und
+Container-Umgebungsvariablen sind für Laufzeitwerte und Secrets vorgesehen und
 werden bei jedem Start eingelesen. Sie werden nicht in die Datenbank
 zurückgeschrieben; die einzige absichtliche Ausnahme ist ein Owner-Bootstrap,
 der nur bei einer Datenbank ohne Owner-Bindung einmalig greift. Docker-Labels

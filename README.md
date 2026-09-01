@@ -96,28 +96,24 @@ build argument. `novariusirc -v`, `-V`, and `--version` show the same detailed
 local build and runtime report. IRC `version` and CTCP `VERSION` remain compact;
 the explicit IRC `botinfo` command shows the extended build and feature report.
 
-Run the container. Mount the complete instance directory so relative includes,
-certificates, external plugins, and manual configuration edits stay available;
-keep data and logs writable. The bot reads configuration but never rewrites it:
+The container uses the same installation-prefix shape as a native installation:
+`/app/bin`, `/app/venv`, and `/app/instances`. Persistent state is the complete
+`/app/instances` tree. The checked-in `compose.yml` is host-neutral and uses a
+named volume, so it can be deployed directly as a Portainer repository Stack:
 ```bash
-docker run --rm \
-  -v "$(pwd)/instance:/app/instance" \
-  -v "$(pwd)/data:/app/data" \
-  -v "$(pwd)/logs:/app/logs" \
-  -e NOVARIUSIRC_DATA_ROOT=/app/data \
-  -e NOVARIUSIRC_LOG_ROOT=/app/logs \
-  novariusirc:local --config /app/instance/config.toml
+docker compose up --build
 ```
 
-Podman with SELinux label:
+On first start, the image creates `/app/instances/example` from the included
+template. An operator can instead attach a host-chosen bind mount or a
+Kubernetes PVC to `/app/instances`; no host path is prescribed by the project.
+For a bind mount, make the files writable by UID/GID `10001`. Podman with
+SELinux additionally needs `:Z`:
 ```bash
 podman run --rm \
-  -v "$(pwd)/instance:/app/instance:Z" \
-  -v "$(pwd)/data:/app/data:Z" \
-  -v "$(pwd)/logs:/app/logs:Z" \
-  -e NOVARIUSIRC_DATA_ROOT=/app/data \
-  -e NOVARIUSIRC_LOG_ROOT=/app/logs \
-  novariusirc:local --config /app/instance/config.toml
+  -v /chosen/instance-root:/app/instances:Z \
+  -e NOVARIUSIRC_INSTANCE=example \
+  novariusirc:local
 ```
 
 For an environment-only container, pass `--config env` and at minimum set

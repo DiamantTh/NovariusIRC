@@ -1,0 +1,19 @@
+# Host-neutral default for Docker, Podman Compose and Portainer Stacks.
+# The named volume persists every instance below /app/instances.  A deployment
+# may replace it with a bind mount or Kubernetes PVC at the same target.
+services:
+  novariusirc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: novariusirc:local
+    pull_policy: build
+    environment:
+      NOVARIUSIRC_INSTANCE: example
+    volumes:
+      - type: volume
+        source: novariusirc_instances
+        target: /app/instances
+
+volumes:
+  novariusirc_instances:
