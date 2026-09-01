@@ -231,6 +231,13 @@ def test_backup_uses_sqlite_snapshot_and_records_data_files(tmp_path: Path) -> N
         }
         assert archive.extractfile("database.sqlite3") is not None
 
+    database.add_role_binding("admin", "account", "new-admin")
+    manager.restore(result.path, replace=True, restore_data=True)
+    assert not any(
+        binding.binding_value == "new-admin" for binding in database.list_role_bindings()
+    )
+    assert data_file.read_text(encoding="utf-8") == "keep this"
+
 
 def test_known_server_backend_fails_with_actionable_error() -> None:
     config = DatabaseConfig(enabled=True, backend="postgresql", dsn="postgresql://db")

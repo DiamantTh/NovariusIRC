@@ -105,6 +105,21 @@ def parse_args() -> argparse.Namespace:
         help="List backups for the configured bot instance, then exit",
     )
     parser.add_argument(
+        "--restore-database",
+        type=Path,
+        help="Restore one offline backup archive",
+    )
+    parser.add_argument(
+        "--replace-database",
+        action="store_true",
+        help="Allow --restore-database to replace the configured database",
+    )
+    parser.add_argument(
+        "--restore-data",
+        action="store_true",
+        help="Also copy archived data files during --restore-database",
+    )
+    parser.add_argument(
         "-v",
         "-V",
         "--version",
@@ -437,7 +452,13 @@ def register_runtime_commands(
 async def async_main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    if args.init_database or args.check_database or args.backup_database or args.list_backups:
+    if (
+        args.init_database
+        or args.check_database
+        or args.backup_database
+        or args.list_backups
+        or args.restore_database
+    ):
         if not config.database.enabled:
             raise RuntimeError("Database is disabled in [database]")
         database = create_database(config.database, config.bot.name or config.network.nick)
@@ -460,6 +481,17 @@ async def async_main() -> None:
                 f"Backup created: {result.path}; "
                 f"compression={'bzip3' if result.compressed else 'none'}"
             )
+            return
+        if args.restore_database:
+            try:
+                backups.restore(
+                    args.restore_database,
+                    replace=args.replace_database,
+                    restore_data=args.restore_data,
+                )
+            except BackupError as exc:
+                raise RuntimeError(f"Restore failed: {exc}") from exc
+            print(f"Database restored from: {args.restore_database}")
             return
         status = (
             database.initialize(create=True)

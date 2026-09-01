@@ -154,3 +154,79 @@ class BackupManager:
             [*self.directory.glob(f"{self.instance_name}_*.tar"), *self.directory.glob(f"{self.instance_name}_*.tar.bz3")],
             reverse=True,
         )
+
+    def restore(self, archive_path: Path, *, replace: bool, restore_data: bool) -> None:
+        """Restore a verified archive; callers must explicitly allow replacement."""
+        archive_path = archive_path.resolve()
+        if not archive_path.is_file():
+            raise BackupError(f"backup archive does not exist: {archive_path}")
+        if self.database.path.exists() and not replace:
+            raise BackupError("database exists; use --replace-database to restore")
+        with tempfile.TemporaryDirectory(prefix=".restore-", dir=self.directory) as raw:
+            staging = Path(raw)
+            tar_path = archive_path
+            if archive_path.suffix == ".bz3":
+                tar_path = staging / "archive.tar"
+                try:
+                    with tar_path.open("xb") as output:
+                        subprocess.run(
+                            ["bzip3", "-dc", str(archive_path)],
+                            check=True,
+                            stdout=output,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                        )
+                except FileNotFoundError as exc:
+                    raise BackupError("bzip3 is not installed") from exc
+                except subprocess.CalledProcessError as exc:
+                    raise BackupError(f"bzip3 failed: {exc.stderr.strip()}") from exc
+            try:
+                with tarfile.open(tar_path) as archive:
+                    members = archive.getmembers()
+                    if any(
+                        member.issym() or member.islnk() or Path(member.name).is_absolute()
+                        or ".." in Path(member.name).parts
+                        for member in members
+                    ):
+                        raise BackupError("backup archive contains unsafe paths")
+                    archive.extractall(staging / "contents", filter="data")
+            except (tarfile.TarError, OSError) as exc:
+                raise BackupError(f"cannot read backup archive: {exc}") from exc
+            contents = staging / "contents"
+            try:
+                manifest = json.loads((contents / "manifest.json").read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise BackupError("backup has no valid manifest") from exc
+            if manifest.get("format") != 1 or manifest.get("bot_name") != self.instance_name:
+                raise BackupError("backup does not belong to this bot instance")
+            for item in manifest.get("files", []):
+                path = contents / item["path"]
+                if not path.is_file() or path.stat().st_size != item["size"] or self._sha256(path) != item["sha256"]:
+                    raise BackupError(f"backup file verification failed: {item.get('path')}")
+            snapshot = contents / "database.sqlite3"
+            if not snapshot.is_file():
+                raise BackupError("backup has no database snapshot")
+            try:
+                with sqlite3.connect(snapshot) as connection:
+                    if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                        raise BackupError("backup database integrity check failed")
+            except sqlite3.Error as exc:
+                raise BackupError(f"backup database is invalid: {exc}") from exc
+            self.database.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_database = self.database.path.with_suffix(".restore.tmp")
+            shutil.copy2(snapshot, temporary_database)
+            temporary_database.replace(self.database.path)
+            for suffix in ("-wal", "-shm"):
+                Path(f"{self.database.path}{suffix}").unlink(missing_ok=True)
+            if restore_data:
+                source_data = contents / "data"
+                if source_data.is_dir():
+                    for source in source_data.rglob("*"):
+                        if source.is_file():
+                            target = self.data_root / source.relative_to(source_data)
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(source, target)
+            try:
+                self.database.check()
+            except DatabaseError as exc:
+                raise BackupError(f"restored database failed validation: {exc}") from exc

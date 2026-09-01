@@ -365,6 +365,14 @@ novariusirc --list-backups --config ./config.toml
 ```
 
 Für `compression = "bzip3"` muss `bzip3` im Ausführungspfad installiert sein.
+Eine Wiederherstellung ist nur offline möglich und verlangt ausdrücklich
+`--replace-database`; `--restore-data` kopiert zusätzlich archivierte
+Zusatzdateien zurück:
+
+```console
+novariusirc --restore-database ./backups/MeinBot_20260901T201530Z.tar \
+  --replace-database --restore-data --config ./config.toml
+```
 
 <a id="feeds"></a>
 ## `[feeds]`

@@ -38,7 +38,7 @@ IRC-Netz und dessen Services.
 | Konfiguration | fertig | TOML, Includes, ENV-Overrides, strikte Schlüsselprüfung und relative Pfade |
 | Lokale Steuerung | fertig | Terminal-Konsole und Unix-Socket mit `0600`, ohne TCP-Listener oder Betriebssystem-Shell |
 | Rollen | fertig | DB-bindbare Rollen für Hostmask, IRCv3-Account oder CertFP; einmaliger Owner-Seed und Owner-Befehl `role` |
-| SQLite-Backups | fertig | Konsistenter SQLite-Snapshot, Datenarchiv, SHA-256-Manifest, Botname und UTC-Dateiname; optional bzip3 |
+| SQLite-Backups | fertig | Konsistenter Snapshot, Datenarchiv, SHA-256-Manifest, Botname und UTC-Dateiname; bewusster Offline-Restore, optional bzip3 |
 | Buildinformation | fertig | `-v`, `-V`, `--version`, IRC-`version` und `botinfo` |
 | Sprache | fertig | Core- und Modulantworten für Deutsch, Englisch und Japanisch |
 | RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits und Vorlagen; mit Datenbank liegt der Feed-Status in SQL statt in JSON-Dateien |
@@ -49,9 +49,7 @@ IRC-Netz und dessen Services.
 
 ### P0 – Betriebsdaten und Wiederherstellung
 
-1. Bewusst offline ausgeführte Wiederherstellung aus dem SQLite-Archiv bauen
-   und den vollständigen Backup-/Restore-Test automatisieren.
-2. Bei späteren getesteten Server-Backends deren eigene Dump- und Restorepfade
+1. Bei späteren getesteten Server-Backends deren eigene Dump- und Restorepfade
    ergänzen; SQLite-Archive dürfen nie als angeblich portable Server-Dumps
    ausgegeben werden.
 
