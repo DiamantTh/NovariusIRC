@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
@@ -91,8 +93,51 @@ class StoredFeedState:
     seen_ids: list[str]
 
 
+class DatabaseBackend(Protocol):
+    """Backend-facing storage contract used by core services.
+
+    Core services never select a SQL dialect or access database files.  A
+    backend owns its engine, integrity checks, backup representation, and
+    backend-specific restore mechanics.
+    """
+
+    backend_name: str
+    backup_snapshot_name: str
+
+    def initialize(self, *, create: bool = False) -> DatabaseStatus: ...
+
+    def check(self) -> DatabaseStatus: ...
+
+    def create_backup_snapshot(self, destination: Path) -> None: ...
+
+    def validate_backup_snapshot(self, snapshot: Path) -> None: ...
+
+    def restore_backup_snapshot(self, snapshot: Path, *, replace: bool) -> None: ...
+
+    def backup_excluded_data_paths(self) -> set[Path]: ...
+
+    def list_role_bindings(self) -> list[RoleBinding]: ...
+
+    def add_role_binding(
+        self, role_name: str, binding_type: str, binding_value: str
+    ) -> RoleBinding: ...
+
+    def remove_role_binding(self, binding_id: int) -> bool: ...
+
+    def bootstrap_owner_bindings(
+        self, bindings: list[tuple[str, str]]
+    ) -> list[RoleBinding]: ...
+
+    def load_feed_state(self, feed_url: str) -> StoredFeedState | None: ...
+
+    def save_feed_state(self, feed_url: str, state: StoredFeedState) -> None: ...
+
+
 class SQLiteDatabase:
     """SQLite lifecycle using SQLAlchemy Core and packaged Alembic revisions."""
+
+    backend_name = "sqlite"
+    backup_snapshot_name = "database.sqlite3"
 
     def __init__(self, config: DatabaseConfig, instance_name: str):
         if not config.path:
@@ -195,6 +240,45 @@ class SQLiteDatabase:
             raise DatabaseError(f"SQLite validation failed: {exc}") from exc
         finally:
             engine.dispose()
+
+    def create_backup_snapshot(self, destination: Path) -> None:
+        """Create a consistent SQLite snapshot without exposing SQLite to callers."""
+        try:
+            with sqlite3.connect(self.path) as source, sqlite3.connect(
+                destination
+            ) as target:
+                source.backup(target)
+        except sqlite3.Error as exc:
+            raise DatabaseError(f"SQLite backup failed: {exc}") from exc
+
+    def validate_backup_snapshot(self, snapshot: Path) -> None:
+        """Validate a SQLite snapshot before it can replace live state."""
+        try:
+            with sqlite3.connect(snapshot) as connection:
+                if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                    raise DatabaseError("backup database integrity check failed")
+        except sqlite3.Error as exc:
+            raise DatabaseError(f"backup database is invalid: {exc}") from exc
+
+    def restore_backup_snapshot(self, snapshot: Path, *, replace: bool) -> None:
+        """Replace the database from a verified SQLite snapshot when allowed."""
+        if self.path.exists() and not replace:
+            raise DatabaseError("database exists; use --replace-database to restore")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_database = self.path.with_suffix(".restore.tmp")
+        shutil.copy2(snapshot, temporary_database)
+        temporary_database.replace(self.path)
+        for suffix in ("-wal", "-shm"):
+            Path(f"{self.path}{suffix}").unlink(missing_ok=True)
+
+    def backup_excluded_data_paths(self) -> set[Path]:
+        """Return live files that must not be recursively copied into a backup."""
+        database_path = self.path.resolve()
+        return {
+            database_path,
+            Path(f"{database_path}-wal"),
+            Path(f"{database_path}-shm"),
+        }
 
     def list_role_bindings(self) -> list[RoleBinding]:
         """Return the role assignments for the in-memory authorization cache."""
@@ -451,7 +535,7 @@ class SQLiteDatabase:
         return DatabaseStatus("sqlite", str(revision), integrity, str(self.path))
 
 
-def create_database(config: DatabaseConfig, instance_name: str) -> SQLiteDatabase:
+def create_database(config: DatabaseConfig, instance_name: str) -> DatabaseBackend:
     spec = backend_spec(config.backend)
     if spec.name == "sqlite":
         return SQLiteDatabase(config, instance_name)

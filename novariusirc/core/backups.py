@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-import sqlite3
 import subprocess
 import tarfile
 import tempfile
@@ -14,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .config import BackupConfig
-from .database import DatabaseError, SQLiteDatabase
+from .database import DatabaseBackend, DatabaseError
 
 
 class BackupError(RuntimeError):
@@ -29,12 +28,12 @@ class BackupResult:
 
 
 class BackupManager:
-    """Creates a self-verifying archive without copying SQLite files directly."""
+    """Creates self-verifying archives through the selected database backend."""
 
     def __init__(
         self,
         config: BackupConfig,
-        database: SQLiteDatabase,
+        database: DatabaseBackend,
         instance_name: str,
         data_root: Path,
     ) -> None:
@@ -52,26 +51,12 @@ class BackupManager:
                 digest.update(block)
         return digest.hexdigest()
 
-    def _snapshot_database(self, destination: Path) -> None:
-        try:
-            with sqlite3.connect(self.database.path) as source, sqlite3.connect(
-                destination
-            ) as target:
-                source.backup(target)
-        except sqlite3.Error as exc:
-            raise BackupError(f"SQLite backup failed: {exc}") from exc
-
     def _copy_data(self, destination: Path) -> list[Path]:
         copied: list[Path] = []
         if not self.config.include_data or not self.data_root.is_dir():
             return copied
         archive_root = self.directory.resolve()
-        database_path = self.database.path.resolve()
-        database_artifacts = {
-            database_path,
-            Path(f"{database_path}-wal"),
-            Path(f"{database_path}-shm"),
-        }
+        database_artifacts = self.database.backup_excluded_data_paths()
         for source in self.data_root.rglob("*"):
             if source.is_symlink() or not source.is_file():
                 continue
@@ -98,14 +83,17 @@ class BackupManager:
         name = f"{self.instance_name}_{timestamp}"
         with tempfile.TemporaryDirectory(prefix=f".{name}-", dir=self.directory) as raw:
             staging = Path(raw)
-            snapshot = staging / "database.sqlite3"
-            self._snapshot_database(snapshot)
+            snapshot = staging / self.database.backup_snapshot_name
+            try:
+                self.database.create_backup_snapshot(snapshot)
+            except DatabaseError as exc:
+                raise BackupError(str(exc)) from exc
             data_files = self._copy_data(staging / "data")
             files = [snapshot, *data_files]
             manifest = {
                 "format": 1,
                 "bot_name": self.instance_name,
-                "backend": "sqlite",
+                "backend": self.database.backend_name,
                 "created_at": created_at.isoformat(),
                 "database_schema": self.database.check().schema_version,
                 "files": [
@@ -160,8 +148,6 @@ class BackupManager:
         archive_path = archive_path.resolve()
         if not archive_path.is_file():
             raise BackupError(f"backup archive does not exist: {archive_path}")
-        if self.database.path.exists() and not replace:
-            raise BackupError("database exists; use --replace-database to restore")
         with tempfile.TemporaryDirectory(prefix=".restore-", dir=self.directory) as raw:
             staging = Path(raw)
             tar_path = archive_path
@@ -197,27 +183,24 @@ class BackupManager:
                 manifest = json.loads((contents / "manifest.json").read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
                 raise BackupError("backup has no valid manifest") from exc
-            if manifest.get("format") != 1 or manifest.get("bot_name") != self.instance_name:
+            if (
+                manifest.get("format") != 1
+                or manifest.get("bot_name") != self.instance_name
+                or manifest.get("backend") != self.database.backend_name
+            ):
                 raise BackupError("backup does not belong to this bot instance")
             for item in manifest.get("files", []):
                 path = contents / item["path"]
                 if not path.is_file() or path.stat().st_size != item["size"] or self._sha256(path) != item["sha256"]:
                     raise BackupError(f"backup file verification failed: {item.get('path')}")
-            snapshot = contents / "database.sqlite3"
+            snapshot = contents / self.database.backup_snapshot_name
             if not snapshot.is_file():
                 raise BackupError("backup has no database snapshot")
             try:
-                with sqlite3.connect(snapshot) as connection:
-                    if connection.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-                        raise BackupError("backup database integrity check failed")
-            except sqlite3.Error as exc:
-                raise BackupError(f"backup database is invalid: {exc}") from exc
-            self.database.path.parent.mkdir(parents=True, exist_ok=True)
-            temporary_database = self.database.path.with_suffix(".restore.tmp")
-            shutil.copy2(snapshot, temporary_database)
-            temporary_database.replace(self.database.path)
-            for suffix in ("-wal", "-shm"):
-                Path(f"{self.database.path}{suffix}").unlink(missing_ok=True)
+                self.database.validate_backup_snapshot(snapshot)
+                self.database.restore_backup_snapshot(snapshot, replace=replace)
+            except DatabaseError as exc:
+                raise BackupError(str(exc)) from exc
             if restore_data:
                 source_data = contents / "data"
                 if source_data.is_dir():
