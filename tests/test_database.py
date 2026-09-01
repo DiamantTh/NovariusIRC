@@ -147,6 +147,25 @@ def test_sqlite_migrates_the_legacy_metadata_database(tmp_path: Path) -> None:
         )
 
 
+def test_database_upgrade_from_previous_alembic_revision_preserves_metadata(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(DatabaseConfig(path=str(tmp_path / "bot.sqlite3")), "TestBot")
+    database.initialize(create=True)
+    with sqlite3.connect(database.path) as connection:
+        connection.execute("DROP TABLE feed_states")
+        connection.execute("DROP TABLE role_bindings")
+        connection.execute("DROP TABLE roles")
+        connection.execute("UPDATE alembic_version SET version_num = '0001_storage_metadata'")
+
+    with pytest.raises(DatabaseError, match="requires migration"):
+        database.check()
+    status = database.initialize(create=True)
+
+    assert status.schema_version == "0002_persistent_core_state"
+    assert database.check() == status
+
+
 def test_sqlite_persists_feed_state_and_exposes_empty_role_bindings(
     tmp_path: Path,
 ) -> None:

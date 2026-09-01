@@ -13,14 +13,13 @@ Instanz verbindet sich mit einem IRC-Netz, beantwortet Core-Befehle und kann
 das eingebaute RSS/Atom-Modul ausführen. Konfiguration, lokaler Control-Socket,
 Buildinformationen und Protokollgrenzen sind getestet.
 
-Vor einem als stabil beworbenen Release fehlen jedoch noch persistente
-Core-Daten, Backups und deren Wiederherstellung. Die Datenbankbasis verwendet
-jetzt SQLAlchemy Core und versionierte Alembic-Migrationen, enthält aber noch
-keine der fachlichen Betriebsdaten.
+Vor einem als stabil beworbenen Release fehlen noch automatisierte
+Release-Absicherung und dokumentierte Tests auf realen IRC-Netzen. Persistente
+Core-Daten, Backups und die Offline-Wiederherstellung sind vorhanden.
 
 Verifiziert am 1. September 2026:
 
-- 163 von 163 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 172 von 172 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund und Poetry-Metadaten gültig
 - `--check-config`, `--status`, `--init-database` und `--check-database`
   funktionieren ohne IRC-Verbindung
