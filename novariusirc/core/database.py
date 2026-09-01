@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,7 +15,7 @@ from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from .database_schema import instance_metadata
+from .database_schema import feed_states, instance_metadata, role_bindings
 
 if TYPE_CHECKING:
     from .config import DatabaseConfig
@@ -64,6 +66,25 @@ class DatabaseStatus:
     schema_version: str
     integrity: str
     location: str
+
+
+@dataclass(frozen=True)
+class RoleBinding:
+    """One persistent role assignment to an IRC identity attribute."""
+
+    id: int
+    role_name: str
+    binding_type: str
+    binding_value: str
+
+
+@dataclass(frozen=True)
+class StoredFeedState:
+    """Serialized feed polling state, independent from the feed module."""
+
+    etag: str | None
+    last_modified: str | None
+    seen_ids: list[str]
 
 
 class SQLiteDatabase:
@@ -168,6 +189,99 @@ class SQLiteDatabase:
                 return self._status(connection)
         except SQLAlchemyError as exc:
             raise DatabaseError(f"SQLite validation failed: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def list_role_bindings(self) -> list[RoleBinding]:
+        """Return the role assignments for the in-memory authorization cache."""
+        engine = self._engine(read_only=True)
+        try:
+            with engine.connect() as connection:
+                rows = connection.execute(
+                    select(
+                        role_bindings.c.id,
+                        role_bindings.c.role_name,
+                        role_bindings.c.binding_type,
+                        role_bindings.c.binding_value,
+                    ).order_by(role_bindings.c.id)
+                )
+                return [
+                    RoleBinding(
+                        id=int(row.id),
+                        role_name=str(row.role_name),
+                        binding_type=str(row.binding_type),
+                        binding_value=str(row.binding_value),
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"could not read role bindings: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def load_feed_state(self, feed_url: str) -> StoredFeedState | None:
+        """Read feed state without exposing SQL details to the feed module."""
+        engine = self._engine(read_only=True)
+        try:
+            with engine.connect() as connection:
+                row = connection.execute(
+                    select(
+                        feed_states.c.etag,
+                        feed_states.c.last_modified,
+                        feed_states.c.seen_ids,
+                    ).where(feed_states.c.feed_url == feed_url)
+                ).one_or_none()
+                if row is None:
+                    return None
+                try:
+                    seen_ids = json.loads(row.seen_ids)
+                except (TypeError, json.JSONDecodeError) as exc:
+                    raise DatabaseError(
+                        f"invalid stored feed state for {feed_url!r}"
+                    ) from exc
+                if not isinstance(seen_ids, list) or not all(
+                    isinstance(item, str) for item in seen_ids
+                ):
+                    raise DatabaseError(f"invalid stored feed IDs for {feed_url!r}")
+                return StoredFeedState(
+                    etag=row.etag,
+                    last_modified=row.last_modified,
+                    seen_ids=list(dict.fromkeys(seen_ids)),
+                )
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"could not read feed state: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def save_feed_state(self, feed_url: str, state: StoredFeedState) -> None:
+        """Atomically replace the state stored for one feed URL."""
+        payload = json.dumps(list(dict.fromkeys(state.seen_ids)), ensure_ascii=False)
+        now = datetime.now(UTC)
+        engine = self._engine()
+        try:
+            with engine.begin() as connection:
+                result = connection.execute(
+                    feed_states.update()
+                    .where(feed_states.c.feed_url == feed_url)
+                    .values(
+                        etag=state.etag,
+                        last_modified=state.last_modified,
+                        seen_ids=payload,
+                        updated_at=now,
+                    )
+                )
+                if result.rowcount == 0:
+                    connection.execute(
+                        feed_states.insert().values(
+                            feed_url=feed_url,
+                            etag=state.etag,
+                            last_modified=state.last_modified,
+                            seen_ids=payload,
+                            updated_at=now,
+                        )
+                    )
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"could not save feed state: {exc}") from exc
         finally:
             engine.dispose()
 

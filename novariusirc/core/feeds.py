@@ -12,13 +12,25 @@ import ssl
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 import aiohttp
 import feedparser
 
 from .config import FeedDefinition, FeedsConfig
+from .database import StoredFeedState
 
 Subscriber = Callable[[FeedDefinition, dict], Awaitable[None]]
+
+
+class FeedStateStore(Protocol):
+    """Small synchronous interface implemented by the database service."""
+
+    def load_feed_state(self, feed_url: str) -> StoredFeedState | None:
+        """Load one feed state, if it has been persisted."""
+
+    def save_feed_state(self, feed_url: str, state: StoredFeedState) -> None:
+        """Persist one feed state."""
 
 
 @dataclass
@@ -34,6 +46,7 @@ class FeedEngine:
         config: FeedsConfig,
         logger: logging.Logger,
         data_root: Path | None = None,
+        state_store: FeedStateStore | None = None,
     ):
         self.config = config
         self.logger = logger.getChild("feeds")
@@ -50,8 +63,9 @@ class FeedEngine:
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5_0)",
             "Mozilla/5.0 (X11; Linux x86_64)",
         ]
+        self._state_store = state_store
         self._state_dir = data_root / "feeds" if data_root else None
-        if self._state_dir:
+        if self._state_dir and not self._state_store:
             self._state_dir.mkdir(parents=True, exist_ok=True)
 
     def add_feed(self, feed: FeedDefinition) -> None:
@@ -62,7 +76,7 @@ class FeedEngine:
             self.logger.warning("Feed limit reached; cannot add feed %s", feed.url)
             return
         self.feed_definitions[feed.url] = feed
-        self.feed_states.setdefault(feed.url, self._load_state(feed.url) or FeedState())
+        self.feed_states.setdefault(feed.url, FeedState())
         self.logger.info("Registered feed %s -> channel %s", feed.name, feed.channel)
 
     @property
@@ -81,6 +95,7 @@ class FeedEngine:
         if not self.config.enabled:
             self.logger.info("Feed engine disabled")
             return
+        await self._restore_states()
         if self.session is None:
             timeout = aiohttp.ClientTimeout(total=self.config.http_timeout)
             connector = aiohttp.TCPConnector(ssl=self._ssl_context())
@@ -193,7 +208,7 @@ class FeedEngine:
         limit = max_items if max_items is not None else self.config.max_items_per_poll
         for entry in unseen_entries[:limit]:
             await self._notify(feed, entry)
-        self._save_state(feed.url, state)
+        await asyncio.to_thread(self._save_state, feed.url, state)
 
     def _select_unseen(self, state: FeedState, entries: list[dict]) -> list[dict]:
         known_ids = set(state.seen_ids)
@@ -219,6 +234,18 @@ class FeedEngine:
         return self._state_dir / f"{digest}.json"
 
     def _load_state(self, url: str) -> FeedState | None:
+        if self._state_store:
+            stored = self._state_store.load_feed_state(url)
+            if stored:
+                return FeedState(
+                    etag=stored.etag,
+                    last_modified=stored.last_modified,
+                    seen_ids=stored.seen_ids,
+                )
+            return self._load_legacy_state(url)
+        return self._load_legacy_state(url)
+
+    def _load_legacy_state(self, url: str) -> FeedState | None:
         state_file = self._state_file(url)
         if not state_file or not state_file.exists():
             return None
@@ -241,6 +268,16 @@ class FeedEngine:
             return None
 
     def _save_state(self, url: str, state: FeedState) -> None:
+        if self._state_store:
+            self._state_store.save_feed_state(
+                url,
+                StoredFeedState(
+                    etag=state.etag,
+                    last_modified=state.last_modified,
+                    seen_ids=state.seen_ids,
+                ),
+            )
+            return
         state_file = self._state_file(url)
         if not state_file:
             return
@@ -254,6 +291,20 @@ class FeedEngine:
                 json.dump(payload, fh)
         except (OSError, TypeError, ValueError) as exc:
             self.logger.warning("Failed to save feed state for %s: %s", url, exc)
+
+    async def _restore_states(self) -> None:
+        for url in self.feed_definitions:
+            state = await asyncio.to_thread(self._load_state, url)
+            if state is not None:
+                self.feed_states[url] = state
+                if (
+                    self._state_store
+                    and await asyncio.to_thread(self._state_store.load_feed_state, url)
+                    is None
+                ):
+                    # Import an existing JSON state once; after this, the
+                    # database is the only state source.
+                    await asyncio.to_thread(self._save_state, url, state)
 
     async def _notify(self, feed: FeedDefinition, entry: dict) -> None:
         if not self.subscribers:

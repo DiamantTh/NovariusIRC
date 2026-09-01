@@ -23,7 +23,7 @@ from novariusirc.core.control import (
     dispatch_local_command,
     run_control_command,
 )
-from novariusirc.core.database import DatabaseError, create_database
+from novariusirc.core.database import DatabaseError, SQLiteDatabase, create_database
 from novariusirc.core.feeds import FeedEngine
 from novariusirc.core.i18n import init_i18n
 from novariusirc.core.logging import setup_logging, setup_moderation_logging
@@ -369,6 +369,7 @@ async def async_main() -> None:
     logger = setup_logging(config.logging, config.paths)
     setup_moderation_logging(config.moderation.log_file)
 
+    database: SQLiteDatabase | None = None
     if config.database.enabled:
         database = create_database(config.database, config.bot.name or config.network.nick)
         status = database.check()
@@ -389,7 +390,12 @@ async def async_main() -> None:
     start_time = time.monotonic()
     register_builtin_commands(commands, config, start_time)
 
-    feeds = FeedEngine(config.feeds, logger, data_root=Path(config.paths.data_root))
+    feeds = FeedEngine(
+        config.feeds,
+        logger,
+        data_root=Path(config.paths.data_root),
+        state_store=database,
+    )
     workers = WorkerPool(config.workers, logger)
     tasks = TaskSupervisor(logger)
     plugins = PluginManager(config, commands, feeds, auth, logger, tasks)

@@ -11,6 +11,7 @@ from novariusirc.core.database import (
     DatabaseBackendUnavailable,
     DatabaseError,
     SQLiteDatabase,
+    StoredFeedState,
     create_database,
     normalize_backend_name,
 )
@@ -81,7 +82,7 @@ def test_sqlite_database_requires_explicit_initialization(tmp_path: Path) -> Non
 
     status = database.initialize(create=True)
     assert status.integrity == "ok"
-    assert status.schema_version == "0001_storage_metadata"
+    assert status.schema_version == "0002_persistent_core_state"
     assert database.check() == status
 
 
@@ -126,11 +127,28 @@ def test_sqlite_migrates_the_legacy_metadata_database(tmp_path: Path) -> None:
         create=True
     )
 
-    assert status.schema_version == "0001_storage_metadata"
+    assert status.schema_version == "0002_persistent_core_state"
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0001_storage_metadata",
+            "0002_persistent_core_state",
         )
+
+
+def test_sqlite_persists_feed_state_and_exposes_empty_role_bindings(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(DatabaseConfig(path=str(tmp_path / "bot.sqlite3")), "TestBot")
+    database.initialize(create=True)
+
+    assert database.list_role_bindings() == []
+    database.save_feed_state(
+        "https://example.test/feed.xml",
+        StoredFeedState("etag", "yesterday", ["first", "first", "second"]),
+    )
+
+    assert database.load_feed_state("https://example.test/feed.xml") == StoredFeedState(
+        "etag", "yesterday", ["first", "second"]
+    )
 
 
 def test_known_server_backend_fails_with_actionable_error() -> None:

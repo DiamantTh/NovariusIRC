@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 from types import MethodType
 
-from novariusirc.core.config import FeedDefinition, FeedsConfig
+from novariusirc.core.config import DatabaseConfig, FeedDefinition, FeedsConfig
+from novariusirc.core.database import SQLiteDatabase
 from novariusirc.core.feeds import FeedEngine, FeedState
 from novariusirc.core.moderation import ModerationManager
 
@@ -84,3 +86,30 @@ def test_feed_limit_does_not_backfill_old_items_on_later_polls() -> None:
     assert [entry["id"] for entry in first_unseen[:1]] == ["3"]
     assert second_unseen == []
     assert state.seen_ids == ["3", "2", "1"]
+
+
+def test_feed_engine_uses_database_state(tmp_path: Path) -> None:
+    database = SQLiteDatabase(DatabaseConfig(path=str(tmp_path / "bot.sqlite3")), "TestBot")
+    database.initialize(create=True)
+    engine = FeedEngine(
+        FeedsConfig(),
+        logging.getLogger("test.feeds"),
+        data_root=tmp_path,
+        state_store=database,
+    )
+    feed = FeedDefinition(name="first", url="https://one.test/feed", channel="#one")
+    engine.add_feed(feed)
+    engine.feed_states[feed.url] = FeedState(etag="one", seen_ids=["a", "b"])
+
+    engine._save_state(feed.url, engine.feed_states[feed.url])
+
+    restored = FeedEngine(
+        FeedsConfig(),
+        logging.getLogger("test.feeds"),
+        data_root=tmp_path,
+        state_store=database,
+    )
+    restored.add_feed(feed)
+    asyncio.run(restored._restore_states())
+
+    assert restored.feed_states[feed.url] == FeedState(etag="one", seen_ids=["a", "b"])

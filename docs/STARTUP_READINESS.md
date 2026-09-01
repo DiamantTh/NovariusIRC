@@ -39,7 +39,7 @@ IRC-Netz und dessen Services.
 | Lokale Steuerung | fertig | Terminal-Konsole und Unix-Socket mit `0600`, ohne TCP-Listener oder Betriebssystem-Shell |
 | Buildinformation | fertig | `-v`, `-V`, `--version`, IRC-`version` und `botinfo` |
 | Sprache | fertig | Core- und Modulantworten für Deutsch, Englisch und Japanisch |
-| RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits, Vorlagen und Feed-Status |
+| RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits und Vorlagen; mit Datenbank liegt der Feed-Status in SQL statt in JSON-Dateien |
 | Logging | fertig | Core-, IRC-, Raw- und Moderationslogs; Zeitzone konfigurierbar |
 | Datenbankbasis | fertig | SQLAlchemy Core, mitgelieferte Alembic-Revisionen, stabiler Botname, explizite Initialisierung, WAL, Foreign Keys, Integritäts- und Schemacheck |
 
@@ -47,9 +47,9 @@ IRC-Netz und dessen Services.
 
 ### P0 – Betriebsdaten und Wiederherstellung
 
-1. Persistente Core-Tabellen bauen: interne Rollen und Bindungen, Feed-Zustand,
-   K-Line-Historie und Audit-Ereignisse. Die heutigen JSON-Feeddateien und
-   `data/klines.txt` dürfen danach nicht mehr die maßgebliche Quelle sein.
+1. Persistente Rollen und Bindungen an die Autorisierung anschließen. Die
+   Tabellen sind vorbereitet; die heutige Hostmask-Konfiguration ist bis zum
+   Owner-Bootstrap noch maßgeblich.
 2. Einmaligen Owner-Bootstrap über ENV ergänzen; danach müssen Rollen aus der
    Datenbank stammen. Hostmask, IRCv3-Account und CertFP werden als getrennte
    Bindungsarten behandelt, damit ältere IRC-Netze nicht ausgeschlossen sind.

@@ -264,7 +264,7 @@ service and should not be listed here. Unknown or unimportable modules make
 | Section.Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `paths.log_root` | path | `./logs` | Root directory for log files. |
-| `paths.data_root` | path | `./data` | Root directory for persistent runtime data such as feed state. |
+| `paths.data_root` | path | `./data` | Root directory for persistent runtime data. Without a database, feed state is JSON here; with an enabled database it is stored in SQL. |
 | `workers.processes` | integer | `2` | Process count for CPU-heavy work, at least 1. |
 
 Relative runtime paths are resolved against the directory containing

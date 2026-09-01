@@ -270,7 +270,7 @@ importierbares Modul lässt `--check-config` fehlschlagen.
 | Abschnitt.Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
 | `paths.log_root` | Pfad | `./logs` | Stammverzeichnis für Logdateien. |
-| `paths.data_root` | Pfad | `./data` | Stammverzeichnis für persistente Laufzeitdaten, etwa Feed-Zustände. |
+| `paths.data_root` | Pfad | `./data` | Stammverzeichnis für persistente Laufzeitdaten. Ohne Datenbank liegen Feed-Zustände dort als JSON; mit aktivierter Datenbank liegen sie in SQL. |
 | `workers.processes` | Ganzzahl | `2` | Prozessanzahl des Pools für CPU-lastige Aufgaben, mindestens 1. |
 
 Relative Laufzeitpfade werden relativ zum Verzeichnis von `config.toml`
