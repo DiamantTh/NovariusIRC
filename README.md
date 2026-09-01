@@ -123,6 +123,10 @@ For an environment-only container, pass `--config env` and at minimum set
 `NOVARIUSIRC_SERVER` and `NOVARIUSIRC_NICK`. The image handles `SIGINT` and
 `SIGTERM` for a graceful stop and runs as an unprivileged user.
 
+The German [operations guide](docs/OPERATIONS.md) covers local release checks,
+systemd, writable container mounts, SQLite backups, and offline restore. The
+project deliberately does not use Forgejo runners or push/PR jobs.
+
 ## Project Layout
 - `novariusirc/irc`: protocol-focused IRC transport, capability and state primitives; independent of bot commands and modules
 - `novariusirc/core`: bot services (client adapter, config, local control, auth, commands, logging, i18n, feeds, plugins, workers)
@@ -132,6 +136,7 @@ For an environment-only container, pass `--config env` and at minimum set
 - `config.example.toml`: starter configuration
 - `config/*.example.toml`: optional feature snippets (feeds, moderation, workers)
 - `docs/CONFIGURATION.md` / `docs/CONFIGURATION.en.md`: complete German and English configuration reference
+- `docs/OPERATIONS.md`: local operation, systemd, container, backup, and restore guide
 - `LICENSE`: GNU AGPLv3 license text
 - `VALUES.md`: non-binding project values and public-code position
 - `docs/LICENSING.md`: license history and reason for the change

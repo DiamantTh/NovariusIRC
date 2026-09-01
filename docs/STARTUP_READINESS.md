@@ -48,20 +48,18 @@ IRC-Netz und dessen Services.
 
 ### P0 – Betriebsdaten und Wiederherstellung
 
-1. Bei späteren getesteten Server-Backends deren eigene Dump- und Restorepfade
-   ergänzen; SQLite-Archive dürfen nie als angeblich portable Server-Dumps
-   ausgegeben werden.
+Keine offenen Punkte für den derzeit unterstützten SQLite-Betrieb. Spätere
+getestete Server-Backends benötigen eigene Dump- und Restorepfade; SQLite-
+Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 
 ### P0 – Release-Absicherung
 
 1. Reproduzierbare lokale Prüfungen für Python 3.12 und das Container-Image
    dokumentieren. Es werden bewusst keine Forgejo-Runner oder Push-/PR-Jobs
    betrieben.
-2. Sauberen Upgrade-Test ergänzen: alte Datenbank sichern, migrieren, starten,
-   prüfen und wiederherstellen.
-3. Release-Notizen, unterstützte Upgradepfade und ein reproduzierbares
+2. Release-Notizen, unterstützte Upgradepfade und ein reproduzierbares
    Build-/Installationsverfahren festlegen.
-4. Einen dokumentierten Testlauf gegen mindestens ein modernes und ein
+3. Einen dokumentierten Testlauf gegen mindestens ein modernes und ein
    klassisches IRC-Netz durchführen.
 
 ### P1 – Betrieb vereinfachen
@@ -71,7 +69,7 @@ IRC-Netz und dessen Services.
 2. Lokale Monitoring-Ausgabe für Verbindungsstatus, Queue-Auslastung,
    letzten erfolgreichen Backup-Lauf und DB-Schema bereitstellen.
 3. Betriebsanleitung für Container, systemd, Verzeichnisrechte und Backupziele
-   schreiben.
+   pflegen.
 
 ## Bewusste Entscheidungen
 
@@ -116,5 +114,4 @@ IRC-Netz und dessen Services.
    novariusirc --status --config ./config.toml
    ```
 
-5. Erst nach dem P0-Backupblock produktive, nicht anderweitig gesicherte
-   Betriebsdaten in der Datenbank ablegen.
+5. Produktive Daten nur mit regelmäßigen extern abgelegten Backups betreiben.
