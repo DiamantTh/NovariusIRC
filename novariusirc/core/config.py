@@ -50,6 +50,10 @@ ENV_DATABASE_BACKEND = "NOVARIUSIRC_DATABASE_BACKEND"
 ENV_DATABASE_PATH = "NOVARIUSIRC_DATABASE_PATH"
 ENV_DATABASE_DSN = "NOVARIUSIRC_DATABASE_DSN"
 
+ENV_OWNER_HOSTMASK = "NOVARIUSIRC_OWNER_HOSTMASK"
+ENV_OWNER_ACCOUNT = "NOVARIUSIRC_OWNER_ACCOUNT"
+ENV_OWNER_CERTFP = "NOVARIUSIRC_OWNER_CERTFP"
+
 
 def safe_filename_component(value: str) -> str:
     """Return a stable, conservative filename component for an instance name."""
@@ -352,6 +356,45 @@ class RolesConfig(ConfigModel):
     admins: list[RoleEntry] = Field(default_factory=list)
 
 
+class OwnerBootstrapConfig(ConfigModel):
+    """One-time owner identity seeds for a database-backed instance."""
+
+    hostmask: str | None = None
+    account: str | None = None
+    certfp: str | None = None
+
+    @field_validator("hostmask", "account", "certfp")
+    @classmethod
+    def validate_identity(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value or any(character in value for character in "\r\n\0"):
+            raise ValueError("owner bootstrap identity must be non-empty plain text")
+        return value
+
+    def resolve_env(self) -> None:
+        for attribute, variable in (
+            ("hostmask", ENV_OWNER_HOSTMASK),
+            ("account", ENV_OWNER_ACCOUNT),
+            ("certfp", ENV_OWNER_CERTFP),
+        ):
+            value = os.getenv(variable)
+            if value:
+                setattr(self, attribute, value)
+
+    def bindings(self) -> list[tuple[str, str]]:
+        return [
+            (binding_type, value)
+            for binding_type, value in (
+                ("hostmask", self.hostmask),
+                ("account", self.account),
+                ("certfp", self.certfp),
+            )
+            if value
+        ]
+
+
 class ChannelLoggingConfig(ConfigModel):
     channel: str
     enabled: bool = True
@@ -589,6 +632,7 @@ class Config(ConfigModel):
     modules: ModulesConfig = Field(default_factory=ModulesConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     roles: RolesConfig = Field(default_factory=RolesConfig)
+    owner_bootstrap: OwnerBootstrapConfig = Field(default_factory=OwnerBootstrapConfig)
     commands: CommandsConfig = Field(default_factory=CommandsConfig)
     lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
     control: ControlConfig = Field(default_factory=ControlConfig)
@@ -740,6 +784,10 @@ class Config(ConfigModel):
         config.paths.resolve_env()
         config.database.resolve_env()
         config.database = DatabaseConfig.model_validate(config.database.model_dump())
+        config.owner_bootstrap.resolve_env()
+        config.owner_bootstrap = OwnerBootstrapConfig.model_validate(
+            config.owner_bootstrap.model_dump()
+        )
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
             config.auth.sasl_username = config.network.nick
@@ -790,6 +838,10 @@ class Config(ConfigModel):
         config.paths.resolve_env()
         config.database.resolve_env()
         config.database = DatabaseConfig.model_validate(config.database.model_dump())
+        config.owner_bootstrap.resolve_env()
+        config.owner_bootstrap = OwnerBootstrapConfig.model_validate(
+            config.owner_bootstrap.model_dump()
+        )
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
             config.auth.sasl_username = config.network.nick

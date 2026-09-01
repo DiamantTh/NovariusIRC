@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from novariusirc.__main__ import check_config
+from novariusirc.core.auth import AuthManager
 from novariusirc.core.config import Config, DatabaseConfig, safe_filename_component
 from novariusirc.core.database import (
     DatabaseBackendUnavailable,
@@ -33,6 +35,9 @@ realname = "Bot"
 enabled = true
 backend = "sqlite"
 {database}
+
+[owner_bootstrap]
+hostmask = "owner!*@trusted.example"
 """.strip(),
         encoding="utf-8",
     )
@@ -148,6 +153,46 @@ def test_sqlite_persists_feed_state_and_exposes_empty_role_bindings(
 
     assert database.load_feed_state("https://example.test/feed.xml") == StoredFeedState(
         "etag", "yesterday", ["first", "second"]
+    )
+
+
+def test_owner_bootstrap_runs_once_and_role_bindings_authorize_identities(
+    tmp_path: Path,
+) -> None:
+    database = SQLiteDatabase(DatabaseConfig(path=str(tmp_path / "bot.sqlite3")), "TestBot")
+    database.initialize(create=True)
+
+    seeded = database.bootstrap_owner_bindings(
+        [("hostmask", "Owner!*@trusted.example"), ("account", "owner-account")]
+    )
+    assert [binding.role_name for binding in seeded] == ["owner", "owner"]
+    assert database.bootstrap_owner_bindings([("hostmask", "Other!*@example")]) == []
+    database.add_role_binding("admin", "certfp", "AB:CD")
+
+    config = Config.model_validate(
+        {
+            "bot": {},
+            "network": {
+                "server": "irc.example.test",
+                "nick": "bot",
+                "user": "bot",
+                "realname": "Bot",
+            },
+        }
+    )
+    auth = AuthManager(
+        config.auth,
+        config.roles,
+        logging.getLogger("test.database"),
+        persistent_bindings=database.list_role_bindings(),
+    )
+
+    assert "owner" in auth.roles_for_identity("Owner", "Owner!u@trusted.example")
+    assert "owner" in auth.roles_for_identity(
+        "untrusted", "untrusted!u@host", account="owner-account"
+    )
+    assert "admin" in auth.roles_for_identity(
+        "untrusted", "untrusted!u@host", certfp="ab:cd"
     )
 
 

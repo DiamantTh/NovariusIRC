@@ -152,6 +152,14 @@ def check_config(config: Config) -> list[str]:
                 assert config.database.path is not None
                 if Path(config.database.path).exists():
                     database.check()
+                    if not any(
+                        binding.role_name == "owner"
+                        for binding in database.list_role_bindings()
+                    ) and not owner_seed_bindings(config):
+                        errors.append(
+                            "database has no owner binding; configure [owner_bootstrap] "
+                            "or NOVARIUSIRC_OWNER_HOSTMASK before startup"
+                        )
                 elif not writable_parent(config.database.path):
                     errors.append(
                         f"database directory cannot be created or written: "
@@ -177,6 +185,12 @@ def check_config(config: Config) -> list[str]:
             errors.append(f"Built-in module {name!r} cannot be loaded: {exc}")
 
     return errors
+
+
+def owner_seed_bindings(config: Config) -> list[tuple[str, str]]:
+    """Return one-time owner seeds, including the legacy config hostmasks."""
+    configured = [("hostmask", entry.hostmask) for entry in config.roles.owners]
+    return list(dict.fromkeys([*configured, *config.owner_bootstrap.bindings()]))
 
 
 def configuration_status(config: Config) -> list[str]:
@@ -236,7 +250,12 @@ def configure_event_loop() -> None:
 
 
 def register_builtin_commands(
-    commands: CommandRegistry, config: Config, start_time: float
+    commands: CommandRegistry,
+    config: Config,
+    start_time: float,
+    *,
+    auth: AuthManager | None = None,
+    database: SQLiteDatabase | None = None,
 ) -> None:
     async def ping(ctx: CommandContext, args: list[str]) -> None:
         await ctx.reply(ctx.tr("pong"))
@@ -266,6 +285,73 @@ def register_builtin_commands(
     commands.register("uptime", uptime, help_text="Show bot uptime", owner="core")
     commands.register("version", version, help_text="Show bot version", owner="core")
     commands.register("help", help_cmd, help_text="Show available commands", owner="core")
+
+    if database and auth:
+
+        async def role(ctx: CommandContext, args: list[str]) -> None:
+            usage = ctx.invocation("role list | add <role> <hostmask|account|certfp> <value> | remove <id>")
+            if not args:
+                await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                return
+            action = args[0].lower()
+            if action in {"list", "ls"} and len(args) == 1:
+                bindings = database.list_role_bindings()
+                if not bindings:
+                    await ctx.reply(ctx.tr("No role bindings are configured."))
+                    return
+                for binding in bindings:
+                    await ctx.reply(
+                        ctx.tr(
+                            "Role binding #{id}: {role} {type} {value}",
+                            id=binding.id,
+                            role=binding.role_name,
+                            type=binding.binding_type,
+                            value=binding.binding_value,
+                        )
+                    )
+                return
+            if action == "add" and len(args) >= 4:
+                try:
+                    binding = database.add_role_binding(
+                        args[1], args[2], " ".join(args[3:])
+                    )
+                except DatabaseError as exc:
+                    await ctx.reply(str(exc))
+                    return
+                auth.set_persistent_bindings(database.list_role_bindings())
+                await ctx.reply(
+                    ctx.tr("Added role binding #{id}.", id=binding.id)
+                )
+                return
+            if action in {"remove", "delete", "del"} and len(args) == 2:
+                try:
+                    binding_id = int(args[1])
+                except ValueError:
+                    await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                    return
+                bindings = database.list_role_bindings()
+                binding = next((item for item in bindings if item.id == binding_id), None)
+                if binding is None:
+                    await ctx.reply(ctx.tr("Role binding #{id} was not found.", id=binding_id))
+                    return
+                if binding.role_name == "owner" and sum(
+                    item.role_name == "owner" for item in bindings
+                ) == 1:
+                    await ctx.reply(ctx.tr("Cannot remove the last owner binding."))
+                    return
+                database.remove_role_binding(binding_id)
+                auth.set_persistent_bindings(database.list_role_bindings())
+                await ctx.reply(ctx.tr("Removed role binding #{id}.", id=binding_id))
+                return
+            await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+
+        commands.register(
+            "role",
+            role,
+            roles=("owner",),
+            help_text="Manage persistent role bindings",
+            owner="core",
+        )
 
 
 def register_runtime_commands(
@@ -339,6 +425,10 @@ async def async_main() -> None:
             if args.init_database
             else database.check()
         )
+        if args.init_database:
+            seeded = database.bootstrap_owner_bindings(owner_seed_bindings(config))
+            if seeded:
+                print(f"Seeded {len(seeded)} owner binding(s).")
         print(
             f"Database {status.integrity}: backend={status.backend}; "
             f"schema={status.schema_version}; location={status.location}"
@@ -373,6 +463,9 @@ async def async_main() -> None:
     if config.database.enabled:
         database = create_database(config.database, config.bot.name or config.network.nick)
         status = database.check()
+        seeded = database.bootstrap_owner_bindings(owner_seed_bindings(config))
+        if seeded:
+            logger.info("Seeded %s owner binding(s) from bootstrap configuration", len(seeded))
         logger.info(
             "Database ready: backend=%s schema=%s location=%s",
             status.backend,
@@ -383,12 +476,17 @@ async def async_main() -> None:
     if args.foreground:
         logger.info("Starting in foreground mode")
 
-    auth = AuthManager(config.auth, config.roles, logger)
+    auth = AuthManager(
+        config.auth,
+        config.roles,
+        logger,
+        persistent_bindings=database.list_role_bindings() if database else None,
+    )
     commands = CommandRegistry(
         prefix=config.bot.prefix, rate_limit_seconds=config.commands.rate_limit_seconds
     )
     start_time = time.monotonic()
-    register_builtin_commands(commands, config, start_time)
+    register_builtin_commands(commands, config, start_time, auth=auth, database=database)
 
     feeds = FeedEngine(
         config.feeds,

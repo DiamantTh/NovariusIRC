@@ -82,19 +82,28 @@ certfp_enabled = false
 # certfp_key_file = "./certs/irc-client.key"
 
 [roles]
-# Eigentümer haben volle Bot-Rechte (z. B. reload, shutdown)
-# Hostmask-Pattern: nick!user@host oder Wildcards (*!*@*.trusted.net)
+# Ohne Datenbank: Eigentümer haben volle Bot-Rechte. Mit Datenbank dienen diese
+# Hostmasks nur beim ersten Start als Owner-Seed; danach ist SQL maßgeblich.
+# Hostmask-Pattern: nick!user@host oder Wildcards (*!*@*.trusted.net).
 owners = [
     { hostmask = "owner!*@*.trusted.net" },
     { hostmask = "admin!~user@secure.host.tld" }
 ]
 
-# Administratoren haben erweiterte Rechte (z. B. kick, ban, aber kein shutdown)
+# Ohne Datenbank: Administratoren haben erweiterte Rechte. Mit Datenbank über
+# den Owner-Befehl !role add admin ... verwalten.
 admins = [
     { hostmask = "moderator!*@*.staff.example.net" },
     { hostmask = "*!*@vhost/staff/*" },
     { hostmask = "secureadmin!*@*" }
 ]
+
+# Einmalige Owner-Identitäten für eine neue Datenbank. Besonders für Docker
+# besser per NOVARIUSIRC_OWNER_HOSTMASK/ACCOUNT/CERTFP statt im TOML setzen.
+[owner_bootstrap]
+# hostmask = "owner!*@*.trusted.net"
+# account = "owner-account"
+# certfp = "0123456789abcdef..."
 
 [logging]
 level = "INFO"

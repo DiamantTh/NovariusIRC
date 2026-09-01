@@ -1144,7 +1144,12 @@ class IRCClient:
 
         # Extract hostmask from prefix (nick!user@host) or fallback to nick
         hostmask = prefix if "!" in prefix else f"{nick}!unknown@unknown"
-        roles = self.auth.roles_for_hostmask(nick, hostmask)
+        roles = self.auth.roles_for_identity(
+            nick,
+            hostmask,
+            account=account,
+            certfp=self.auth.certfp_from_tags(message_tags),
+        )
         command_message = self._command_message(message, in_channel=channel is not None)
         ctx = CommandContext(
             nick=nick,

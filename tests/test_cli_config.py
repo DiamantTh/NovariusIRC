@@ -19,8 +19,10 @@ from novariusirc.__main__ import (
     register_builtin_commands,
     register_runtime_commands,
 )
+from novariusirc.core.auth import AuthManager
 from novariusirc.core.commands import CommandRegistry
-from novariusirc.core.config import Config
+from novariusirc.core.config import Config, DatabaseConfig
+from novariusirc.core.database import SQLiteDatabase
 from novariusirc.version import SIMPLE_VERSION, detailed_version
 
 
@@ -155,6 +157,49 @@ def test_irc_version_is_simple_and_botinfo_is_detailed() -> None:
     assert f"software={detailed_version().splitlines()[0]}" in botinfo
     assert "network=TestNet; status=connected" in botinfo
     assert "Runtime:" in botinfo
+
+
+def test_owner_role_command_updates_the_database_cache(tmp_path: Path) -> None:
+    config = Config.model_validate(
+        {
+            "bot": {"language": "en"},
+            "network": {
+                "server": "irc.example.test",
+                "nick": "bot",
+                "user": "bot",
+                "realname": "Bot",
+            },
+        }
+    )
+    database = SQLiteDatabase(
+        DatabaseConfig(path=str(tmp_path / "bot.sqlite3")), "TestBot"
+    )
+    database.initialize(create=True)
+    database.bootstrap_owner_bindings([("hostmask", "owner!*@trusted.example")])
+    auth = AuthManager(
+        config.auth,
+        config.roles,
+        logging.getLogger("test.roles"),
+        persistent_bindings=database.list_role_bindings(),
+    )
+    commands = CommandRegistry(prefix="!", rate_limit_seconds=0)
+    register_builtin_commands(commands, config, start_time=0, auth=auth, database=database)
+    terminal = TerminalClient()
+
+    assert asyncio.run(
+        dispatch_terminal_command(
+            commands,
+            config,
+            logging.getLogger("test.roles"),
+            terminal,
+            "role add admin account staff-account",
+        )
+    )
+    assert terminal.messages[-1] == "Added role binding #2."
+    assert auth.roles_for_identity("staff", "staff!u@host", account="staff-account") == [
+        "user",
+        "admin",
+    ]
 
 
 def test_status_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:

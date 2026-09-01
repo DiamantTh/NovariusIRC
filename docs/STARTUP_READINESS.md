@@ -37,6 +37,7 @@ IRC-Netz und dessen Services.
 | Alte IRCds | fertig | IRCv3 ist optional; ohne CAP und Account-Tag bleibt der normale IRC-Betrieb möglich |
 | Konfiguration | fertig | TOML, Includes, ENV-Overrides, strikte Schlüsselprüfung und relative Pfade |
 | Lokale Steuerung | fertig | Terminal-Konsole und Unix-Socket mit `0600`, ohne TCP-Listener oder Betriebssystem-Shell |
+| Rollen | fertig | DB-bindbare Rollen für Hostmask, IRCv3-Account oder CertFP; einmaliger Owner-Seed und Owner-Befehl `role` |
 | Buildinformation | fertig | `-v`, `-V`, `--version`, IRC-`version` und `botinfo` |
 | Sprache | fertig | Core- und Modulantworten für Deutsch, Englisch und Japanisch |
 | RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits und Vorlagen; mit Datenbank liegt der Feed-Status in SQL statt in JSON-Dateien |
@@ -47,13 +48,7 @@ IRC-Netz und dessen Services.
 
 ### P0 – Betriebsdaten und Wiederherstellung
 
-1. Persistente Rollen und Bindungen an die Autorisierung anschließen. Die
-   Tabellen sind vorbereitet; die heutige Hostmask-Konfiguration ist bis zum
-   Owner-Bootstrap noch maßgeblich.
-2. Einmaligen Owner-Bootstrap über ENV ergänzen; danach müssen Rollen aus der
-   Datenbank stammen. Hostmask, IRCv3-Account und CertFP werden als getrennte
-   Bindungsarten behandelt, damit ältere IRC-Netze nicht ausgeschlossen sind.
-3. Sichere Backups und Wiederherstellung bauen: SQLite-Backup-API,
+1. Sichere Backups und Wiederherstellung bauen: SQLite-Backup-API,
    backendabhängige Server-Dumps, Manifest, Prüfsumme, Test und eindeutige
    Dateinamen mit Botname und UTC-Zeitstempel.
 
@@ -87,6 +82,9 @@ IRC-Netz und dessen Services.
 - Alembic-Revisionen werden mit dem Paket ausgeliefert. Die frühere
   SQLite-Metadatendatei wird bei einer expliziten Initialisierung in die erste
   Alembic-Revision überführt.
+- Bei aktivierter Datenbank sind die DB-Bindungen maßgeblich. Der einmalige
+  Owner-Seed kann Hostmasks (klassisches IRC), IRCv3-Accounts oder CertFPs
+  enthalten; der danach laufende `role`-Befehl verwaltet die Einträge.
 - Secrets bleiben in ENV, Secret-Dateien oder Container-Secrets; sie gehören
   nicht in die Datenbank oder in Backups im Klartext.
 - Große Anhänge und Logs bleiben Dateien. Die Datenbank speichert später nur

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,6 +45,8 @@ BACKENDS = (
     BackendSpec("mysql", (), False, "MySQL"),
     BackendSpec("mssql", ("sqlserver", "sql-server"), False, "Microsoft SQL Server"),
 )
+ROLE_NAMES = frozenset(("user", "admin", "owner"))
+BINDING_TYPES = frozenset(("hostmask", "account", "certfp"))
 
 
 def normalize_backend_name(value: str) -> str:
@@ -216,6 +219,122 @@ class SQLiteDatabase:
                 ]
         except SQLAlchemyError as exc:
             raise DatabaseError(f"could not read role bindings: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    @staticmethod
+    def _validate_role_binding(
+        role_name: str, binding_type: str, binding_value: str
+    ) -> tuple[str, str, str]:
+        role_name = role_name.strip().lower()
+        binding_type = binding_type.strip().lower()
+        binding_value = binding_value.strip()
+        if role_name not in ROLE_NAMES:
+            raise DatabaseError(f"unknown role: {role_name!r}")
+        if binding_type not in BINDING_TYPES:
+            raise DatabaseError(f"unknown role binding type: {binding_type!r}")
+        if not binding_value or any(character in binding_value for character in "\r\n\0"):
+            raise DatabaseError("role binding value must be non-empty plain text")
+        if binding_type == "account" and any(character.isspace() for character in binding_value):
+            raise DatabaseError("IRC account bindings must not contain whitespace")
+        if binding_type == "certfp":
+            normalized = binding_value.replace(":", "")
+            if not re.fullmatch(r"[0-9a-fA-F]+", normalized):
+                raise DatabaseError("CertFP bindings must be hexadecimal fingerprints")
+            binding_value = normalized.lower()
+        return role_name, binding_type, binding_value
+
+    def add_role_binding(
+        self, role_name: str, binding_type: str, binding_value: str
+    ) -> RoleBinding:
+        """Create a role binding and return its stable numeric ID."""
+        role_name, binding_type, binding_value = self._validate_role_binding(
+            role_name, binding_type, binding_value
+        )
+        engine = self._engine()
+        try:
+            with engine.begin() as connection:
+                result = connection.execute(
+                    role_bindings.insert().values(
+                        role_name=role_name,
+                        binding_type=binding_type,
+                        binding_value=binding_value,
+                        created_at=datetime.now(UTC),
+                    )
+                )
+                binding_id = result.inserted_primary_key[0]
+                if binding_id is None:
+                    raise DatabaseError("database did not return the role binding ID")
+                return RoleBinding(
+                    id=int(binding_id),
+                    role_name=role_name,
+                    binding_type=binding_type,
+                    binding_value=binding_value,
+                )
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"could not add role binding: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def remove_role_binding(self, binding_id: int) -> bool:
+        """Remove one role binding by ID; the owner safety check is caller-owned."""
+        if binding_id < 1:
+            raise DatabaseError("role binding ID must be positive")
+        engine = self._engine()
+        try:
+            with engine.begin() as connection:
+                result = connection.execute(
+                    role_bindings.delete().where(role_bindings.c.id == binding_id)
+                )
+                return result.rowcount == 1
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"could not remove role binding: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def bootstrap_owner_bindings(
+        self, bindings: list[tuple[str, str]]
+    ) -> list[RoleBinding]:
+        """Seed owners exactly once, without replacing existing DB authority."""
+        normalized = [
+            self._validate_role_binding("owner", binding_type, binding_value)
+            for binding_type, binding_value in bindings
+        ]
+        if not normalized:
+            return []
+        deduplicated = list(dict.fromkeys((kind, value) for _, kind, value in normalized))
+        engine = self._engine()
+        try:
+            with engine.begin() as connection:
+                existing = connection.execute(
+                    select(role_bindings.c.id).where(role_bindings.c.role_name == "owner")
+                ).first()
+                if existing is not None:
+                    return []
+                created: list[RoleBinding] = []
+                for binding_type, binding_value in deduplicated:
+                    result = connection.execute(
+                        role_bindings.insert().values(
+                            role_name="owner",
+                            binding_type=binding_type,
+                            binding_value=binding_value,
+                            created_at=datetime.now(UTC),
+                        )
+                    )
+                    binding_id = result.inserted_primary_key[0]
+                    if binding_id is None:
+                        raise DatabaseError("database did not return the role binding ID")
+                    created.append(
+                        RoleBinding(
+                            id=int(binding_id),
+                            role_name="owner",
+                            binding_type=binding_type,
+                            binding_value=binding_value,
+                        )
+                    )
+                return created
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"could not bootstrap owner bindings: {exc}") from exc
         finally:
             engine.dispose()
 

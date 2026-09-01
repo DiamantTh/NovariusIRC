@@ -10,6 +10,7 @@
 - [Netzwerk und IRCv3](#network)
 - [Authentifizierung](#auth)
 - [Rollen](#roles)
+- [Owner-Bootstrap](#owner-bootstrap)
 - [Logging](#logging)
 - [Befehle, Lifecycle und Control](#commands-lifecycle-control)
 - [Eingebaute Module](#modules)
@@ -188,8 +189,11 @@ EXTERNAL benötigt TLS, aktiviertes CertFP und eine Zertifikatsdatei.
 <a id="roles"></a>
 ## `[roles]`
 
-Die Rollen `owner` und `admin` werden über IRC-Hostmasks zugeordnet. Der
-Abschnitt enthält zwei Rollenlisten:
+Ohne aktivierte Datenbank werden die Rollen `owner` und `admin` wie bisher
+über IRC-Hostmasks aus dieser Konfiguration zugeordnet. Mit Datenbank dienen
+`owners` beim ersten Start nur als einmaliger Owner-Seed; `admins` werden dann
+nicht mehr verwendet. Weitere Zuweisungen verwaltet ein Owner mit
+`!role list`, `!role add` und `!role remove` in der Datenbank.
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
@@ -215,6 +219,32 @@ admins = [
 Hostmasks funktionieren auch auf Netzen ohne NickServ und ohne IRCv3. Für
 privilegierte Rollen sollten stabile, serverseitig gesetzte Hosts verwendet
 werden; ein bloßer Nick ist kein verlässlicher Identitätsnachweis.
+
+<a id="owner-bootstrap"></a>
+## `[owner_bootstrap]`
+
+Diese Werte erzeugen einmalig Owner-Bindungen, wenn eine aktivierte Datenbank
+noch keinen Owner enthält. Sie werden beim `--init-database` und beim normalen
+Start ausgewertet, danach nie als zweite Autoritätsquelle verwendet. Damit
+eignet sich der Abschnitt besonders für die erste Container-Installation.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `hostmask` | Text oder leer | leer | Hostmask-Muster; funktioniert auch mit klassischen IRCds. |
+| `account` | Text oder leer | leer | Exakter IRC-Kontoname aus dem IRCv3-Tag `account`. |
+| `certfp` | Text oder leer | leer | Hexadezimaler TLS-Zertifikatsfingerabdruck aus `certfp` oder `solanum.chat/certfp`. Doppelpunkte sind erlaubt. |
+
+```toml
+[owner_bootstrap]
+hostmask = "owner!*@trusted.example"
+# account = "owner-account"
+# certfp = "0123456789abcdef..."
+```
+
+Für die containerfreundliche Einmal-Konfiguration überschreiben
+`NOVARIUSIRC_OWNER_HOSTMASK`, `NOVARIUSIRC_OWNER_ACCOUNT` und
+`NOVARIUSIRC_OWNER_CERTFP` die jeweiligen Werte. Mindestens eine Owner-Bindung
+ist erforderlich, bevor ein Datenbankbetrieb als startbereit gilt.
 
 <a id="logging"></a>
 ## `[logging]`
@@ -460,6 +490,9 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | `NOVARIUSIRC_DATABASE_BACKEND` | `database.backend` | Registrierter Backendname oder Alias. |
 | `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite-Dateipfad. |
 | `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Verbindungs-DSN einer Serverdatenbank; Geheimwert. |
+| `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | Einmalige Owner-Hostmask. |
+| `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | Einmaliger Owner-IRC-Kontoname. |
+| `NOVARIUSIRC_OWNER_CERTFP` | `owner_bootstrap.certfp` | Einmaliger Owner-CertFP. |
 
 ENV-only benötigt mindestens `NOVARIUSIRC_SERVER` und `NOVARIUSIRC_NICK`:
 

@@ -481,7 +481,12 @@ class PluginManager:
             config=self.config,
             client=self.client,
             logger=self.logger,
-            roles=self.auth.roles_for_hostmask(nick, resolved_hostmask),
+            roles=self.auth.roles_for_identity(
+                nick,
+                resolved_hostmask,
+                account=account,
+                certfp=self.auth.certfp_from_tags(dict(tags or {})),
+            ),
             tags=dict(tags or {}),
             account=account,
             event=event,

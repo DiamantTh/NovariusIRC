@@ -10,6 +10,7 @@
 - [Network and IRCv3](#network)
 - [Authentication](#auth)
 - [Roles](#roles)
+- [Owner bootstrap](#owner-bootstrap)
 - [Logging](#logging)
 - [Commands, lifecycle, and control](#commands-lifecycle-control)
 - [Built-in modules](#modules)
@@ -183,8 +184,11 @@ EXTERNAL requires TLS, enabled CertFP, and a certificate file.
 <a id="roles"></a>
 ## `[roles]`
 
-The `owner` and `admin` roles are assigned through IRC hostmasks. The section
-contains two role lists:
+Without an enabled database, the `owner` and `admin` roles continue to be
+assigned through IRC hostmasks from this configuration. With a database,
+`owners` is only a one-time owner seed on first startup and `admins` is no
+longer used. An owner manages later assignments in the database with
+`!role list`, `!role add`, and `!role remove`.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -210,6 +214,32 @@ admins = [
 Hostmasks also work on networks without NickServ or IRCv3. Privileged roles
 should use stable server-assigned hosts; a nickname alone is not reliable proof
 of identity.
+
+<a id="owner-bootstrap"></a>
+## `[owner_bootstrap]`
+
+These values create owner bindings once when an enabled database does not yet
+contain an owner. They are evaluated by `--init-database` and normal startup,
+then never act as a second authority source. This is intended especially for
+the first container installation.
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `hostmask` | text or empty | empty | Hostmask pattern; works with classic IRCds too. |
+| `account` | text or empty | empty | Exact IRC account name from the IRCv3 `account` tag. |
+| `certfp` | text or empty | empty | Hex TLS certificate fingerprint from `certfp` or `solanum.chat/certfp`. Colons are accepted. |
+
+```toml
+[owner_bootstrap]
+hostmask = "owner!*@trusted.example"
+# account = "owner-account"
+# certfp = "0123456789abcdef..."
+```
+
+For container-friendly first-time configuration,
+`NOVARIUSIRC_OWNER_HOSTMASK`, `NOVARIUSIRC_OWNER_ACCOUNT`, and
+`NOVARIUSIRC_OWNER_CERTFP` override the matching values. At least one owner
+binding is required before database operation is startup-ready.
 
 <a id="logging"></a>
 ## `[logging]`
@@ -453,6 +483,9 @@ the base structure is validated before overrides are applied.
 | `NOVARIUSIRC_DATABASE_BACKEND` | `database.backend` | Registered backend name or alias. |
 | `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite file path. |
 | `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Server-database connection DSN; secret value. |
+| `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | One-time owner hostmask. |
+| `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | One-time owner IRC account name. |
+| `NOVARIUSIRC_OWNER_CERTFP` | `owner_bootstrap.certfp` | One-time owner CertFP. |
 
 Environment-only startup requires at least `NOVARIUSIRC_SERVER` and
 `NOVARIUSIRC_NICK`:

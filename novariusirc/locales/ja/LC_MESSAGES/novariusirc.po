@@ -49,6 +49,27 @@ msgstr "コアサービスの状態を表示"
 msgid "Show bot identity and features"
 msgstr "Bot の識別情報と機能を表示"
 
+msgid "Manage persistent role bindings"
+msgstr "永続的なロール割り当てを管理"
+
+msgid "No role bindings are configured."
+msgstr "ロール割り当ては設定されていません。"
+
+msgid "Role binding #{id}: {role} {type} {value}"
+msgstr "ロール割り当て #{id}: {role} {type} {value}"
+
+msgid "Added role binding #{id}."
+msgstr "ロール割り当て #{id} を追加しました。"
+
+msgid "Removed role binding #{id}."
+msgstr "ロール割り当て #{id} を削除しました。"
+
+msgid "Role binding #{id} was not found."
+msgstr "ロール割り当て #{id} は見つかりません。"
+
+msgid "Cannot remove the last owner binding."
+msgstr "最後の owner 割り当ては削除できません。"
+
 msgid "connected"
 msgstr "接続済み"
 
