@@ -81,7 +81,7 @@ def test_sqlite_database_requires_explicit_initialization(tmp_path: Path) -> Non
 
     status = database.initialize(create=True)
     assert status.integrity == "ok"
-    assert status.schema_version == 1
+    assert status.schema_version == "0001_storage_metadata"
     assert database.check() == status
 
 
@@ -103,6 +103,34 @@ def test_sqlite_refuses_unknown_existing_database(tmp_path: Path) -> None:
     database = SQLiteDatabase(DatabaseConfig(path=str(path)), "TestBot")
     with pytest.raises(DatabaseError, match="unknown existing database"):
         database.initialize(create=True)
+
+
+def test_sqlite_migrates_the_legacy_metadata_database(tmp_path: Path) -> None:
+    path = tmp_path / "legacy.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE schema_migrations "
+            "(version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "CREATE TABLE instance_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO schema_migrations VALUES (1, 'initial storage metadata', 'now')"
+        )
+        connection.execute(
+            "INSERT INTO instance_metadata VALUES ('bot_name', 'TestBot')"
+        )
+
+    status = SQLiteDatabase(DatabaseConfig(path=str(path)), "TestBot").initialize(
+        create=True
+    )
+
+    assert status.schema_version == "0001_storage_metadata"
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            "0001_storage_metadata",
+        )
 
 
 def test_known_server_backend_fails_with_actionable_error() -> None:

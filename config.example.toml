@@ -136,8 +136,8 @@ log_root = "./logs"
 data_root = "./data"
 
 [database]
-# SQLite ist bereits nutzbar. Weitere bekannte Backendnamen werden erst nach
-# Installation ihres jeweiligen Adapters aktiviert.
+# SQLite nutzt SQLAlchemy Core und versionierte Alembic-Migrationen. Weitere
+# bekannte Backendnamen werden erst nach Installation ihres Adapters aktiviert.
 enabled = false
 backend = "sqlite"
 # Ohne Pfadangabe: <data_root>/<bot.name>.sqlite3

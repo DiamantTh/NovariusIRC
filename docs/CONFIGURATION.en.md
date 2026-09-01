@@ -295,10 +295,12 @@ novariusirc --init-database --config ./config.toml
 novariusirc --check-database --config ./config.toml
 ```
 
-Initialization enables foreign keys, WAL, `synchronous = FULL`, creates the
-migration tables, and records the stable bot name. An unknown existing SQLite
-file is not adopted. If an initialized database disappears, the bot stops
-instead of silently creating an empty replacement.
+Initialization enables foreign keys, WAL, `synchronous = FULL`, runs the
+packaged Alembic migrations, and records the stable bot name. An unknown
+existing SQLite file is not adopted. If an initialized database disappears,
+the bot stops instead of silently creating an empty replacement. The earlier
+SQLite metadata file is accepted during explicit initialization and moved to
+the first Alembic revision.
 
 <a id="feeds"></a>
 ## `[feeds]`

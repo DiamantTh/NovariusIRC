@@ -14,8 +14,9 @@ das eingebaute RSS/Atom-Modul ausführen. Konfiguration, lokaler Control-Socket,
 Buildinformationen und Protokollgrenzen sind getestet.
 
 Vor einem als stabil beworbenen Release fehlen jedoch noch persistente
-Core-Daten, Backups und die endgültige Datenbankarchitektur. Die aktuelle
-SQLite-Grundlage ist absichtlich noch kein Ersatz für diese Punkte.
+Core-Daten, Backups und deren Wiederherstellung. Die Datenbankbasis verwendet
+jetzt SQLAlchemy Core und versionierte Alembic-Migrationen, enthält aber noch
+keine der fachlichen Betriebsdaten.
 
 Verifiziert am 1. September 2026:
 
@@ -40,22 +41,19 @@ IRC-Netz und dessen Services.
 | Sprache | fertig | Core- und Modulantworten für Deutsch, Englisch und Japanisch |
 | RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits, Vorlagen und Feed-Status |
 | Logging | fertig | Core-, IRC-, Raw- und Moderationslogs; Zeitzone konfigurierbar |
-| SQLite-Basis | fertig | Stabiler Botname, explizite Initialisierung, WAL, Foreign Keys, Integritäts- und Schemacheck |
+| Datenbankbasis | fertig | SQLAlchemy Core, mitgelieferte Alembic-Revisionen, stabiler Botname, explizite Initialisierung, WAL, Foreign Keys, Integritäts- und Schemacheck |
 
 ## Vor Release noch erforderlich
 
 ### P0 – Betriebsdaten und Wiederherstellung
 
-1. SQLAlchemy-Core und Alembic als Datenbankbasis einführen, bevor weitere
-   Tabellen entstehen. SQLite, PostgreSQL und MariaDB/MySQL brauchen dieselbe
-   getestete Migrationskette; weitere Dialekte bleiben ausdrücklich optional.
-2. Persistente Core-Tabellen bauen: interne Rollen und Bindungen, Feed-Zustand,
+1. Persistente Core-Tabellen bauen: interne Rollen und Bindungen, Feed-Zustand,
    K-Line-Historie und Audit-Ereignisse. Die heutigen JSON-Feeddateien und
    `data/klines.txt` dürfen danach nicht mehr die maßgebliche Quelle sein.
-3. Einmaligen Owner-Bootstrap über ENV ergänzen; danach müssen Rollen aus der
+2. Einmaligen Owner-Bootstrap über ENV ergänzen; danach müssen Rollen aus der
    Datenbank stammen. Hostmask, IRCv3-Account und CertFP werden als getrennte
    Bindungsarten behandelt, damit ältere IRC-Netze nicht ausgeschlossen sind.
-4. Sichere Backups und Wiederherstellung bauen: SQLite-Backup-API,
+3. Sichere Backups und Wiederherstellung bauen: SQLite-Backup-API,
    backendabhängige Server-Dumps, Manifest, Prüfsumme, Test und eindeutige
    Dateinamen mit Botname und UTC-Zeitstempel.
 
@@ -86,6 +84,9 @@ IRC-Netz und dessen Services.
 - SQLite ist der nutzbare Startpunkt. PostgreSQL, MariaDB, MySQL und Microsoft
   SQL Server sind nur registrierte Namen, bis ihre SQLAlchemy-Treiber und
   Migrationspfade getestet sind.
+- Alembic-Revisionen werden mit dem Paket ausgeliefert. Die frühere
+  SQLite-Metadatendatei wird bei einer expliziten Initialisierung in die erste
+  Alembic-Revision überführt.
 - Secrets bleiben in ENV, Secret-Dateien oder Container-Secrets; sie gehören
   nicht in die Datenbank oder in Backups im Klartext.
 - Große Anhänge und Logs bleiben Dateien. Die Datenbank speichert später nur

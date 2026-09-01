@@ -301,10 +301,12 @@ novariusirc --init-database --config ./config.toml
 novariusirc --check-database --config ./config.toml
 ```
 
-Die Initialisierung aktiviert Foreign Keys, WAL, `synchronous = FULL`, legt die
-Migrationstabellen an und speichert den stabilen Botnamen. Eine unbekannte
-bestehende SQLite-Datei wird nicht übernommen. Fehlt eine zuvor initialisierte
-Datei, bricht der Bot ab, statt unbemerkt eine leere Datenbank zu erzeugen.
+Die Initialisierung aktiviert Foreign Keys, WAL, `synchronous = FULL`, führt
+die mitgelieferten Alembic-Migrationen aus und speichert den stabilen Botnamen.
+Eine unbekannte bestehende SQLite-Datei wird nicht übernommen. Fehlt eine zuvor
+initialisierte Datei, bricht der Bot ab, statt unbemerkt eine leere Datenbank
+zu erzeugen. Die frühere SQLite-Metadatendatei wird beim expliziten
+Initialisieren übernommen und auf die erste Alembic-Revision gesetzt.
 
 <a id="feeds"></a>
 ## `[feeds]`
