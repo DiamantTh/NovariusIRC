@@ -97,10 +97,11 @@ local build and runtime report. IRC `version` and CTCP `VERSION` remain compact;
 the explicit IRC `botinfo` command shows the extended build and feature report.
 
 Run the container. Mount the complete instance directory so relative includes,
-certificates, and external plugins stay available; keep data and logs writable:
+certificates, external plugins, and manual configuration edits stay available;
+keep data and logs writable. The bot reads configuration but never rewrites it:
 ```bash
 docker run --rm \
-  -v "$(pwd)/instance:/app/instance:ro" \
+  -v "$(pwd)/instance:/app/instance" \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
   -e NOVARIUSIRC_DATA_ROOT=/app/data \
@@ -111,7 +112,7 @@ docker run --rm \
 Podman with SELinux label:
 ```bash
 podman run --rm \
-  -v "$(pwd)/instance:/app/instance:ro,Z" \
+  -v "$(pwd)/instance:/app/instance:Z" \
   -v "$(pwd)/data:/app/data:Z" \
   -v "$(pwd)/logs:/app/logs:Z" \
   -e NOVARIUSIRC_DATA_ROOT=/app/data \

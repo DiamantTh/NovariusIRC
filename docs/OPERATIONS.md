@@ -79,13 +79,14 @@ Unit-Datei.
 
 ## Container
 
-Die Konfiguration wird schreibgeschützt gemountet. Daten, Logs, Backups und der
-Unix-Control-Socket brauchen jeweils beschreibbare Mounts. Bei Podman mit
+Die Konfiguration darf für manuelle Änderungen beschreibbar gemountet werden;
+der Bot liest sie nur und schreibt sie nie selbst. Daten, Logs, Backups und der
+Unix-Control-Socket brauchen ebenfalls beschreibbare Mounts. Bei Podman mit
 SELinux `:Z` ergänzen.
 
 ```console
 podman run --rm --name example-novariusirc \
-  -v ./instance:/app/instance:ro,Z \
+  -v ./instance:/app/instance:Z \
   -v ./data:/app/data:Z \
   -v ./logs:/app/logs:Z \
   -v ./backups:/app/backups:Z \
@@ -96,8 +97,15 @@ podman run --rm --name example-novariusirc \
   novariusirc:local --config /app/instance/config.toml
 ```
 
-Für `compression = "bzip3"` muss das gewählte Runtime-Image `bzip3` enthalten;
-anderenfalls `compression = "none"` verwenden.
+Das mitgelieferte Runtime-Image enthält bzip3. Bei einem eigenen Image muss
+`compression = "none"` gewählt werden, falls bzip3 dort fehlt.
+
+Docker-Umgebungsvariablen sind für Laufzeitwerte und Secrets vorgesehen und
+werden bei jedem Start eingelesen. Sie werden nicht in die Datenbank
+zurückgeschrieben; die einzige absichtliche Ausnahme ist ein Owner-Bootstrap,
+der nur bei einer Datenbank ohne Owner-Bindung einmalig greift. Docker-Labels
+sind keine Prozessumgebung. Der Bot liest sie bewusst nicht, weil dies Zugriff
+auf den Docker-Socket verlangen würde.
 
 ## Backup und Offline-Restore
 

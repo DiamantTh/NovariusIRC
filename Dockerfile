@@ -38,6 +38,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y bzip3 && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -45,12 +49,12 @@ COPY config.example.toml ./config.example.toml
 COPY config ./config
 COPY plugins ./plugins
 
-RUN addgroup --system app && \
-    adduser --system --ingroup app --home /app app && \
+RUN addgroup --system novariusirc && \
+    adduser --system --ingroup novariusirc --home /app novariusirc && \
     mkdir -p /app/logs /app/data && \
-    chown -R app:app /app
+    chown -R novariusirc:novariusirc /app
 
-USER app
+USER novariusirc
 
 STOPSIGNAL SIGINT
 
