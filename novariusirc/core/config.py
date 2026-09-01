@@ -609,6 +609,14 @@ class DatabaseConfig(ConfigModel):
             self.dsn = env_val
 
 
+class BackupConfig(ConfigModel):
+    enabled: bool = False
+    directory: str = "./backups"
+    compression: Literal["none", "bzip3"] = "none"
+    compression_min_bytes: int = Field(default=8 * 1024 * 1024, ge=0)
+    include_data: bool = True
+
+
 class IncludesConfig(ConfigModel):
     files: list[str] = Field(default_factory=lambda: list(DEFAULT_INCLUDE_FILES))
 
@@ -643,6 +651,7 @@ class Config(ConfigModel):
     workers: WorkerConfig = Field(default_factory=WorkerConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    backups: BackupConfig = Field(default_factory=BackupConfig)
 
     @staticmethod
     def _merge(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
@@ -703,6 +712,7 @@ class Config(ConfigModel):
                 filename = f"{safe_filename_component(self.bot.name)}.sqlite3"
                 database_path = str(Path(self.paths.data_root) / filename)
             self.database.path = resolve(database_path)
+        self.backups.directory = resolve(self.backups.directory)
         self.control.socket_path = resolve(self.control.socket_path)
         self.moderation.log_file = resolve(self.moderation.log_file)
         for attribute in ("certfp_cert_file", "certfp_key_file"):

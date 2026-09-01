@@ -16,6 +16,7 @@
 - [Built-in modules](#modules)
 - [Paths and workers](#paths-workers)
 - [Database](#database)
+- [Backups](#backups)
 - [Feeds](#feeds)
   - [Feed definitions](#feed-definitions)
 - [Moderation](#moderation)
@@ -331,6 +332,33 @@ existing SQLite file is not adopted. If an initialized database disappears,
 the bot stops instead of silently creating an empty replacement. The earlier
 SQLite metadata file is accepted during explicit initialization and moved to
 the first Alembic revision.
+
+<a id="backups"></a>
+## `[backups]`
+
+Backups are optional and deliberately started through the CLI only. SQLite is
+read as a consistent snapshot through its backup API. The archive also includes
+regular files below `paths.data_root`, but never the live database, its WAL/SHM
+sidecars, or the backup directory itself. `manifest.json` records the SHA-256
+hash and size of every included file.
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `false` | Permit creating backups. |
+| `directory` | path | `./backups` | Destination directory, relative to `config.toml`. |
+| `compression` | choice | `none` | `none` keeps a portable `.tar`; `bzip3` compresses only above the threshold. |
+| `compression_min_bytes` | integer | `8388608` | Minimum TAR size for optional bzip3 compression. `0` always compresses. |
+| `include_data` | Boolean | `true` | Include regular extra files from `paths.data_root`. |
+
+Names use only the stable bot name and UTC, for example
+`MyBot_20260901T201530Z.tar`:
+
+```console
+novariusirc --backup-database --config ./config.toml
+novariusirc --list-backups --config ./config.toml
+```
+
+For `compression = "bzip3"`, `bzip3` must be installed in the execution path.
 
 <a id="feeds"></a>
 ## `[feeds]`

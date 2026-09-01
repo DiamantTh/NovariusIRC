@@ -8,12 +8,14 @@ import contextlib
 import importlib
 import logging
 import os
+import shutil
 import signal
 import sys
 import time
 from pathlib import Path
 
 from novariusirc.core.auth import AuthManager
+from novariusirc.core.backups import BackupError, BackupManager
 from novariusirc.core.client import IRCClient
 from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config, load_config
@@ -93,6 +95,16 @@ def parse_args() -> argparse.Namespace:
         help="Check the configured database integrity and schema, then exit",
     )
     parser.add_argument(
+        "--backup-database",
+        action="store_true",
+        help="Create one verified offline database and data backup, then exit",
+    )
+    parser.add_argument(
+        "--list-backups",
+        action="store_true",
+        help="List backups for the configured bot instance, then exit",
+    )
+    parser.add_argument(
         "-v",
         "-V",
         "--version",
@@ -136,6 +148,11 @@ def check_config(config: Config) -> list[str]:
         ("log root", config.paths.log_root),
         ("data root", config.paths.data_root),
         ("moderation log directory", str(Path(config.moderation.log_file).parent)),
+        *(
+            [("backup directory", config.backups.directory)]
+            if config.backups.enabled
+            else []
+        ),
     ):
         if not writable_parent(path):
             errors.append(f"{label} cannot be created or written: {path}")
@@ -172,6 +189,10 @@ def check_config(config: Config) -> list[str]:
                     )
         except DatabaseError as exc:
             errors.append(str(exc))
+    if config.backups.enabled and config.backups.compression == "bzip3" and not shutil.which(
+        "bzip3"
+    ):
+        errors.append("bzip3 is required for backups.compression = 'bzip3'")
 
     for name in config.modules.enabled:
         try:
@@ -416,10 +437,30 @@ def register_runtime_commands(
 async def async_main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    if args.init_database or args.check_database:
+    if args.init_database or args.check_database or args.backup_database or args.list_backups:
         if not config.database.enabled:
             raise RuntimeError("Database is disabled in [database]")
         database = create_database(config.database, config.bot.name or config.network.nick)
+        backups = BackupManager(
+            config.backups,
+            database,
+            config.bot.name or config.network.nick,
+            Path(config.paths.data_root),
+        )
+        if args.list_backups:
+            for backup in backups.list():
+                print(backup)
+            return
+        if args.backup_database:
+            try:
+                result = backups.create()
+            except BackupError as exc:
+                raise RuntimeError(f"Backup failed: {exc}") from exc
+            print(
+                f"Backup created: {result.path}; "
+                f"compression={'bzip3' if result.compressed else 'none'}"
+            )
+            return
         status = (
             database.initialize(create=True)
             if args.init_database

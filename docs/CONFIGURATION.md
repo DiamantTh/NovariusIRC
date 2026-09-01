@@ -16,6 +16,7 @@
 - [Eingebaute Module](#modules)
 - [Pfade und Worker](#paths-workers)
 - [Datenbank](#database)
+- [Backups](#backups)
 - [Feeds](#feeds)
   - [Feed-Definitionen](#feed-definitions)
 - [Moderation](#moderation)
@@ -337,6 +338,33 @@ Eine unbekannte bestehende SQLite-Datei wird nicht übernommen. Fehlt eine zuvor
 initialisierte Datei, bricht der Bot ab, statt unbemerkt eine leere Datenbank
 zu erzeugen. Die frühere SQLite-Metadatendatei wird beim expliziten
 Initialisieren übernommen und auf die erste Alembic-Revision gesetzt.
+
+<a id="backups"></a>
+## `[backups]`
+
+Backups sind optional und werden bewusst nur per CLI gestartet. Die SQLite-Datei
+wird mit der SQLite-Backup-API als konsistenter Snapshot gelesen. Zusätzlich
+nimmt das Archiv reguläre Dateien unter `paths.data_root` mit, aber nie die
+Live-Datenbank, ihre WAL-/SHM-Begleitdateien oder das Backup-Verzeichnis selbst.
+`manifest.json` enthält SHA-256 und Größe jeder enthaltenen Datei.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `false` | Erlaubt das Erzeugen von Backups. |
+| `directory` | Pfad | `./backups` | Zielverzeichnis; relativ zu `config.toml`. |
+| `compression` | Auswahl | `none` | `none` lässt ein portables `.tar`; `bzip3` komprimiert erst ab der Schwelle. |
+| `compression_min_bytes` | Ganzzahl | `8388608` | Mindestgröße des TAR vor optionaler bzip3-Kompression. `0` komprimiert immer. |
+| `include_data` | Boolean | `true` | Reguläre Zusatzdateien aus `paths.data_root` aufnehmen. |
+
+Die Namen verwenden nur den stabilen Botnamen und UTC, etwa
+`MeinBot_20260901T201530Z.tar`:
+
+```console
+novariusirc --backup-database --config ./config.toml
+novariusirc --list-backups --config ./config.toml
+```
+
+Für `compression = "bzip3"` muss `bzip3` im Ausführungspfad installiert sein.
 
 <a id="feeds"></a>
 ## `[feeds]`

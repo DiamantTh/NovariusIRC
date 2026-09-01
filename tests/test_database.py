@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
+import tarfile
 from pathlib import Path
 
 import pytest
 
 from novariusirc.__main__ import check_config
 from novariusirc.core.auth import AuthManager
-from novariusirc.core.config import Config, DatabaseConfig, safe_filename_component
+from novariusirc.core.backups import BackupManager
+from novariusirc.core.config import (
+    BackupConfig,
+    Config,
+    DatabaseConfig,
+    safe_filename_component,
+)
 from novariusirc.core.database import (
     DatabaseBackendUnavailable,
     DatabaseError,
@@ -194,6 +202,34 @@ def test_owner_bootstrap_runs_once_and_role_bindings_authorize_identities(
     assert "admin" in auth.roles_for_identity(
         "untrusted", "untrusted!u@host", certfp="ab:cd"
     )
+
+
+def test_backup_uses_sqlite_snapshot_and_records_data_files(tmp_path: Path) -> None:
+    database = SQLiteDatabase(DatabaseConfig(path=str(tmp_path / "data" / "bot.sqlite3")), "TestBot")
+    database.initialize(create=True)
+    database.bootstrap_owner_bindings([("hostmask", "owner!*@trusted.example")])
+    data_file = tmp_path / "data" / "notes.txt"
+    data_file.write_text("keep this", encoding="utf-8")
+    manager = BackupManager(
+        BackupConfig(enabled=True, directory=str(tmp_path / "backups")),
+        database,
+        "TestBot",
+        tmp_path / "data",
+    )
+
+    result = manager.create()
+
+    assert result.path.name.startswith("TestBot_")
+    assert result.path.suffix == ".tar"
+    assert manager.list() == [result.path]
+    with tarfile.open(result.path) as archive:
+        manifest = json.load(archive.extractfile("manifest.json"))
+        assert manifest["bot_name"] == "TestBot"
+        assert {item["path"] for item in manifest["files"]} == {
+            "database.sqlite3",
+            "data/notes.txt",
+        }
+        assert archive.extractfile("database.sqlite3") is not None
 
 
 def test_known_server_backend_fails_with_actionable_error() -> None:

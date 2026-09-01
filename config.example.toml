@@ -154,6 +154,15 @@ backend = "sqlite"
 connect_timeout_seconds = 10
 busy_timeout_seconds = 5
 
+[backups]
+# Nur manuell über --backup-database. Namen: <Botname>_<UTC>.tar[.bz3].
+enabled = false
+directory = "./backups"
+# "none" oder "bzip3" (bzip3 muss im Container/System installiert sein)
+compression = "none"
+compression_min_bytes = 8388608
+include_data = true
+
 [workers]
 # Anzahl Prozesse im Worker-Pool (CPU-lastige Tasks)
 processes = 2
