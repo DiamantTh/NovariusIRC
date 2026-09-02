@@ -54,6 +54,7 @@ async def dispatch_local_command(
         client=client,
         logger=logger,
         roles=["owner"],
+        metadata={"transport": "local"},
     )
     if not await commands.dispatch(context):
         await client.send_privmsg(

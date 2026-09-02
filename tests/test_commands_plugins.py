@@ -77,6 +77,28 @@ def test_aliases_roles_help_and_unregister_share_one_registry() -> None:
     assert not asyncio.run(registry.dispatch(context(client, "!hello", ["owner"])))
 
 
+def test_local_only_commands_are_hidden_and_rejected_from_irc() -> None:
+    registry = CommandRegistry(prefix="!", rate_limit_seconds=0)
+    client = ReplyClient()
+
+    async def handler(ctx: CommandContext, args: list[str]) -> None:
+        await ctx.reply("local-ok")
+
+    registry.register("db", handler, roles=("owner",), local_only=True)
+    remote = context(client, "!db", ["owner"])
+    assert asyncio.run(registry.dispatch(remote))
+    assert client.messages[-1][1] == "This command is available only through local control."
+    assert registry.list_commands(["owner"]) == []
+
+    local = context(client, "!db", ["owner"])
+    local.metadata["transport"] = "local"
+    assert asyncio.run(registry.dispatch(local))
+    assert client.messages[-1][1] == "local-ok"
+    assert [command.name for command in registry.list_commands(["owner"], include_local=True)] == [
+        "db"
+    ]
+
+
 def test_command_names_are_globally_unique_case_insensitively() -> None:
     registry = CommandRegistry()
 

@@ -297,6 +297,7 @@ def register_builtin_commands(
     *,
     auth: AuthManager | None = None,
     database: DatabaseBackend | None = None,
+    backups: BackupManager | None = None,
 ) -> None:
     async def ping(ctx: CommandContext, args: list[str]) -> None:
         await ctx.reply(ctx.tr("pong"))
@@ -318,7 +319,7 @@ def register_builtin_commands(
             ]
         else:
             lines = [ctx.tr("Commands ({prefix}):", prefix=config.bot.prefix)]
-        for cmd in commands.list_commands(ctx.roles):
+        for cmd in commands.list_commands(ctx.roles, include_local=ctx.is_local):
             lines.append(f"{cmd.name} - {ctx.tr(cmd.help_text)}")
         await ctx.reply(" | ".join(lines))
 
@@ -326,6 +327,66 @@ def register_builtin_commands(
     commands.register("uptime", uptime, help_text="Show bot uptime", owner="core")
     commands.register("version", version, help_text="Show bot version", owner="core")
     commands.register("help", help_cmd, help_text="Show available commands", owner="core")
+
+    if database:
+
+        async def db(ctx: CommandContext, args: list[str]) -> None:
+            usage = ctx.invocation("db status | check | backup | backups")
+            if len(args) != 1:
+                await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                return
+            action = args[0].lower()
+            if action in {"status", "check"}:
+                try:
+                    status = await asyncio.to_thread(database.check)
+                except DatabaseError as exc:
+                    await ctx.reply(ctx.tr("Database check failed: {error}", error=exc))
+                    return
+                await ctx.reply(
+                    ctx.tr(
+                        "Database: backend={backend}; schema={schema}; integrity={integrity}; location={location}",
+                        backend=status.backend,
+                        schema=status.schema_version,
+                        integrity=status.integrity,
+                        location=status.location,
+                    )
+                )
+                return
+            if backups is None or not backups.config.enabled:
+                await ctx.reply(ctx.tr("Backups are disabled in [backups]."))
+                return
+            if action == "backup":
+                try:
+                    result = await asyncio.to_thread(backups.create)
+                except BackupError as exc:
+                    await ctx.reply(ctx.tr("Database backup failed: {error}", error=exc))
+                    return
+                await ctx.reply(
+                    ctx.tr(
+                        "Backup created: {path}; compression={compression}",
+                        path=result.path,
+                        compression="bzip3" if result.compressed else "none",
+                    )
+                )
+                return
+            if action in {"backups", "list"}:
+                archived = await asyncio.to_thread(backups.list)
+                if not archived:
+                    await ctx.reply(ctx.tr("No backups are available."))
+                    return
+                for path in archived:
+                    await ctx.reply(ctx.tr("Backup: {path}", path=path))
+                return
+            await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+
+        commands.register(
+            "db",
+            db,
+            roles=("owner",),
+            help_text="Inspect local database and backups",
+            owner="core",
+            local_only=True,
+        )
 
     if database and auth:
 
@@ -546,6 +607,7 @@ async def async_main() -> None:
     setup_moderation_logging(config.moderation.log_file)
 
     database: DatabaseBackend | None = None
+    backups: BackupManager | None = None
     if config.database.enabled:
         database = create_database(config.database, config.bot.name or config.network.nick)
         status = database.check()
@@ -557,6 +619,12 @@ async def async_main() -> None:
             status.backend,
             status.schema_version,
             status.location,
+        )
+        backups = BackupManager(
+            config.backups,
+            database,
+            config.bot.name or config.network.nick,
+            Path(config.paths.data_root),
         )
 
     if args.foreground:
@@ -572,7 +640,9 @@ async def async_main() -> None:
         prefix=config.bot.prefix, rate_limit_seconds=config.commands.rate_limit_seconds
     )
     start_time = time.monotonic()
-    register_builtin_commands(commands, config, start_time, auth=auth, database=database)
+    register_builtin_commands(
+        commands, config, start_time, auth=auth, database=database, backups=backups
+    )
 
     feeds = FeedEngine(
         config.feeds,

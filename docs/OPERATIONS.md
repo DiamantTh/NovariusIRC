@@ -137,6 +137,20 @@ der nur bei einer Datenbank ohne Owner-Bindung einmalig greift. Docker-Labels
 sind keine Prozessumgebung. Der Bot liest sie bewusst nicht, weil dies Zugriff
 auf den Docker-Socket verlangen würde.
 
+## Lokale Datenbanksteuerung
+
+Bei aktivem Unix-Control-Socket stehen dem lokalen Owner diese Befehle zur
+Verfügung. Sie werden weder über IRC noch über einen TCP-Port angeboten:
+
+```console
+novariusirc --ctl "db status" --config ./config.toml
+novariusirc --ctl "db check" --config ./config.toml
+novariusirc --ctl "db backups" --config ./config.toml
+novariusirc --ctl "db backup" --config ./config.toml
+```
+
+Ein Restore und ein Schema-Upgrade bleiben absichtlich Offline-CLI-Vorgänge.
+
 ## Backup und Offline-Restore
 
 ```console

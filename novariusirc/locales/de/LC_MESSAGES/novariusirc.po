@@ -52,6 +52,33 @@ msgstr "Botidentität und Funktionen anzeigen"
 msgid "Manage persistent role bindings"
 msgstr "Dauerhafte Rollenzuordnungen verwalten"
 
+msgid "Inspect local database and backups"
+msgstr "Lokale Datenbank und Sicherungen prüfen"
+
+msgid "This command is available only through local control."
+msgstr "Dieser Befehl ist nur über die lokale Steuerung verfügbar."
+
+msgid "Database: backend={backend}; schema={schema}; integrity={integrity}; location={location}"
+msgstr "Datenbank: Backend={backend}; Schema={schema}; Integrität={integrity}; Ort={location}"
+
+msgid "Database check failed: {error}"
+msgstr "Datenbankprüfung fehlgeschlagen: {error}"
+
+msgid "Backups are disabled in [backups]."
+msgstr "Sicherungen sind in [backups] deaktiviert."
+
+msgid "Database backup failed: {error}"
+msgstr "Datenbanksicherung fehlgeschlagen: {error}"
+
+msgid "Backup created: {path}; compression={compression}"
+msgstr "Sicherung erstellt: {path}; Komprimierung={compression}"
+
+msgid "No backups are available."
+msgstr "Es sind keine Sicherungen vorhanden."
+
+msgid "Backup: {path}"
+msgstr "Sicherung: {path}"
+
 msgid "No role bindings are configured."
 msgstr "Es sind keine Rollenzuordnungen eingerichtet."
 

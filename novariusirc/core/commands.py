@@ -74,6 +74,11 @@ class CommandContext:
         bot = getattr(self.config, "bot", None)
         return f"{getattr(bot, 'prefix', '!')}{command}"
 
+    @property
+    def is_local(self) -> bool:
+        """Whether this invocation came through the private local interface."""
+        return self.metadata.get("transport") == "local"
+
 
 @dataclass(frozen=True)
 class Command:
@@ -83,6 +88,7 @@ class Command:
     help_text: str = ""
     aliases: tuple[str, ...] = ()
     owner: str | None = None
+    local_only: bool = False
 
 
 class CommandRegistry:
@@ -108,6 +114,7 @@ class CommandRegistry:
         help_text: str = "",
         aliases: Sequence[str] = (),
         owner: str | None = None,
+        local_only: bool = False,
     ) -> None:
         command_name = self._normalize_name(name)
         command_aliases = tuple(self._normalize_name(alias) for alias in aliases)
@@ -136,6 +143,7 @@ class CommandRegistry:
             help_text=help_text,
             aliases=command_aliases,
             owner=owner,
+            local_only=local_only,
         )
         self._primary_commands[command_name] = command_entry
         for candidate in all_names:
@@ -167,8 +175,16 @@ class CommandRegistry:
     def get(self, name: str) -> Command | None:
         return self._commands.get(name.strip().lower())
 
-    def list_commands(self, roles: Iterable[str] | None = None) -> list[Command]:
+    def list_commands(
+        self, roles: Iterable[str] | None = None, *, include_local: bool = False
+    ) -> list[Command]:
         commands: Iterable[Command] = self._primary_commands.values()
+        if not include_local:
+            commands = (
+                command_entry
+                for command_entry in commands
+                if not command_entry.local_only
+            )
         if roles is not None:
             commands = (
                 command_entry
@@ -197,6 +213,9 @@ class CommandRegistry:
 
         if not _roles_satisfy(ctx.roles, command_entry.roles):
             await ctx.reply(ctx.tr("You are not allowed to run this command."))
+            return True
+        if command_entry.local_only and not ctx.is_local:
+            await ctx.reply(ctx.tr("This command is available only through local control."))
             return True
 
         if self.rate_limit_seconds > 0:

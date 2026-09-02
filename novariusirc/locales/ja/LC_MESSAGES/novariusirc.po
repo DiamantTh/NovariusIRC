@@ -52,6 +52,33 @@ msgstr "Bot の識別情報と機能を表示"
 msgid "Manage persistent role bindings"
 msgstr "永続的なロール割り当てを管理"
 
+msgid "Inspect local database and backups"
+msgstr "ローカルデータベースとバックアップを確認"
+
+msgid "This command is available only through local control."
+msgstr "このコマンドはローカル制御からのみ利用できます。"
+
+msgid "Database: backend={backend}; schema={schema}; integrity={integrity}; location={location}"
+msgstr "データベース: バックエンド={backend}; スキーマ={schema}; 整合性={integrity}; 場所={location}"
+
+msgid "Database check failed: {error}"
+msgstr "データベースの検査に失敗しました: {error}"
+
+msgid "Backups are disabled in [backups]."
+msgstr "[backups] でバックアップは無効です。"
+
+msgid "Database backup failed: {error}"
+msgstr "データベースのバックアップに失敗しました: {error}"
+
+msgid "Backup created: {path}; compression={compression}"
+msgstr "バックアップを作成しました: {path}; 圧縮={compression}"
+
+msgid "No backups are available."
+msgstr "利用可能なバックアップはありません。"
+
+msgid "Backup: {path}"
+msgstr "バックアップ: {path}"
+
 msgid "No role bindings are configured."
 msgstr "ロール割り当ては設定されていません。"
 
