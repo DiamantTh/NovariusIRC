@@ -87,7 +87,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--init-database",
         action="store_true",
-        help="Initialize the configured database and exit",
+        help="Initialize a new database or safely upgrade an existing one, then exit",
+    )
+    parser.add_argument(
+        "--upgrade-database",
+        action="store_true",
+        help="Safely upgrade an existing database on a copy, then exit",
     )
     parser.add_argument(
         "--check-database",
@@ -454,6 +459,7 @@ async def async_main() -> None:
     config = load_config(args.config)
     if (
         args.init_database
+        or args.upgrade_database
         or args.check_database
         or args.backup_database
         or args.list_backups
@@ -493,11 +499,18 @@ async def async_main() -> None:
                 raise RuntimeError(f"Restore failed: {exc}") from exc
             print(f"Database restored from: {args.restore_database}")
             return
-        status = (
-            database.initialize(create=True)
-            if args.init_database
-            else database.check()
-        )
+        if args.upgrade_database:
+            result = database.upgrade_safely()
+            status = result.status
+            if result.previous_copy:
+                print(
+                    "Database upgraded safely: "
+                    f"previous={result.previous_copy}; "
+                    f"sha256={result.previous_sha256}; "
+                    f"upgraded_sha256={result.upgraded_sha256}"
+                )
+        else:
+            status = database.initialize(create=True) if args.init_database else database.check()
         if args.init_database:
             seeded = database.bootstrap_owner_bindings(owner_seed_bindings(config))
             if seeded:

@@ -45,6 +45,24 @@ Relative Pfade gelten relativ zu `config.toml`. Das Verzeichnis des laufenden
 Benutzers muss Schreibrechte für `paths.log_root`, `paths.data_root`, den
 Control-Socket und – falls aktiv – `backups.directory` haben.
 
+## Datenbank-Upgrade
+
+Ein normaler Botstart führt absichtlich keine Migration aus. Erkennt
+`--check-database` eine ältere Schemarevision, Bot zuerst vollständig stoppen
+und dann upgraden:
+
+```console
+novariusirc --backup-database --config ./config.toml
+novariusirc --upgrade-database --config ./config.toml
+novariusirc --check-database --config ./config.toml
+```
+
+Für SQLite wird nie die Live-Datei migriert: Novarius erstellt eine
+timestampierte `*.pre-migration-*.sqlite3`-Kopie, migriert eine zweite Kopie,
+prüft Integrität, Schema und SHA-256 und ersetzt die Live-Datei erst danach
+atomar. Die Vor-Migrationskopie bleibt zur Wiederherstellung erhalten. Es muss
+mindestens ungefähr die doppelte Größe der Datenbank inklusive WAL frei sein.
+
 ## systemd
 
 Beispiel für eine Instanz unter

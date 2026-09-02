@@ -42,7 +42,7 @@ IRC-Netz und dessen Services.
 | Sprache | fertig | Core- und Modulantworten für Deutsch, Englisch und Japanisch |
 | RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits und Vorlagen; mit Datenbank liegt der Feed-Status in SQL statt in JSON-Dateien |
 | Logging | fertig | Core-, IRC-, Raw- und Moderationslogs; Zeitzone konfigurierbar |
-| Datenbankbasis | fertig | SQLAlchemy Core, mitgelieferte Alembic-Revisionen, stabiler Botname, explizite Initialisierung, WAL, Foreign Keys, Integritäts- und Schemacheck |
+| Datenbankbasis | fertig | SQLAlchemy Core, mitgelieferte Alembic-Revisionen, stabiler Botname, explizite Initialisierung, sichere SQLite-Kopie-vor-Upgrade, WAL, Foreign Keys, Integritäts- und Schemacheck |
 
 ## Vor Release noch erforderlich
 
@@ -79,9 +79,10 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 - SQLite ist der nutzbare Startpunkt. PostgreSQL, MariaDB, MySQL und Microsoft
   SQL Server sind nur registrierte Namen, bis ihre SQLAlchemy-Treiber und
   Migrationspfade getestet sind.
-- Alembic-Revisionen werden mit dem Paket ausgeliefert. Die frühere
-  SQLite-Metadatendatei wird bei einer expliziten Initialisierung in die erste
-  Alembic-Revision überführt.
+- Alembic-Revisionen werden mit dem Paket ausgeliefert. Eine bestehende
+  SQLite-Datei wird nur durch den expliziten Upgradepfad auf einer Kopie
+  migriert und danach atomar ersetzt. Die frühere SQLite-Metadatendatei wird
+  dabei in die erste Alembic-Revision überführt.
 - Bei aktivierter Datenbank sind die DB-Bindungen maßgeblich. Der einmalige
   Owner-Seed kann Hostmasks (klassisches IRC), IRCv3-Accounts oder CertFPs
   enthalten; der danach laufende `role`-Befehl verwaltet die Einträge.

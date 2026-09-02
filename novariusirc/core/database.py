@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -75,6 +76,16 @@ class DatabaseStatus:
 
 
 @dataclass(frozen=True)
+class DatabaseUpgradeResult:
+    """Outcome of a safe, file-based SQLite schema upgrade."""
+
+    status: DatabaseStatus
+    previous_copy: Path | None
+    previous_sha256: str | None
+    upgraded_sha256: str | None
+
+
+@dataclass(frozen=True)
 class RoleBinding:
     """One persistent role assignment to an IRC identity attribute."""
 
@@ -107,6 +118,8 @@ class DatabaseBackend(Protocol):
     def initialize(self, *, create: bool = False) -> DatabaseStatus: ...
 
     def check(self) -> DatabaseStatus: ...
+
+    def upgrade_safely(self) -> DatabaseUpgradeResult: ...
 
     def create_backup_snapshot(self, destination: Path) -> None: ...
 
@@ -142,6 +155,7 @@ class SQLiteDatabase:
     def __init__(self, config: DatabaseConfig, instance_name: str):
         if not config.path:
             raise DatabaseError("SQLite database.path was not resolved")
+        self.config = config
         self.path = Path(config.path)
         self.instance_name = instance_name
         self.busy_timeout_ms = int(config.busy_timeout_seconds * 1000)
@@ -189,7 +203,27 @@ class SQLiteDatabase:
     def _run_migrations(self, connection: Connection) -> None:
         command.upgrade(self._migration_config(connection), "head")
 
-    def initialize(self, *, create: bool = False) -> DatabaseStatus:
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as file:
+            for block in iter(lambda: file.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    def _migration_required(self, connection: Connection) -> bool:
+        tables = set(inspect(connection).get_table_names())
+        if "alembic_version" not in tables:
+            return True
+        revision = connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one_or_none()
+        head = ScriptDirectory.from_config(
+            self._migration_config(connection)
+        ).get_current_head()
+        return revision != head
+
+    def _initialize_in_place(self, *, create: bool = False) -> DatabaseStatus:
         if not self.path.exists() and not create:
             raise DatabaseError(
                 f"database does not exist: {self.path}; initialize it explicitly"
@@ -228,6 +262,111 @@ class SQLiteDatabase:
             raise DatabaseError(f"SQLite initialization failed: {exc}") from exc
         finally:
             engine.dispose()
+
+    def initialize(self, *, create: bool = False) -> DatabaseStatus:
+        """Create a new database or safely upgrade a known existing database."""
+        if not self.path.exists():
+            return self._initialize_in_place(create=create)
+        if not self.path.is_file():
+            raise DatabaseError(f"database path is not a file: {self.path}")
+        if self.path.stat().st_size == 0:
+            return self._initialize_in_place(create=create)
+        engine = self._engine(read_only=True)
+        try:
+            with engine.connect() as connection:
+                if not self._is_known_database(connection):
+                    raise DatabaseError(
+                        f"refusing to initialize an unknown existing database: {self.path}"
+                    )
+                migration_required = self._migration_required(connection)
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"SQLite migration check failed: {exc}") from exc
+        finally:
+            engine.dispose()
+        if not migration_required:
+            return self.check()
+        return self.upgrade_safely().status
+
+    def upgrade_safely(self) -> DatabaseUpgradeResult:
+        """Upgrade a known SQLite database on a copy and atomically replace it.
+
+        The old live file is never modified.  A timestamped pre-upgrade copy is
+        retained beside it, so a failed migration leaves the original untouched.
+        The bot must be stopped: SQLite can snapshot concurrent writes safely,
+        but those writes would not be present in the candidate being swapped in.
+        """
+        if not self.path.is_file():
+            raise DatabaseError(f"database file does not exist: {self.path}")
+        engine = self._engine(read_only=True)
+        try:
+            with engine.connect() as connection:
+                if not self._is_known_database(connection):
+                    raise DatabaseError(
+                        f"refusing to migrate an unknown database: {self.path}"
+                    )
+                if not self._migration_required(connection):
+                    return DatabaseUpgradeResult(self.check(), None, None, None)
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"SQLite migration check failed: {exc}") from exc
+        finally:
+            engine.dispose()
+
+        source_size = sum(
+            candidate.stat().st_size
+            for candidate in (
+                self.path,
+                Path(f"{self.path}-wal"),
+                Path(f"{self.path}-shm"),
+            )
+            if candidate.is_file()
+        )
+        available = shutil.disk_usage(self.path.parent).free
+        required = max(source_size * 2, 1)
+        if available < required:
+            raise DatabaseError(
+                f"insufficient free space for safe migration: need {required} bytes, "
+                f"have {available}"
+            )
+
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        previous_copy = self.path.with_name(
+            f"{self.path.stem}.pre-migration-{timestamp}{self.path.suffix}"
+        )
+        candidate = self.path.with_name(
+            f".{self.path.stem}.migration-{timestamp}{self.path.suffix}"
+        )
+        prepared = self.path.with_name(
+            f".{self.path.stem}.migration-ready-{timestamp}{self.path.suffix}"
+        )
+        if previous_copy.exists() or candidate.exists() or prepared.exists():
+            raise DatabaseError("migration staging path already exists; retry after inspection")
+        self.create_backup_snapshot(previous_copy)
+        previous_sha256 = self._sha256(previous_copy)
+        try:
+            self.create_backup_snapshot(candidate)
+            candidate_config = self.config.model_copy(update={"path": str(candidate)})
+            candidate_database = SQLiteDatabase(candidate_config, self.instance_name)
+            candidate_database._initialize_in_place(create=True)
+            # Snapshot once more after migration so no candidate WAL file is
+            # needed after the final atomic rename.
+            candidate_database.create_backup_snapshot(prepared)
+            candidate_database.validate_backup_snapshot(prepared)
+            prepared.chmod(self.path.stat().st_mode)
+            upgraded_sha256 = self._sha256(prepared)
+            prepared.replace(self.path)
+            for suffix in ("-wal", "-shm"):
+                Path(f"{self.path}{suffix}").unlink(missing_ok=True)
+                Path(f"{candidate}{suffix}").unlink(missing_ok=True)
+            candidate.unlink(missing_ok=True)
+            return DatabaseUpgradeResult(
+                self.check(), previous_copy, previous_sha256, upgraded_sha256
+            )
+        except Exception:
+            for path in (candidate, prepared):
+                path.unlink(missing_ok=True)
+            for suffix in ("-wal", "-shm"):
+                Path(f"{candidate}{suffix}").unlink(missing_ok=True)
+            raise
 
     def check(self) -> DatabaseStatus:
         if not self.path.is_file():

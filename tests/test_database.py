@@ -160,10 +160,21 @@ def test_database_upgrade_from_previous_alembic_revision_preserves_metadata(
 
     with pytest.raises(DatabaseError, match="requires migration"):
         database.check()
-    status = database.initialize(create=True)
+    result = database.upgrade_safely()
+    status = result.status
 
     assert status.schema_version == "0002_persistent_core_state"
     assert database.check() == status
+    assert result.previous_copy is not None
+    assert result.previous_copy.is_file()
+    assert result.previous_sha256 is not None
+    assert len(result.previous_sha256) == 64
+    assert result.upgraded_sha256 is not None
+    assert len(result.upgraded_sha256) == 64
+    with sqlite3.connect(result.previous_copy) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            "0001_storage_metadata",
+        )
 
 
 def test_sqlite_persists_feed_state_and_exposes_empty_role_bindings(
