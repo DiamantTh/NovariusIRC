@@ -67,7 +67,10 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 1. `db status`, `db backup`, `db backups`, `db check` und später einen bewusst
    offline ausgeführten Restore-Befehl über den lokalen Control-Socket ergänzen.
 2. Lokale Monitoring-Ausgabe für Verbindungsstatus, Queue-Auslastung,
-   letzten erfolgreichen Backup-Lauf und DB-Schema bereitstellen.
+   letzten erfolgreichen Backup-Lauf und DB-Schema bereitstellen. Falls daraus
+   eine Web-API entsteht, wird sie direkt mit FastAPI gebaut: optional über
+   `[web_api]`, standardmäßig ohne Listener und zunächst rein lesend. `aiohttp`
+   bleibt ausschließlich HTTP-Client des Core.
 3. Betriebsanleitung für Container, systemd, Verzeichnisrechte und Backupziele
    pflegen.
 
