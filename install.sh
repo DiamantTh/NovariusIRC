@@ -5,9 +5,8 @@
 set -euo pipefail
 
 # Konfiguration
-INSTALL_PREFIX="${NOVARIUSIRC_PREFIX:-$HOME/NovariusIRC}"
+INSTALL_PREFIX="${NOVARIUSIRC_INSTALL_PREFIX:-$HOME/NovariusIRC}"
 VENV_DIR="$INSTALL_PREFIX/venv"
-BIN_DIR="$INSTALL_PREFIX/bin"
 INSTANCES_DIR="$INSTALL_PREFIX/instances"
 
 echo "🤖 NovariusIRC Installation"
@@ -19,7 +18,6 @@ echo ""
 # Verzeichnisstruktur erstellen
 echo "📁 Erstelle Verzeichnisstruktur..."
 mkdir -p "$INSTALL_PREFIX"
-mkdir -p "$BIN_DIR"
 mkdir -p "$INSTANCES_DIR"
 
 # Virtual Environment erstellen (wenn nicht vorhanden)
@@ -30,37 +28,42 @@ else
     echo "♻️  Nutze existierendes Virtual Environment..."
 fi
 
-# venv aktivieren
-source "$VENV_DIR/bin/activate"
-
-# Poetry Build
+# Build in a disposable staging directory. Installation must never leave wheel,
+# metadata, or generated build information in the source checkout.
 echo "📦 Baue Wheel-Paket..."
-BUILD_INFO_FILE="novariusirc/_build_info.json"
-trap 'rm -f "$BUILD_INFO_FILE"' EXIT
-python3 scripts/generate_build_info.py
-poetry build -f wheel
+SOURCE_DIR="$(pwd)"
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/novariusirc-build.XXXXXX")"
+BUILD_SOURCE="$BUILD_DIR/source"
+trap 'rm -rf "$BUILD_DIR"' EXIT
+mkdir -p "$BUILD_SOURCE"
+tar \
+    --exclude-vcs \
+    --exclude='./.venv' \
+    --exclude='./dist' \
+    --exclude='./build' \
+    --exclude='./*.egg-info' \
+    -cf - -C "$SOURCE_DIR" . | tar -xf - -C "$BUILD_SOURCE"
+(
+    cd "$BUILD_SOURCE"
+    python3 scripts/generate_build_info.py
+    poetry build -f wheel
+)
 
 # Neueste Wheel-Datei finden
-WHEEL=$(ls -t dist/*.whl | head -n1)
+WHEEL=$(ls -t "$BUILD_SOURCE"/dist/*.whl | head -n1)
 echo "📥 Installiere $WHEEL..."
 
 # Installation mit pip im venv
-pip install --quiet --upgrade --force-reinstall "$WHEEL"
-
-# Symlink zum Binary erstellen
-echo "🔗 Erstelle Binary-Symlink..."
-ln -sf "$VENV_DIR/bin/novariusirc" "$BIN_DIR/novariusirc"
+"$VENV_DIR/bin/pip" install --quiet --upgrade --force-reinstall "$WHEEL"
 
 # Example-Instanz erstellen (wenn noch nicht vorhanden)
 EXAMPLE_INSTANCE="$INSTANCES_DIR/example"
 if [ ! -d "$EXAMPLE_INSTANCE" ]; then
     echo "📋 Erstelle Beispiel-Instanz in $EXAMPLE_INSTANCE..."
-    mkdir -p "$EXAMPLE_INSTANCE"
-    cp config.example.toml "$EXAMPLE_INSTANCE/config.toml"
-    cp secrets.example.toml "$EXAMPLE_INSTANCE/secrets.toml"
-    cp config/feeds.example.toml "$EXAMPLE_INSTANCE/feeds.toml"
-    cp config/moderation.example.toml "$EXAMPLE_INSTANCE/moderation.toml"
-    cp -r config/ "$EXAMPLE_INSTANCE/" 2>/dev/null || true
+    mkdir -p "$EXAMPLE_INSTANCE/config"
+    cp config/config.example.toml "$EXAMPLE_INSTANCE/config/config.toml"
+    cp config/secrets.example.toml "$EXAMPLE_INSTANCE/config/secrets.toml"
+    cp config/feeds.example.toml "$EXAMPLE_INSTANCE/config/feeds.toml"
     cp -r plugins/ "$EXAMPLE_INSTANCE/" 2>/dev/null || true
 fi
 
@@ -76,21 +79,20 @@ Jedes Unterverzeichnis hier ist eine separate Bot-Instanz.
 cd ~/NovariusIRC/instances
 mkdir mein-bot
 cd mein-bot
-cp ../example/config.toml .
-cp ../example/secrets.toml .
+cp -a ../example/config .
 # Config anpassen...
 ```
 
 ## Bot starten
 
 ```bash
-~/NovariusIRC/bin/novariusirc instances/mein-bot/config.toml
+~/NovariusIRC/venv/bin/novariusirc --instance mein-bot
 ```
 
 Oder mit relativem Pfad aus dem Instanz-Verzeichnis:
 ```bash
 cd ~/NovariusIRC/instances/mein-bot
-../../bin/novariusirc config.toml
+../../venv/bin/novariusirc --instancedir .
 ```
 EOF
 
@@ -99,14 +101,11 @@ echo "✅ Installation abgeschlossen!"
 echo ""
 echo "📍 Installation: $INSTALL_PREFIX"
 echo "🐍 Virtual Environment: $VENV_DIR"
-echo "🔧 Binary: $BIN_DIR/novariusirc"
+echo "🔧 Binary: $VENV_DIR/bin/novariusirc"
 echo "🤖 Instanzen: $INSTANCES_DIR"
 echo ""
-echo "💡 Füge zu deiner Shell-Config hinzu:"
-echo "   export PATH=\"$BIN_DIR:\$PATH\""
-echo ""
 echo "🚀 Bot starten (Beispiel):"
-echo "   novariusirc $INSTANCES_DIR/example/config.toml"
+echo "   $VENV_DIR/bin/novariusirc --instance example"
 echo ""
 echo "🔍 Oder aktiviere das venv direkt:"
 echo "   source $VENV_DIR/bin/activate"

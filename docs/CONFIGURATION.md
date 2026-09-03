@@ -34,15 +34,15 @@ Diese Seite folgt dem praktischen Aufbau der
 Jeder Abschnitt nennt Zweck, Parameter, Standardwerte und ein kurzes Beispiel.
 Sie beschreibt die vom aktuellen Core und den eingebauten Modulen ausgewerteten
 Werte. Die vollständige Startvorlage ist
-[`config.example.toml`](../config.example.toml).
+[`config/config.example.toml`](../config/config.example.toml).
 
 <a id="loading"></a>
 ## Laden und prüfen
 
 ```console
-novariusirc --check-config --config ./config.toml
-novariusirc --status --config ./config.toml
-novariusirc --config ./config.toml
+novariusirc --check-config --config ./config
+novariusirc --status --config ./config
+novariusirc --config ./config
 ```
 
 `--check-config` verbindet sich nicht mit IRC. Es prüft die TOML-Struktur,
@@ -79,12 +79,12 @@ jede genannte Datei existieren.
 
 ```toml
 [includes]
-files = ["secrets.toml", "feeds.toml", "moderation.toml"]
+files = ["secrets.toml", "feeds.toml"]
 ```
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
-| `files` | Textliste | `["secrets.toml"]` | Zusammenzuführende Dateien in Ladereihenfolge; doppelte Namen werden entfernt. |
+| `files` | Textliste | `["secrets.toml"]` | Zusammenzuführende Dateien in Ladereihenfolge; doppelte Namen werden entfernt. Die Instanzvorlage lagert zusätzlich Feeds aus. |
 
 Alternativ ist die Kurzform auf oberster Ebene möglich:
 
@@ -94,7 +94,7 @@ include = ["secrets.toml", "feeds.toml"]
 
 Include-Pfade sind relativ zum Verzeichnis der Hauptdatei. Absolute Pfade sind
 ebenfalls erlaubt. Zugangsdaten gehören in eine nicht versionierte Datei nach
-Vorlage von [`secrets.example.toml`](../secrets.example.toml).
+Vorlage von [`config/secrets.example.toml`](../config/secrets.example.toml).
 
 <a id="bot"></a>
 ## `[bot]`
@@ -288,18 +288,21 @@ registrierten Bot-Befehle wie die Terminalsteuerung aus.
 <a id="web-api"></a>
 ## `[web_api]`
 
-Die spätere Web-API nutzt Tornado. Sie ist standardmäßig deaktiviert; die
-aktuelle Version startet deshalb unabhängig von diesen Werten keinen
-HTTP-Listener. `host` und `port` reservieren die spätere Betriebsadresse.
+Die Web-API nutzt Tornado und liefert ausschließlich Betriebsdaten. Sie ist
+standardmäßig deaktiviert. Bei `enabled = true` startet sie den Listener an
+`host` und `port`; standardmäßig also nur lokal auf `127.0.0.1:9688`.
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
-| `enabled` | Boolean | `false` | Bereitet die spätere API-Aktivierung vor; aktuell ohne Listener-Wirkung. |
+| `enabled` | Boolean | `false` | Startet die rein lesende Monitoring-API. |
 | `host` | Text | `127.0.0.1` | Bind-Adresse. `0.0.0.0` nur für eine bewusst veröffentlichte Container-API. |
-| `port` | Ganzzahl | `9688` | TCP-Port der späteren API. |
+| `port` | Ganzzahl | `9688` | TCP-Port der API. |
 
-Ein Docker-Healthcheck braucht keine veröffentlichte Compose-Portzuordnung:
-er ruft den späteren Listener innerhalb des Containers auf `127.0.0.1` auf.
+Verfügbar sind `/_health` (Prozess läuft), `/_ready` (IRC-Registrierung
+abgeschlossen) und `/v1/status` (secret-freier Betriebsstatus einschließlich
+IRC-Queue-Auslastung). Ein Docker-Healthcheck braucht keine veröffentlichte
+Compose-Portzuordnung: er ruft `/_health` innerhalb des Containers auf
+`127.0.0.1` auf.
 
 <a id="modules"></a>
 ## `[modules]`
@@ -346,8 +349,8 @@ werden bis dahin mit einem klaren Fehler abgelehnt.
 Eine aktivierte SQLite-Datenbank muss ausdrücklich angelegt werden:
 
 ```console
-novariusirc --init-database --config ./config.toml
-novariusirc --check-database --config ./config.toml
+novariusirc --init-database --config ./config
+novariusirc --check-database --config ./config
 ```
 
 Die Initialisierung aktiviert Foreign Keys, WAL, `synchronous = FULL`, führt
@@ -378,8 +381,8 @@ Die Namen verwenden nur den stabilen Botnamen und UTC, etwa
 `MeinBot_20260901T201530Z.tar`:
 
 ```console
-novariusirc --backup-database --config ./config.toml
-novariusirc --list-backups --config ./config.toml
+novariusirc --backup-database --config ./config
+novariusirc --list-backups --config ./config
 ```
 
 Für `compression = "bzip3"` muss `bzip3` im Ausführungspfad installiert sein.
@@ -389,7 +392,7 @@ Zusatzdateien zurück:
 
 ```console
 novariusirc --restore-database ./backups/MeinBot_20260901T201530Z.tar \
-  --replace-database --restore-data --config ./config.toml
+  --replace-database --restore-data --config ./config
 ```
 
 <a id="feeds"></a>
@@ -545,7 +548,7 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite-Dateipfad. |
 | `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Verbindungs-DSN einer Serverdatenbank; Geheimwert. |
 | `NOVARIUSIRC_WEB_API_ENABLED` | `web_api.enabled` | Boolean-Syntax wie bei TLS. |
-| `NOVARIUSIRC_WEB_API_HOST` | `web_api.host` | Bind-Adresse der späteren API. |
+| `NOVARIUSIRC_WEB_API_HOST` | `web_api.host` | Bind-Adresse der API. |
 | `NOVARIUSIRC_WEB_API_PORT` | `web_api.port` | TCP-Port zwischen 1 und 65535. |
 | `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | Einmalige Owner-Hostmask. |
 | `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | Einmaliger Owner-IRC-Kontoname. |

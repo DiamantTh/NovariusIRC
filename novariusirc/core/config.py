@@ -443,7 +443,7 @@ class ControlConfig(ConfigModel):
 
 
 class WebAPIConfig(ConfigModel):
-    """Reserved listener configuration for the optional Tornado API."""
+    """Listener configuration for the optional read-only Tornado API."""
 
     enabled: bool = False
     host: str = "127.0.0.1"

@@ -32,6 +32,7 @@ from novariusirc.core.logging import setup_logging, setup_moderation_logging
 from novariusirc.core.moderation import ModerationManager
 from novariusirc.core.plugins import Plugin, PluginManager
 from novariusirc.core.tasks import TaskSupervisor
+from novariusirc.core.web_api import WebAPIServer
 from novariusirc.core.workers import WorkerPool
 from novariusirc.version import SIMPLE_VERSION, detailed_version
 
@@ -53,6 +54,15 @@ def parse_args() -> argparse.Namespace:
         dest="config_option",
         type=Path,
         help="Path to config.toml or 'env'",
+    )
+    parser.add_argument(
+        "--instancedir",
+        type=Path,
+        help="Instance directory containing config/config.toml",
+    )
+    parser.add_argument(
+        "--instance",
+        help="Instance name below $NOVARIUSIRC_INSTANCE_ROOT (default ~/NovariusIRC/instances)",
     )
     parser.add_argument(
         "-s",
@@ -133,7 +143,32 @@ def parse_args() -> argparse.Namespace:
         help="Show version and exit",
     )
     args = parser.parse_args()
-    args.config = args.config_option or args.config_path or Path("./config.toml")
+    if args.config_option is not None:
+        # Keep the established behavior: an explicit --config overrides the
+        # optional positional path. Instance selectors remain unambiguous.
+        if args.instancedir is not None or args.instance is not None:
+            parser.error("--config cannot be combined with --instancedir or --instance")
+        args.config = args.config_option
+        return args
+    if args.config_path is not None and (
+        args.instancedir is not None or args.instance is not None
+    ):
+        parser.error("config path cannot be combined with --instancedir or --instance")
+    if args.instance is not None:
+        instance = args.instance.strip()
+        if not instance or instance in {".", ".."} or "/" in instance or "\\" in instance:
+            parser.error("--instance must be a simple instance name")
+        instance_root = Path(
+            os.getenv(
+                "NOVARIUSIRC_INSTANCE_ROOT",
+                str(Path.home() / "NovariusIRC" / "instances"),
+            )
+        )
+        args.config = instance_root / instance / "config"
+    elif args.instancedir is not None:
+        args.config = args.instancedir / "config"
+    else:
+        args.config = args.config_path or Path("./config")
     return args
 
 
@@ -659,6 +694,9 @@ async def async_main() -> None:
     client = IRCClient(config, commands, auth, plugins, moderation, logger)
     plugins.set_client(client)
     register_runtime_commands(commands, client, plugins, feeds, start_time)
+    web_api = WebAPIServer(
+        config.web_api, client, feeds, database, start_time, logger
+    )
     loop = asyncio.get_running_loop()
     handled_signals = (signal.SIGINT, signal.SIGTERM)
     for handled_signal in handled_signals:
@@ -678,6 +716,7 @@ async def async_main() -> None:
         await feeds.start()
         if config.control.enabled:
             await control.start()
+        await web_api.start()
         if args.terminal_dcc:
             terminal_task = asyncio.create_task(
                 run_terminal_console(commands, config, logger, client),
@@ -695,6 +734,7 @@ async def async_main() -> None:
         for handled_signal in handled_signals:
             with contextlib.suppress(NotImplementedError):
                 loop.remove_signal_handler(handled_signal)
+        await web_api.stop()
         await client.stop()
         await control.stop()
         await feeds.stop()

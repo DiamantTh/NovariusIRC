@@ -45,26 +45,25 @@ RUN apt-get update && \
 ARG NOVARIUSIRC_UID=10001
 ARG NOVARIUSIRC_GID=10001
 
-# Keep the container layout equivalent to an installation prefix: /app/bin,
-# /app/venv and /app/instances.  Only /app/instances is persistent state.
+# Keep the container layout equivalent to a native install: /app/venv and
+# /app/instances. Only /app/instances is persistent state.
 COPY --from=builder /app/venv /app/venv
-COPY config.example.toml /opt/novariusirc-instance-template/config.toml
-COPY secrets.example.toml /opt/novariusirc-instance-template/secrets.toml
-COPY config /opt/novariusirc-instance-template/config
+COPY config/config.example.toml /opt/novariusirc-instance-template/config/config.toml
+COPY config/secrets.example.toml /opt/novariusirc-instance-template/config/secrets.toml
+COPY config/feeds.example.toml /opt/novariusirc-instance-template/config/feeds.toml
 COPY plugins /opt/novariusirc-instance-template/plugins
-COPY scripts/container-entrypoint.sh /app/bin/container-entrypoint
+COPY scripts/container-entrypoint.sh /app/container-entrypoint
 
 RUN addgroup --system --gid "$NOVARIUSIRC_GID" novariusirc && \
     adduser --system --uid "$NOVARIUSIRC_UID" --ingroup novariusirc --home /app novariusirc && \
-    mkdir -p /app/bin /app/instances/example && \
-    ln -s /app/venv/bin/novariusirc /app/bin/novariusirc && \
+    mkdir -p /app/instances/example && \
     cp -a /opt/novariusirc-instance-template/. /app/instances/example/ && \
-    chmod 0755 /app/bin/container-entrypoint && \
+    chmod 0755 /app/container-entrypoint && \
     chown -R novariusirc:novariusirc /app /opt/novariusirc-instance-template
 
 USER novariusirc
 
 STOPSIGNAL SIGINT
 
-ENTRYPOINT ["/app/bin/container-entrypoint"]
+ENTRYPOINT ["/app/container-entrypoint"]
 CMD []

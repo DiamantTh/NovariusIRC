@@ -53,6 +53,11 @@ class RateLimitedSender:
     def is_running(self) -> bool:
         return self._task is not None and not self._task.done()
 
+    @property
+    def queue_depth(self) -> int:
+        """Return currently queued normal-priority IRC lines."""
+        return self._queue.qsize() if self._queue is not None else 0
+
     def start(self) -> None:
         if self.is_running:
             return

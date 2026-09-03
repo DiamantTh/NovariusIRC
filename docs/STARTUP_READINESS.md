@@ -66,11 +66,10 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 
 1. `db status`, `db backup`, `db backups`, `db check` und später einen bewusst
    offline ausgeführten Restore-Befehl über den lokalen Control-Socket ergänzen.
-2. Lokale Monitoring-Ausgabe für Verbindungsstatus, Queue-Auslastung,
-   letzten erfolgreichen Backup-Lauf und DB-Schema bereitstellen. Falls daraus
-   eine Web-API entsteht, wird sie mit Tornado gebaut: optional über
-   `[web_api]`, standardmäßig ohne Listener und zunächst rein lesend.
-   `tornado-swagger` kommt erst mit der eigentlichen API hinzu.
+2. Die lokale, rein lesende Tornado-API liefert bereits `/_health`, `/_ready`
+   und `/v1/status`. Als Nächstes Queue-Auslastung, letzten erfolgreichen
+   Backup-Lauf und DB-Schema in den Status aufnehmen. `tornado-swagger` kommt
+   erst mit weiteren dokumentierten `/v1/...`-Routen hinzu.
 3. Betriebsanleitung für Container, systemd, Verzeichnisrechte und Backupziele
    pflegen.
 
@@ -96,26 +95,27 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 
 ## Startablauf heute
 
-1. `config.toml`, optionale Include-Dateien und Secrets erstellen.
+1. Instanzordner `config/` mit `config.toml`, optionalen Include-Dateien und
+   Secrets erstellen.
 2. Konfiguration prüfen:
 
    ```console
-   novariusirc --check-config --config ./config.toml
+   novariusirc --check-config --config ./config
    ```
 
 3. Falls `[database].enabled = true` gesetzt ist, die SQLite-Datei einmalig
    erzeugen und anschließend prüfen:
 
    ```console
-   novariusirc --init-database --config ./config.toml
-   novariusirc --check-database --config ./config.toml
+   novariusirc --init-database --config ./config
+   novariusirc --check-database --config ./config
    ```
 
 4. Instanz starten und den lokalen Status prüfen:
 
    ```console
-   novariusirc --config ./config.toml
-   novariusirc --status --config ./config.toml
+   novariusirc --config ./config
+   novariusirc --status --config ./config
    ```
 
 5. Produktive Daten nur mit regelmäßigen extern abgelegten Backups betreiben.

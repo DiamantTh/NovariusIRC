@@ -10,15 +10,11 @@ This repository contains the first MVP skeleton: async IRC core with reconnect l
    ```bash
    make install
    ```
-2. Copy `config.example.toml` to `config.toml` and adjust values or environment variables.
-3. Optional feature files are configured explicitly via `[includes]` in `config.toml`; entries are relative to `config.toml` (or absolute). Templates are in `config/*.example.toml`. `workers` stays in the main config by default.
-4. Add the installed binary location to your shell `PATH`:
+2. Copy `config/` into an instance and rename the included `*.example.toml` files without `.example`; adjust values or environment variables.
+3. Optional feature files are configured explicitly via `[includes]` in `config/config.toml`; entries are relative to that file (or absolute). `workers` stays in the main config by default.
+4. Run the example instance:
    ```bash
-   export PATH="$HOME/NovariusIRC/bin:$PATH"
-   ```
-5. Run the example instance:
-   ```bash
-   novariusirc ~/NovariusIRC/instances/example/config.toml
+   ~/NovariusIRC/venv/bin/novariusirc --instance example
    ```
 
 ### Development workflow (optional)
@@ -31,7 +27,7 @@ poetry install
 Then run the bot:
 
 ```bash
-poetry run novariusirc --config ./config.toml
+poetry run novariusirc --config ./config
 ```
 
 Validate an instance before connecting it to IRC. This loads and validates the
@@ -39,7 +35,7 @@ configuration, referenced TLS files, and enabled built-in modules, but does not
 create log directories, start feeds, or open a network connection:
 
 ```bash
-poetry run novariusirc --check-config --config ./config.toml
+poetry run novariusirc --check-config --config ./config
 ```
 
 The optional database layer currently provides the complete SQLite lifecycle.
@@ -47,14 +43,14 @@ After enabling `[database]`, initialize it explicitly; normal startup never
 silently recreates a missing database:
 
 ```bash
-poetry run novariusirc --init-database --config ./config.toml
-poetry run novariusirc --check-database --config ./config.toml
+poetry run novariusirc --init-database --config ./config
+poetry run novariusirc --check-database --config ./config
 ```
 
 Show the configured instance status without opening an IRC connection:
 
 ```bash
-poetry run novariusirc --status --config ./config.toml
+poetry run novariusirc --status --config ./config
 ```
 
 For local operator control, `-t` starts the bot together with an interactive
@@ -62,7 +58,7 @@ terminal console. It executes registered bot commands as the local owner and
 does not open a TCP listener or use DCC:
 
 ```bash
-poetry run novariusirc -t --config ./config.toml
+poetry run novariusirc -t --config ./config
 ```
 
 Use `!help`, `!status`, or `exit` in the console.
@@ -73,7 +69,7 @@ the terminal console; it is neither a TCP service nor an operating-system
 shell. With the bot running, send one command through it:
 
 ```bash
-poetry run novariusirc --ctl "!status" --config ./config.toml
+poetry run novariusirc --ctl "!status" --config ./config
 ```
 
 ## Container
@@ -97,7 +93,7 @@ local build and runtime report. IRC `version` and CTCP `VERSION` remain compact;
 the explicit IRC `botinfo` command shows the extended build and feature report.
 
 The container uses the same installation-prefix shape as a native installation:
-`/app/bin`, `/app/venv`, and `/app/instances`. Persistent state is the complete
+`/app/venv` and `/app/instances`. Persistent state is the complete
 `/app/instances` tree. The checked-in `compose.yml` is host-neutral and uses a
 named volume, so it can be deployed directly as a Portainer repository Stack:
 ```bash
@@ -130,8 +126,7 @@ project deliberately does not use Forgejo runners or push/PR jobs.
 - `novariusirc/core/database.py`: database backend registry and SQLite lifecycle
 - `novariusirc/modules`: built-in modules (currently `rss_announcer`)
 - `novariusirc/__main__.py`: CLI entry point
-- `config.example.toml`: starter configuration
-- `config/*.example.toml`: optional feature snippets (feeds, moderation, workers)
+- `config/*.example.toml`: starter configuration, secrets template, and optional feature snippets
 - `docs/CONFIGURATION.md` / `docs/CONFIGURATION.en.md`: complete German and English configuration reference
 - `docs/OPERATIONS.md`: local operation, systemd, container, backup, and restore guide
 - `LICENSE`: GNU AGPLv3 license text

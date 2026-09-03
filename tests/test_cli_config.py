@@ -71,6 +71,31 @@ def test_cli_accepts_positional_and_option_config_paths(
     assert parse_args().config == Path("selected.toml")
 
 
+def test_cli_instance_selectors_resolve_the_instance_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NOVARIUSIRC_INSTANCE_ROOT", "/opt/novariusirc/instances")
+    monkeypatch.setattr(sys, "argv", ["novariusirc", "--instance", "example"])
+    assert parse_args().config == Path("/opt/novariusirc/instances/example/config")
+
+    monkeypatch.setattr(sys, "argv", ["novariusirc", "--instancedir", "/data/example"])
+    assert parse_args().config == Path("/data/example/config")
+
+
+def test_cli_rejects_conflicting_or_unsafe_instance_selectors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys, "argv", ["novariusirc", "--instance", "example", "--config", "other"]
+    )
+    with pytest.raises(SystemExit, match="2"):
+        parse_args()
+
+    monkeypatch.setattr(sys, "argv", ["novariusirc", "--instance", "../example"])
+    with pytest.raises(SystemExit, match="2"):
+        parse_args()
+
+
 def test_terminal_dcc_mode_fails_explicitly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -427,8 +452,7 @@ def test_missing_config_path_is_not_silently_treated_as_env(tmp_path: Path) -> N
 
 def test_all_example_toml_files_parse() -> None:
     root = Path(__file__).resolve().parents[1]
-    examples = [root / "config.example.toml", root / "secrets.example.toml"]
-    examples.extend((root / "config").glob("*.toml"))
+    examples = list((root / "config").glob("*.toml"))
     for example in examples:
         with example.open("rb") as handle:
             tomllib.load(handle)
@@ -437,15 +461,15 @@ def test_all_example_toml_files_parse() -> None:
 def test_complete_example_configuration_validates(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     copies = {
-        root / "config.example.toml": tmp_path / "config.toml",
-        root / "secrets.example.toml": tmp_path / "secrets.toml",
-        root / "config" / "feeds.example.toml": tmp_path / "feeds.toml",
-        root / "config" / "moderation.example.toml": tmp_path / "moderation.toml",
+        root / "config" / "config.example.toml": tmp_path / "config" / "config.toml",
+        root / "config" / "secrets.example.toml": tmp_path / "config" / "secrets.toml",
+        root / "config" / "feeds.example.toml": tmp_path / "config" / "feeds.toml",
     }
     for source, destination in copies.items():
+        destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(source.read_bytes())
 
-    config = Config.load(tmp_path / "config.toml")
+    config = Config.load(tmp_path / "config")
 
     assert config.network.nick == "NovariusBot"
     assert len(config.feeds.feeds) == 3

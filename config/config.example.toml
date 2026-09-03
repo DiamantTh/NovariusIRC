@@ -1,0 +1,176 @@
+[bot]
+# Stabiler Instanzname für Daten- und Backup-Dateien; unabhängig vom IRC-Nick
+name = "NovariusBot"
+prefix = "!"
+# Sprache: en, de, ja; ohne Angabe Erkennung aus Umgebung/Locale, Rückfall en
+language = "en"
+# CTCP VERSION meldet immer die native NovariusIRC-Paketversion. Optionaler
+# Klartext wird angehängt, kann Produktname und Version aber nicht ersetzen.
+ctcp_version_extra = ""
+
+# Include-Dateien relativ zu diesem config.toml (oder absoluter Pfad)
+# Unterstützt auch auf oberster Ebene: include = ["secrets.toml", "feeds.toml"]
+# Vorlagen liegen unter config/*.example.toml und können an beliebigen Ort kopiert werden.
+[includes]
+files = ["secrets.toml", "feeds.toml"]
+# Erst bei vollständig ausgebauter Moderation oder ausgelagerten Workern:
+# files = ["secrets.toml", "feeds.toml", "moderation.toml", "workers.toml"]
+
+[network]
+server = "irc.libera.chat"
+port = 6697
+tls = true
+# Optional: lokale Quelladresse beim Verbindungsaufbau (eine Option nutzen)
+# bind_ip = "192.0.2.10"
+# bind_hostname = "bot-host.example.net"
+nick = "NovariusBot"
+user = "novarius"
+realname = "Novarius IRC Bot"
+# name = "libera"  # Optional: Netzwerkname statt Erkennung über 005 NETWORK=
+channels = ["#novariusirc"]
+# Standard: Unicode-Buchstaben/-Zahlen sowie - und _ nach dem IRC-Channelpräfix.
+# Nur für alte oder ungewöhnliche IRCds: allow_unusual_channel_names = true
+# IRCv3 CAP wird standardmäßig ausgehandelt. Nur angebotene Fähigkeiten werden
+# angefordert; unbekannte Fähigkeiten werden nicht blind aktiviert.
+ircv3_enabled = true
+ircv3_capabilities = [
+    "account-notify",
+    "account-tag",
+    "away-notify",
+    "batch",
+    "chghost",
+    "extended-join",
+    "invite-notify",
+    "message-tags",
+    "multi-prefix",
+    "server-time",
+    "standard-replies",
+    "userhost-in-names",
+]
+# Unfertige IRCv3-Erweiterungen sind Opt-in und behalten ihren draft/-Namen.
+# Standardmäßig leer, da sich Draft-Semantik inkompatibel ändern kann.
+ircv3_draft_capabilities = []
+# Beispiel erst verwenden, wenn die Erweiterung implementiert ist:
+# ircv3_draft_capabilities = ["draft/chathistory"]
+# Schutz gegen hängende Verbindungen und ausgehende Floods.
+connect_timeout_seconds = 30
+registration_timeout_seconds = 60
+idle_timeout_seconds = 300
+send_rate_per_second = 1.0
+send_burst = 4
+send_queue_size = 256
+# Begrenzte Warteschlange für Befehle und Erweiterungs-Hooks; der IRC-Leseloop bleibt frei.
+event_queue_size = 256
+
+[auth]
+# SASL PLAIN und EXTERNAL werden nur mit network.tls = true akzeptiert.
+sasl_enabled = true
+sasl_mechanism = "PLAIN"
+sasl_username = "NovariusBot"
+# sasl_password wird in secrets.toml gesetzt (siehe secrets.example.toml)
+
+nickserv_enabled = true
+nickserv_service = "NickServ"
+nickserv_username = "NovariusBot"
+# nickserv_password wird in secrets.toml gesetzt (siehe secrets.example.toml)
+
+# Optional: CertFP (TLS-Clientzertifikat)
+# Bei aktivem CertFP wird das Zertifikat beim TLS-Connect geladen.
+# Für SASL EXTERNAL: sasl_enabled = true und sasl_mechanism = "EXTERNAL"
+certfp_enabled = false
+# certfp_cert_file = "./certs/irc-client.pem"
+# certfp_key_file = "./certs/irc-client.key"
+
+[roles]
+# Ohne Datenbank: Eigentümer haben volle Bot-Rechte. Mit Datenbank dienen diese
+# Hostmasks nur beim ersten Start als Owner-Seed; danach ist SQL maßgeblich.
+# Hostmask-Pattern: nick!user@host oder Wildcards (*!*@*.trusted.net).
+owners = [
+    { hostmask = "owner!*@*.trusted.net" },
+    { hostmask = "admin!~user@secure.host.tld" }
+]
+
+# Ohne Datenbank: Administratoren haben erweiterte Rechte. Mit Datenbank über
+# den Owner-Befehl !role add admin ... verwalten.
+admins = [
+    { hostmask = "moderator!*@*.staff.example.net" },
+    { hostmask = "*!*@vhost/staff/*" },
+    { hostmask = "secureadmin!*@*" }
+]
+
+# Einmalige Owner-Identitäten für eine neue Datenbank. Besonders für Docker
+# besser per NOVARIUSIRC_OWNER_HOSTMASK/ACCOUNT/CERTFP statt im TOML setzen.
+[owner_bootstrap]
+# hostmask = "owner!*@*.trusted.net"
+# account = "owner-account"
+# certfp = "0123456789abcdef..."
+
+[logging]
+level = "INFO"
+log_dir = "logs"
+# Lesbare IRC-Logs; intern bleiben Ereigniszeiten zeitzonenbewusst.
+timezone = "Europe/Berlin"
+journald_enabled = false
+
+[commands]
+# Einfacher Befehlsschutz: Mindestabstand je Benutzer und Befehl in Sekunden
+rate_limit_seconds = 2.0
+
+[lifecycle]
+# Zeitlimit für Start und Stop eingebauter Module. Bei einem Startfehler werden
+# bereits gestartete Module in umgekehrter Reihenfolge wieder gestoppt.
+module_start_timeout_seconds = 30
+module_stop_timeout_seconds = 30
+
+[control]
+# Ausschließlich ein lokaler Unix-Socket, kein TCP-Listener. Die Socket-Datei
+# erhält Rechte 0600 und darf deshalb nur für den lokalen Prozessbenutzer liegen.
+enabled = false
+socket_path = "./run/novariusirc.sock"
+
+[web_api]
+# Optionale, rein lesende Tornado-Monitoring-API. Standardmäßig aus.
+enabled = false
+# 127.0.0.1 nur innerhalb des jeweiligen Hosts/Containers; für eine bewusst
+# veröffentlichte Container-API wäre host = "0.0.0.0" erforderlich.
+host = "127.0.0.1"
+port = 9688
+
+[plugins]
+enabled = true
+directory = "plugins"
+# Externe Plugins werden nur geladen, wenn sie hier explizit aufgeführt sind.
+# Der Name verweist auf plugins/<name>.py oder plugins/<name>/__init__.py.
+load = []
+# Beispiel: load = ["example_greetings"]
+
+[modules]
+# Eingebaute Module explizit aktivieren oder deaktivieren
+enabled = ["rss_announcer"]
+
+[paths]
+log_root = "./logs"
+data_root = "./data"
+
+[database]
+# SQLite nutzt SQLAlchemy Core und versionierte Alembic-Migrationen. Weitere
+# bekannte Backendnamen werden erst nach Installation ihres Adapters aktiviert.
+enabled = false
+backend = "sqlite"
+# Ohne Pfadangabe: <data_root>/<bot.name>.sqlite3
+# path = "./data/NovariusBot.sqlite3"
+connect_timeout_seconds = 10
+busy_timeout_seconds = 5
+
+[backups]
+# Nur manuell über --backup-database. Namen: <Botname>_<UTC>.tar[.bz3].
+enabled = false
+directory = "./backups"
+# "none" oder "bzip3" (bzip3 muss im Container/System installiert sein)
+compression = "none"
+compression_min_bytes = 8388608
+include_data = true
+
+[workers]
+# Anzahl Prozesse im Worker-Pool (CPU-lastige Tasks)
+processes = 2

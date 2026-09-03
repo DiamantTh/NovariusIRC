@@ -17,7 +17,7 @@ help:
 	@echo "  PREFIX=<path>      - Installationspfad (default: ~/NovariusIRC)"
 
 install:
-	@NOVARIUSIRC_PREFIX=$(PREFIX) ./install.sh
+	@NOVARIUSIRC_INSTALL_PREFIX=$(PREFIX) ./install.sh
 
 build:
 	python3 scripts/generate_build_info.py
@@ -37,6 +37,6 @@ uninstall:
 	@read -p "Fortfahren? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		rm -rf "$(PREFIX)/venv" "$(PREFIX)/bin/novariusirc"; \
+		rm -rf "$(PREFIX)/venv"; \
 		echo "✅ Deinstallation abgeschlossen (Instanzen in $(PREFIX)/instances bleiben erhalten)"; \
 	fi

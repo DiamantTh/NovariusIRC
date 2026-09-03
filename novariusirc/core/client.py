@@ -136,6 +136,27 @@ class IRCClient:
     def is_connected(self) -> bool:
         return bool(self.writer and not self.writer.is_closing())
 
+    @property
+    def is_registered(self) -> bool:
+        """Whether IRC registration completed on the current connection."""
+        return self.is_connected and self._registration_complete
+
+    @property
+    def send_queue_depth(self) -> int:
+        return self._sender.queue_depth
+
+    @property
+    def send_queue_capacity(self) -> int:
+        return self.config.network.send_queue_size
+
+    @property
+    def event_queue_depth(self) -> int:
+        return self._event_queue.qsize() if self._event_queue is not None else 0
+
+    @property
+    def event_queue_capacity(self) -> int:
+        return self.config.network.event_queue_size
+
     async def run(self) -> None:
         base_delays = self.config.network.reconnect_delays or [10, 20, 40, 80]
         failure_count = 0

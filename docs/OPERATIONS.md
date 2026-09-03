@@ -23,22 +23,23 @@ podman run --rm novariusirc:local --version
 
 ## Erstinstallation mit SQLite
 
-1. `config.example.toml` als `config.toml` kopieren und IRC-Zugangsdaten setzen.
+1. `config/` aus dem Repository als Instanzordner `config/` kopieren und die
+   enthaltenen `*.example.toml` ohne `.example` benennen.
 2. Einen stabilen `[bot].name` setzen.
 3. Datenbank und mindestens eine einmalige Owner-Bindung konfigurieren, etwa
    per `NOVARIUSIRC_OWNER_HOSTMASK`.
 4. Initialisieren und prüfen:
 
    ```console
-   novariusirc --init-database --config ./config.toml
-   novariusirc --check-config --config ./config.toml
-   novariusirc --check-database --config ./config.toml
+   novariusirc --init-database --config ./config
+   novariusirc --check-config --config ./config
+   novariusirc --check-database --config ./config
    ```
 
 5. Starten:
 
    ```console
-   novariusirc --config ./config.toml
+   novariusirc --config ./config
    ```
 
 Relative Pfade gelten relativ zu `config.toml`. Das Verzeichnis des laufenden
@@ -52,9 +53,9 @@ Ein normaler Botstart führt absichtlich keine Migration aus. Erkennt
 und dann upgraden:
 
 ```console
-novariusirc --backup-database --config ./config.toml
-novariusirc --upgrade-database --config ./config.toml
-novariusirc --check-database --config ./config.toml
+novariusirc --backup-database --config ./config
+novariusirc --upgrade-database --config ./config
+novariusirc --check-database --config ./config
 ```
 
 Für SQLite wird nie die Live-Datei migriert: Novarius erstellt eine
@@ -80,7 +81,7 @@ User=novariusirc
 Group=novariusirc
 WorkingDirectory=/home/novariusirc/NovariusIRC/instances/example
 Environment=NOVARIUSIRC_OWNER_HOSTMASK=owner!*@trusted.example
-ExecStart=/home/novariusirc/NovariusIRC/bin/novariusirc --config /home/novariusirc/NovariusIRC/instances/example/config.toml
+ExecStart=/home/novariusirc/NovariusIRC/venv/bin/novariusirc --instance example
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
@@ -98,7 +99,7 @@ Unit-Datei.
 ## Container
 
 Das Image benutzt dieselbe Präfixstruktur wie der Installer, nur unter `/app`:
-`/app/bin`, `/app/venv` und `/app/instances`. Dauerhafte Instanzen liegen
+`/app/venv` und `/app/instances`. Dauerhafte Instanzen liegen
 vollständig unter `/app/instances`; relative Pfade in einer Instanz bleiben
 damit zusammen. Der Bot erzeugt beim ersten Start einer leeren Instanz deren
 Vorlage selbst.
@@ -143,10 +144,10 @@ Bei aktivem Unix-Control-Socket stehen dem lokalen Owner diese Befehle zur
 Verfügung. Sie werden weder über IRC noch über einen TCP-Port angeboten:
 
 ```console
-novariusirc --ctl "db status" --config ./config.toml
-novariusirc --ctl "db check" --config ./config.toml
-novariusirc --ctl "db backups" --config ./config.toml
-novariusirc --ctl "db backup" --config ./config.toml
+novariusirc --ctl "db status" --config ./config
+novariusirc --ctl "db check" --config ./config
+novariusirc --ctl "db backups" --config ./config
+novariusirc --ctl "db backup" --config ./config
 ```
 
 Ein Restore und ein Schema-Upgrade bleiben absichtlich Offline-CLI-Vorgänge.
@@ -154,8 +155,8 @@ Ein Restore und ein Schema-Upgrade bleiben absichtlich Offline-CLI-Vorgänge.
 ## Backup und Offline-Restore
 
 ```console
-novariusirc --backup-database --config ./config.toml
-novariusirc --list-backups --config ./config.toml
+novariusirc --backup-database --config ./config
+novariusirc --list-backups --config ./config
 ```
 
 Vor einer Wiederherstellung den Bot vollständig stoppen. Der Befehl prüft
@@ -164,8 +165,8 @@ ein eigenes Flag:
 
 ```console
 novariusirc --restore-database ./backups/BOT_YYYYMMDDTHHMMSSZ.tar \
-  --replace-database --restore-data --config ./config.toml
-novariusirc --check-database --config ./config.toml
+  --replace-database --restore-data --config ./config
+novariusirc --check-database --config ./config
 ```
 
 `--restore-data` kopiert archivierte Zusatzdateien zurück, löscht aber keine

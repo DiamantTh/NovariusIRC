@@ -34,15 +34,15 @@ This page follows the practical structure of the
 each section explains its purpose, parameters, defaults, and a short example.
 It covers values currently evaluated by the core and built-in modules. The
 complete starter configuration is
-[`config.example.toml`](../config.example.toml).
+[`config/config.example.toml`](../config/config.example.toml).
 
 <a id="loading"></a>
 ## Loading and validation
 
 ```console
-novariusirc --check-config --config ./config.toml
-novariusirc --status --config ./config.toml
-novariusirc --config ./config.toml
+novariusirc --check-config --config ./config
+novariusirc --status --config ./config
+novariusirc --config ./config
 ```
 
 `--check-config` does not connect to IRC. It validates the TOML structure,
@@ -76,12 +76,12 @@ listed file must exist.
 
 ```toml
 [includes]
-files = ["secrets.toml", "feeds.toml", "moderation.toml"]
+files = ["secrets.toml", "feeds.toml"]
 ```
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `files` | list of text | `["secrets.toml"]` | Files to merge in load order; duplicate names are removed. |
+| `files` | list of text | `["secrets.toml"]` | Files to merge in load order; duplicate names are removed. The instance template additionally separates feeds. |
 
 The top-level shorthand is also supported:
 
@@ -91,7 +91,7 @@ include = ["secrets.toml", "feeds.toml"]
 
 Include paths are relative to the main configuration directory. Absolute paths
 are accepted as well. Credentials belong in an untracked file based on
-[`secrets.example.toml`](../secrets.example.toml).
+[`config/secrets.example.toml`](../config/secrets.example.toml).
 
 <a id="bot"></a>
 ## `[bot]`
@@ -282,18 +282,20 @@ same registered bot commands as the terminal console.
 <a id="web-api"></a>
 ## `[web_api]`
 
-The future web API uses Tornado. It is disabled by default, so the current
-version starts no HTTP listener regardless of these values. `host` and `port`
-reserve its future operating address.
+The web API uses Tornado and exposes operational data only. It is disabled by
+default. With `enabled = true`, it starts a listener at `host` and `port`;
+therefore locally at `127.0.0.1:9688` by default.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| `enabled` | Boolean | `false` | Prepares later API activation; currently has no listener effect. |
+| `enabled` | Boolean | `false` | Starts the read-only monitoring API. |
 | `host` | text | `127.0.0.1` | Bind address. Use `0.0.0.0` only for a deliberately published container API. |
-| `port` | integer | `9688` | TCP port of the future API. |
+| `port` | integer | `9688` | TCP port of the API. |
 
-A Docker healthcheck needs no published Compose port mapping: it calls the
-future listener on `127.0.0.1` inside the container.
+Available endpoints are `/_health` (process running), `/_ready` (IRC
+registration complete), and `/v1/status` (secret-free operational status,
+including IRC queue utilization). A Docker healthcheck needs no published
+Compose port mapping: it calls `/_health` on `127.0.0.1` inside the container.
 
 <a id="modules"></a>
 ## `[modules]`
@@ -340,8 +342,8 @@ with an explicit error until those are available.
 An enabled SQLite database must be created explicitly:
 
 ```console
-novariusirc --init-database --config ./config.toml
-novariusirc --check-database --config ./config.toml
+novariusirc --init-database --config ./config
+novariusirc --check-database --config ./config
 ```
 
 Initialization enables foreign keys, WAL, `synchronous = FULL`, runs the
@@ -372,8 +374,8 @@ Names use only the stable bot name and UTC, for example
 `MyBot_20260901T201530Z.tar`:
 
 ```console
-novariusirc --backup-database --config ./config.toml
-novariusirc --list-backups --config ./config.toml
+novariusirc --backup-database --config ./config
+novariusirc --list-backups --config ./config
 ```
 
 For `compression = "bzip3"`, `bzip3` must be installed in the execution path.
@@ -382,7 +384,7 @@ Restoring is offline-only and explicitly requires `--replace-database`;
 
 ```console
 novariusirc --restore-database ./backups/MyBot_20260901T201530Z.tar \
-  --replace-database --restore-data --config ./config.toml
+  --replace-database --restore-data --config ./config
 ```
 
 <a id="feeds"></a>
@@ -537,7 +539,7 @@ the base structure is validated before overrides are applied.
 | `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite file path. |
 | `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Server-database connection DSN; secret value. |
 | `NOVARIUSIRC_WEB_API_ENABLED` | `web_api.enabled` | Boolean syntax as for TLS. |
-| `NOVARIUSIRC_WEB_API_HOST` | `web_api.host` | Bind address of the future API. |
+| `NOVARIUSIRC_WEB_API_HOST` | `web_api.host` | Bind address of the API. |
 | `NOVARIUSIRC_WEB_API_PORT` | `web_api.port` | TCP port between 1 and 65535. |
 | `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | One-time owner hostmask. |
 | `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | One-time owner IRC account name. |
