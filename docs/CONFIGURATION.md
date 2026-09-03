@@ -40,14 +40,20 @@ Werte. Die vollständige Startvorlage ist
 ## Laden und prüfen
 
 ```console
-novariusirc --check-config --config ./config
-novariusirc --status --config ./config
+novariusirc config check --config ./config
+novariusirc config status --config ./config
 novariusirc --config ./config
 ```
 
-`--check-config` verbindet sich nicht mit IRC. Es prüft die TOML-Struktur,
+`config check` verbindet sich nicht mit IRC. Es prüft die TOML-Struktur,
 Pflichtwerte, Wertebereiche, referenzierte TLS-Dateien, beschreibbare
 Laufzeitpfade und importierbare eingebaute Module.
+
+Die CLI verwendet Typer und gruppiert Betriebsaktionen als `config`, `database`,
+`ctl` und `console`. Instanzschalter wie `--instance` und `--config` dürfen vor
+oder nach dem Unterbefehl stehen. Die bisherigen einzelnen Schalter bleiben als
+stiller Kompatibilitätspfad verfügbar, sind aber nicht mehr die dokumentierte
+Hauptschnittstelle.
 
 Als `--config` sind zulässig:
 
@@ -321,7 +327,7 @@ Verwaltung läuft getrennt über den Unix-Control-Socket.
 `rss_announcer` ist das aktive eingebaute Funktionsmodul. Der alte Name
 `moderation` existiert nur als Kompatibilitätshinweis; Moderation ist bereits
 ein Core-Dienst und gehört nicht in diese Liste. Ein unbekanntes oder nicht
-importierbares Modul lässt `--check-config` fehlschlagen.
+importierbares Modul lässt `config check` fehlschlagen.
 
 <a id="paths-workers"></a>
 ## `[paths]` und `[workers]`
@@ -356,8 +362,8 @@ werden bis dahin mit einem klaren Fehler abgelehnt.
 Eine aktivierte SQLite-Datenbank muss ausdrücklich angelegt werden:
 
 ```console
-novariusirc --init-database --config ./config
-novariusirc --check-database --config ./config
+novariusirc database init --config ./config
+novariusirc database check --config ./config
 ```
 
 Die Initialisierung aktiviert Foreign Keys, WAL, `synchronous = FULL`, führt
@@ -388,8 +394,8 @@ Die Namen verwenden nur den stabilen Botnamen und UTC, etwa
 `MeinBot_20260901T201530Z.tar`:
 
 ```console
-novariusirc --backup-database --config ./config
-novariusirc --list-backups --config ./config
+novariusirc database backup --config ./config
+novariusirc database backups --config ./config
 ```
 
 Für `compression = "bzip3"` muss `bzip3` im Ausführungspfad installiert sein.
@@ -398,8 +404,8 @@ Eine Wiederherstellung ist nur offline möglich und verlangt ausdrücklich
 Zusatzdateien zurück:
 
 ```console
-novariusirc --restore-database ./backups/MeinBot_20260901T201530Z.tar \
-  --replace-database --restore-data --config ./config
+novariusirc database restore ./backups/MeinBot_20260901T201530Z.tar \
+  --replace --data --config ./config
 ```
 
 <a id="feeds"></a>

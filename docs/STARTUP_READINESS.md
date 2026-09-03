@@ -17,11 +17,11 @@ Vor einem als stabil beworbenen Release fehlen noch automatisierte
 Release-Absicherung und dokumentierte Tests auf realen IRC-Netzen. Persistente
 Core-Daten, Backups und die Offline-Wiederherstellung sind vorhanden.
 
-Verifiziert am 1. September 2026:
+Verifiziert am 4. September 2026:
 
-- 172 von 172 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 192 von 192 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
 - Ruff ohne Befund und Poetry-Metadaten gültig
-- `--check-config`, `--status`, `--init-database` und `--check-database`
+- `config check`, `config status`, `database init` und `database check`
   funktionieren ohne IRC-Verbindung
 - Konfigurationsreferenz liegt auf Deutsch und Englisch vor
 
@@ -100,22 +100,22 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 2. Konfiguration prüfen:
 
    ```console
-   novariusirc --check-config --config ./config
+   novariusirc config check --config ./config
    ```
 
 3. Falls `[database].enabled = true` gesetzt ist, die SQLite-Datei einmalig
    erzeugen und anschließend prüfen:
 
    ```console
-   novariusirc --init-database --config ./config
-   novariusirc --check-database --config ./config
+   novariusirc database init --config ./config
+   novariusirc database check --config ./config
    ```
 
 4. Instanz starten und den lokalen Status prüfen:
 
    ```console
    novariusirc --config ./config
-   novariusirc --status --config ./config
+   novariusirc config status --config ./config
    ```
 
 5. Produktive Daten nur mit regelmäßigen extern abgelegten Backups betreiben.

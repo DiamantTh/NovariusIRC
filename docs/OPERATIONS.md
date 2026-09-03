@@ -31,9 +31,9 @@ podman run --rm novariusirc:local --version
 4. Initialisieren und prüfen:
 
    ```console
-   novariusirc --init-database --config ./config
-   novariusirc --check-config --config ./config
-   novariusirc --check-database --config ./config
+   novariusirc database init --config ./config
+   novariusirc config check --config ./config
+   novariusirc database check --config ./config
    ```
 
 5. Starten:
@@ -49,13 +49,13 @@ Control-Socket und – falls aktiv – `backups.directory` haben.
 ## Datenbank-Upgrade
 
 Ein normaler Botstart führt absichtlich keine Migration aus. Erkennt
-`--check-database` eine ältere Schemarevision, Bot zuerst vollständig stoppen
+`database check` eine ältere Schemarevision, Bot zuerst vollständig stoppen
 und dann upgraden:
 
 ```console
-novariusirc --backup-database --config ./config
-novariusirc --upgrade-database --config ./config
-novariusirc --check-database --config ./config
+novariusirc database backup --config ./config
+novariusirc database upgrade --config ./config
+novariusirc database check --config ./config
 ```
 
 Für SQLite wird nie die Live-Datei migriert: Novarius erstellt eine
@@ -144,10 +144,10 @@ Bei aktivem Unix-Control-Socket stehen dem lokalen Owner diese Befehle zur
 Verfügung. Sie werden weder über IRC noch über einen TCP-Port angeboten:
 
 ```console
-novariusirc --ctl "db status" --config ./config
-novariusirc --ctl "db check" --config ./config
-novariusirc --ctl "db backups" --config ./config
-novariusirc --ctl "db backup" --config ./config
+novariusirc ctl "db status" --config ./config
+novariusirc ctl "db check" --config ./config
+novariusirc ctl "db backups" --config ./config
+novariusirc ctl "db backup" --config ./config
 ```
 
 Ein Restore und ein Schema-Upgrade bleiben absichtlich Offline-CLI-Vorgänge.
@@ -155,8 +155,8 @@ Ein Restore und ein Schema-Upgrade bleiben absichtlich Offline-CLI-Vorgänge.
 ## Backup und Offline-Restore
 
 ```console
-novariusirc --backup-database --config ./config
-novariusirc --list-backups --config ./config
+novariusirc database backup --config ./config
+novariusirc database backups --config ./config
 ```
 
 Vor einer Wiederherstellung den Bot vollständig stoppen. Der Befehl prüft
@@ -164,9 +164,9 @@ Manifest und SQLite-Integrität; das Ersetzen der Datenbank verlangt absichtlich
 ein eigenes Flag:
 
 ```console
-novariusirc --restore-database ./backups/BOT_YYYYMMDDTHHMMSSZ.tar \
-  --replace-database --restore-data --config ./config
-novariusirc --check-database --config ./config
+novariusirc database restore ./backups/BOT_YYYYMMDDTHHMMSSZ.tar \
+  --replace --data --config ./config
+novariusirc database check --config ./config
 ```
 
 `--restore-data` kopiert archivierte Zusatzdateien zurück, löscht aber keine

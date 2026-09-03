@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import contextlib
 import importlib
@@ -12,7 +11,11 @@ import shutil
 import signal
 import sys
 import time
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Annotated
+
+import typer
 
 from novariusirc.core.auth import AuthManager
 from novariusirc.core.backups import BackupError, BackupManager
@@ -37,139 +40,53 @@ from novariusirc.core.workers import WorkerPool
 from novariusirc.version import SIMPLE_VERSION, detailed_version
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="NovariusIRC bot",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "config_path",
-        nargs="?",
-        type=Path,
-        help="Path to config.toml (positional alternative to --config)",
-    )
-    parser.add_argument(
-        "-c",
-        "--config",
-        dest="config_option",
-        type=Path,
-        help="Path to config.toml or 'env'",
-    )
-    parser.add_argument(
-        "--instancedir",
-        type=Path,
-        help="Instance directory containing config/config.toml",
-    )
-    parser.add_argument(
-        "--instance",
-        help="Instance name below $NOVARIUSIRC_INSTANCE_ROOT (default ~/NovariusIRC/instances)",
-    )
-    parser.add_argument(
-        "-s",
-        "--status",
-        "--channel-stats",
-        dest="status",
-        action="store_true",
-        help="Show configured core status without connecting to IRC",
-    )
-    parser.add_argument(
-        "-t",
-        "--terminal-dcc",
-        action="store_true",
-        help="Run a local terminal control console alongside the bot",
-    )
-    parser.add_argument(
-        "--ctl",
-        metavar="COMMAND",
-        help="Send one command to the configured local Unix control socket",
-    )
-    parser.add_argument(
-        "-f",
-        "--foreground",
-        action="store_true",
-        help="Don't background; stay in foreground",
-    )
-    parser.add_argument(
-        "--check-config",
-        action="store_true",
-        help="Validate configuration and built-in modules without connecting to IRC",
-    )
-    parser.add_argument(
-        "--init-database",
-        action="store_true",
-        help="Initialize a new database or safely upgrade an existing one, then exit",
-    )
-    parser.add_argument(
-        "--upgrade-database",
-        action="store_true",
-        help="Safely upgrade an existing database on a copy, then exit",
-    )
-    parser.add_argument(
-        "--check-database",
-        action="store_true",
-        help="Check the configured database integrity and schema, then exit",
-    )
-    parser.add_argument(
-        "--backup-database",
-        action="store_true",
-        help="Create one verified offline database and data backup, then exit",
-    )
-    parser.add_argument(
-        "--list-backups",
-        action="store_true",
-        help="List backups for the configured bot instance, then exit",
-    )
-    parser.add_argument(
-        "--restore-database",
-        type=Path,
-        help="Restore one offline backup archive",
-    )
-    parser.add_argument(
-        "--replace-database",
-        action="store_true",
-        help="Allow --restore-database to replace the configured database",
-    )
-    parser.add_argument(
-        "--restore-data",
-        action="store_true",
-        help="Also copy archived data files during --restore-database",
-    )
-    parser.add_argument(
-        "-v",
-        "-V",
-        "--version",
-        action="version",
-        version=detailed_version(),
-        help="Show version and exit",
-    )
-    args = parser.parse_args()
-    if args.config_option is not None:
-        # Keep the established behavior: an explicit --config overrides the
-        # optional positional path. Instance selectors remain unambiguous.
-        if args.instancedir is not None or args.instance is not None:
-            parser.error("--config cannot be combined with --instancedir or --instance")
-        args.config = args.config_option
-        return args
-    if args.config_path is not None and (
-        args.instancedir is not None or args.instance is not None
-    ):
-        parser.error("config path cannot be combined with --instancedir or --instance")
-    if args.instance is not None:
-        instance = args.instance.strip()
+def resolve_config_path(
+    config_path: Path | None,
+    config_option: Path | None,
+    instancedir: Path | None,
+    instance: str | None,
+) -> Path:
+    """Resolve the one supported configuration selector for a CLI invocation."""
+    if config_option is not None:
+        if instancedir is not None or instance is not None:
+            raise ValueError("--config cannot be combined with --instancedir or --instance")
+        return config_option
+    if config_path is not None and (instancedir is not None or instance is not None):
+        raise ValueError("config path cannot be combined with --instancedir or --instance")
+    if instance is not None:
+        instance = instance.strip()
         if not instance or instance in {".", ".."} or "/" in instance or "\\" in instance:
-            parser.error("--instance must be a simple instance name")
+            raise ValueError("--instance must be a simple instance name")
         instance_root = Path(
             os.getenv(
                 "NOVARIUSIRC_INSTANCE_ROOT",
                 str(Path.home() / "NovariusIRC" / "instances"),
             )
         )
-        args.config = instance_root / instance / "config"
-    elif args.instancedir is not None:
-        args.config = args.instancedir / "config"
-    else:
-        args.config = args.config_path or Path("./config")
-    return args
+        return instance_root / instance / "config"
+    if instancedir is not None:
+        return instancedir / "config"
+    return config_path or Path("./config")
+
+
+@dataclass(frozen=True)
+class CLIArguments:
+    """Normalized command-line state shared by Typer commands and the runtime."""
+
+    config: Path
+    status: bool = False
+    terminal_dcc: bool = False
+    ctl: str | None = None
+    foreground: bool = False
+    check_config: bool = False
+    init_database: bool = False
+    upgrade_database: bool = False
+    check_database: bool = False
+    backup_database: bool = False
+    list_backups: bool = False
+    restore_database: Path | None = None
+    replace_database: bool = False
+    restore_data: bool = False
 
 
 def check_config(config: Config) -> list[str]:
@@ -550,8 +467,7 @@ def register_runtime_commands(
     )
 
 
-async def async_main() -> None:
-    args = parse_args()
+async def async_main(args: CLIArguments) -> None:
     config = load_config(args.config)
     if (
         args.init_database
@@ -743,10 +659,286 @@ async def async_main() -> None:
         await workers.shutdown()
 
 
+app = typer.Typer(
+    name="novariusirc",
+    help="Run and operate a NovariusIRC instance.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+config_app = typer.Typer(help="Validate and inspect an instance configuration.")
+database_app = typer.Typer(help="Maintain the persistent database and backups.")
+app.add_typer(config_app, name="config")
+app.add_typer(database_app, name="database")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(detailed_version())
+        raise typer.Exit()
+
+
+def _build_cli_args(
+    config_path: Path | None,
+    config_option: Path | None,
+    instancedir: Path | None,
+    instance: str | None,
+    *,
+    status: bool = False,
+    terminal_dcc: bool = False,
+    ctl: str | None = None,
+    foreground: bool = False,
+    check_config: bool = False,
+    init_database: bool = False,
+    upgrade_database: bool = False,
+    check_database: bool = False,
+    backup_database: bool = False,
+    list_backups: bool = False,
+    restore_database: Path | None = None,
+    replace_database: bool = False,
+    restore_data: bool = False,
+) -> CLIArguments:
+    return CLIArguments(
+        config=resolve_config_path(config_path, config_option, instancedir, instance),
+        status=status,
+        terminal_dcc=terminal_dcc,
+        ctl=ctl,
+        foreground=foreground,
+        check_config=check_config,
+        init_database=init_database,
+        upgrade_database=upgrade_database,
+        check_database=check_database,
+        backup_database=backup_database,
+        list_backups=list_backups,
+        restore_database=restore_database,
+        replace_database=replace_database,
+        restore_data=restore_data,
+    )
+
+
+def _with_cli_args(args: CLIArguments, **updates: object) -> CLIArguments:
+    return replace(args, **updates)
+
+
+def _context_args(ctx: typer.Context) -> CLIArguments:
+    if not isinstance(ctx.obj, CLIArguments):
+        raise TypeError("CLI context was not initialized")
+    return ctx.obj
+
+
+def _run_cli_action(args: CLIArguments, **updates: object) -> None:
+    asyncio.run(async_main(_with_cli_args(args, **updates)))
+
+
+@app.callback()
+def root_command(
+    ctx: typer.Context,
+    config_option: Annotated[
+        Path | None,
+        typer.Option("-c", "--config", help="Path to config.toml or 'env'."),
+    ] = None,
+    instancedir: Annotated[
+        Path | None,
+        typer.Option("--instancedir", help="Instance directory containing config/config.toml."),
+    ] = None,
+    instance: Annotated[
+        str | None,
+        typer.Option("--instance", help="Instance below $NOVARIUSIRC_INSTANCE_ROOT."),
+    ] = None,
+    foreground: Annotated[
+        bool,
+        typer.Option("-f", "--foreground", help="Log foreground startup mode."),
+    ] = False,
+    terminal_dcc: Annotated[
+        bool,
+        typer.Option("-t", "--terminal-dcc", hidden=True),
+    ] = False,
+    ctl: Annotated[str | None, typer.Option("--ctl", hidden=True)] = None,
+    status: Annotated[
+        bool,
+        typer.Option("-s", "--status", "--channel-stats", hidden=True),
+    ] = False,
+    check_config: Annotated[bool, typer.Option("--check-config", hidden=True)] = False,
+    init_database: Annotated[bool, typer.Option("--init-database", hidden=True)] = False,
+    upgrade_database: Annotated[bool, typer.Option("--upgrade-database", hidden=True)] = False,
+    check_database: Annotated[bool, typer.Option("--check-database", hidden=True)] = False,
+    backup_database: Annotated[bool, typer.Option("--backup-database", hidden=True)] = False,
+    list_backups: Annotated[bool, typer.Option("--list-backups", hidden=True)] = False,
+    restore_database: Annotated[Path | None, typer.Option("--restore-database", hidden=True)] = None,
+    replace_database: Annotated[bool, typer.Option("--replace-database", hidden=True)] = False,
+    restore_data: Annotated[bool, typer.Option("--restore-data", hidden=True)] = False,
+    version: Annotated[
+        bool,
+        typer.Option("-v", "-V", "--version", callback=_version_callback, is_eager=True),
+    ] = False,
+) -> None:
+    """Set the instance selector shared by all commands."""
+    del version
+    try:
+        args = _build_cli_args(
+            None,
+            config_option,
+            instancedir,
+            instance,
+            status=status,
+            terminal_dcc=terminal_dcc,
+            ctl=ctl,
+            foreground=foreground,
+            check_config=check_config,
+            init_database=init_database,
+            upgrade_database=upgrade_database,
+            check_database=check_database,
+            backup_database=backup_database,
+            list_backups=list_backups,
+            restore_database=restore_database,
+            replace_database=replace_database,
+            restore_data=restore_data,
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    ctx.obj = args
+    legacy_actions = (
+        status,
+        terminal_dcc,
+        ctl is not None,
+        check_config,
+        init_database,
+        upgrade_database,
+        check_database,
+        backup_database,
+        list_backups,
+        restore_database is not None,
+    )
+    if ctx.invoked_subcommand is not None:
+        if any(legacy_actions):
+            raise typer.BadParameter("legacy action flags cannot be combined with a subcommand")
+        return
+    _run_cli_action(args)
+
+
+@app.command("run")
+def run_command(ctx: typer.Context) -> None:
+    """Run the IRC bot (the default when no subcommand is supplied)."""
+    _run_cli_action(_context_args(ctx))
+
+
+@app.command("console")
+def console_command(ctx: typer.Context) -> None:
+    """Run the bot with an interactive local terminal console."""
+    _run_cli_action(_context_args(ctx), terminal_dcc=True)
+
+
+@app.command("ctl")
+def control_command(
+    ctx: typer.Context,
+    command: Annotated[str, typer.Argument(help="Registered local control command.")],
+) -> None:
+    """Send one command to the running bot's Unix control socket."""
+    _run_cli_action(_context_args(ctx), ctl=command)
+
+
+@config_app.command("check")
+def config_check_command(ctx: typer.Context) -> None:
+    """Validate configuration and built-in modules without IRC connectivity."""
+    _run_cli_action(_context_args(ctx), check_config=True)
+
+
+@config_app.command("status")
+def config_status_command(ctx: typer.Context) -> None:
+    """Print the secret-free configured core status without IRC connectivity."""
+    _run_cli_action(_context_args(ctx), status=True)
+
+
+@database_app.command("init")
+def database_init_command(ctx: typer.Context) -> None:
+    """Initialize a database or safely upgrade an existing one."""
+    _run_cli_action(_context_args(ctx), init_database=True)
+
+
+@database_app.command("upgrade")
+def database_upgrade_command(ctx: typer.Context) -> None:
+    """Safely upgrade an existing database using a verified copy."""
+    _run_cli_action(_context_args(ctx), upgrade_database=True)
+
+
+@database_app.command("check")
+def database_check_command(ctx: typer.Context) -> None:
+    """Check configured database integrity and schema."""
+    _run_cli_action(_context_args(ctx), check_database=True)
+
+
+@database_app.command("backup")
+def database_backup_command(ctx: typer.Context) -> None:
+    """Create one verified offline database and data backup."""
+    _run_cli_action(_context_args(ctx), backup_database=True)
+
+
+@database_app.command("backups")
+def database_backups_command(ctx: typer.Context) -> None:
+    """List available backups for the selected instance."""
+    _run_cli_action(_context_args(ctx), list_backups=True)
+
+
+@database_app.command("restore")
+def database_restore_command(
+    ctx: typer.Context,
+    archive: Annotated[Path, typer.Argument(help="Backup archive to restore.")],
+    replace: Annotated[
+        bool,
+        typer.Option("--replace", help="Allow replacing the configured database."),
+    ] = False,
+    data: Annotated[
+        bool,
+        typer.Option("--data", help="Also restore archived data files."),
+    ] = False,
+) -> None:
+    """Restore one offline backup archive."""
+    _run_cli_action(
+        _context_args(ctx),
+        restore_database=archive,
+        replace_database=replace,
+        restore_data=data,
+    )
+
+
+def normalize_cli_arguments(arguments: list[str]) -> list[str]:
+    """Allow shared instance selectors before or after a Typer subcommand."""
+    value_options = {"-c", "--config", "--instancedir", "--instance"}
+    flag_options = {"-f", "--foreground"}
+    global_options: list[str] = []
+    remaining: list[str] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in value_options:
+            if index + 1 >= len(arguments):
+                remaining.append(argument)
+            else:
+                global_options.extend((argument, arguments[index + 1]))
+                index += 1
+        elif (
+            any(argument.startswith(f"{option}=") for option in value_options if option != "-c")
+            or argument in flag_options
+        ):
+            global_options.append(argument)
+        else:
+            remaining.append(argument)
+        index += 1
+    return [*global_options, *remaining]
+
+
 def main() -> None:
     configure_event_loop()
     try:
-        asyncio.run(async_main())
+        command_names = {"run", "console", "ctl", "config", "database"}
+        arguments = sys.argv[1:]
+        # The earlier CLI accepted a config path as its first positional
+        # argument. Typer command groups need that position for their names,
+        # so preserve the old invocation by converting only unknown first
+        # words to the explicit --config form before Typer parses them.
+        if arguments and not arguments[0].startswith("-") and arguments[0] not in command_names:
+            arguments = ["--config", arguments[0], *arguments[1:]]
+        arguments = normalize_cli_arguments(arguments)
+        app(args=arguments, prog_name="novariusirc")
     except KeyboardInterrupt:
         sys.exit(130)
     except SystemExit:

@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from typer.testing import CliRunner
 
+from novariusirc import __main__ as cli
 from novariusirc import __version__
 from novariusirc.__main__ import (
     TerminalClient,
     check_config,
     configuration_status,
     dispatch_terminal_command,
-    parse_args,
     register_builtin_commands,
     register_runtime_commands,
 )
@@ -57,68 +57,134 @@ def test_web_api_network_allowlist_is_validated_and_canonicalized() -> None:
         WebAPIConfig(allowed_networks=["not-a-network"])
 
 
+def test_typer_cli_groups_dispatch_to_existing_async_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invoked: list[object] = []
+
+    async def fake_async_main(args) -> None:
+        invoked.append(args)
+
+    monkeypatch.setattr(cli, "async_main", fake_async_main)
+    result = CliRunner().invoke(cli.app, ["--instance", "example", "config", "check"])
+
+    assert result.exit_code == 0, result.output
+    assert len(invoked) == 1
+    assert invoked[0].check_config is True
+    assert invoked[0].config == Path.home() / "NovariusIRC" / "instances/example/config"
+
+
+def test_typer_cli_keeps_legacy_action_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invoked: list[object] = []
+
+    async def fake_async_main(args) -> None:
+        invoked.append(args)
+
+    monkeypatch.setattr(cli, "async_main", fake_async_main)
+    result = CliRunner().invoke(cli.app, ["--config", "chosen.toml", "--check-config"])
+
+    assert result.exit_code == 0, result.output
+    assert len(invoked) == 1
+    assert invoked[0].check_config is True
+    assert invoked[0].config == Path("chosen.toml")
+
+
+@pytest.mark.parametrize(
+    ("arguments", "attribute", "expected"),
+    [
+        ([], "check_config", False),
+        (["run"], "check_config", False),
+        (["console"], "terminal_dcc", True),
+        (["ctl", "!status"], "ctl", "!status"),
+        (["config", "status"], "status", True),
+        (["database", "init"], "init_database", True),
+        (["database", "upgrade"], "upgrade_database", True),
+        (["database", "check"], "check_database", True),
+        (["database", "backup"], "backup_database", True),
+        (["database", "backups"], "list_backups", True),
+        (["database", "restore", "archive.tar", "--replace", "--data"], "restore_data", True),
+    ],
+)
+def test_typer_cli_commands_dispatch_expected_action(
+    arguments: list[str],
+    attribute: str,
+    expected: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invoked: list[object] = []
+
+    async def fake_async_main(args) -> None:
+        invoked.append(args)
+
+    monkeypatch.setattr(cli, "async_main", fake_async_main)
+    result = CliRunner().invoke(cli.app, arguments)
+
+    assert result.exit_code == 0, result.output
+    assert len(invoked) == 1
+    assert getattr(invoked[0], attribute) == expected
+
+
+def test_cli_normalizes_shared_instance_options_after_subcommands() -> None:
+    assert cli.normalize_cli_arguments(
+        ["database", "check", "--instance", "example"]
+    ) == ["--instance", "example", "database", "check"]
+
+
+def test_main_normalizes_shared_instance_options_after_subcommands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_app(*, args: list[str], prog_name: str) -> None:
+        captured["args"] = args
+        captured["prog_name"] = prog_name
+
+    monkeypatch.setattr(cli, "app", fake_app)
+    monkeypatch.setattr(cli.sys, "argv", ["novariusirc", "database", "check", "--instance", "example"])
+    cli.main()
+
+    assert captured == {
+        "args": ["--instance", "example", "database", "check"],
+        "prog_name": "novariusirc",
+    }
+
+
 @pytest.mark.parametrize("flag", ["-v", "-V", "--version"])
-def test_cli_version_aliases_are_identical(
-    flag: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", flag])
-    with pytest.raises(SystemExit) as exit_info:
-        parse_args()
-    assert exit_info.value.code == 0
-    assert capsys.readouterr().out.strip() == detailed_version()
+def test_cli_version_aliases_are_identical(flag: str) -> None:
+    result = CliRunner().invoke(cli.app, [flag])
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == detailed_version()
 
 
-def test_cli_accepts_positional_and_option_config_paths(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "instance/config.toml"])
-    assert parse_args().config == Path("instance/config.toml")
-
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        ["novariusirc", "ignored.toml", "--config", "selected.toml"],
+def test_cli_accepts_positional_and_option_config_paths() -> None:
+    assert cli.resolve_config_path(Path("instance/config.toml"), None, None, None) == Path(
+        "instance/config.toml"
     )
-    assert parse_args().config == Path("selected.toml")
+    assert cli.resolve_config_path(Path("ignored.toml"), Path("selected.toml"), None, None) == Path(
+        "selected.toml"
+    )
 
 
 def test_cli_instance_selectors_resolve_the_instance_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("NOVARIUSIRC_INSTANCE_ROOT", "/opt/novariusirc/instances")
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--instance", "example"])
-    assert parse_args().config == Path("/opt/novariusirc/instances/example/config")
-
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--instancedir", "/data/example"])
-    assert parse_args().config == Path("/data/example/config")
-
-
-def test_cli_rejects_conflicting_or_unsafe_instance_selectors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        sys, "argv", ["novariusirc", "--instance", "example", "--config", "other"]
+    assert cli.resolve_config_path(None, None, None, "example") == Path(
+        "/opt/novariusirc/instances/example/config"
     )
-    with pytest.raises(SystemExit, match="2"):
-        parse_args()
 
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--instance", "../example"])
-    with pytest.raises(SystemExit, match="2"):
-        parse_args()
+    assert cli.resolve_config_path(None, None, Path("/data/example"), None) == Path(
+        "/data/example/config"
+    )
 
 
-def test_terminal_dcc_mode_fails_explicitly(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--terminal-dcc"])
-    assert parse_args().terminal_dcc
-
-
-def test_ctl_command_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--ctl", "status"])
-    assert parse_args().ctl == "status"
+def test_cli_rejects_conflicting_or_unsafe_instance_selectors() -> None:
+    with pytest.raises(ValueError, match="cannot be combined"):
+        cli.resolve_config_path(None, Path("other"), None, "example")
+    with pytest.raises(ValueError, match="simple instance name"):
+        cli.resolve_config_path(None, None, None, "../example")
 
 
 def test_terminal_console_dispatches_owner_commands() -> None:
@@ -250,27 +316,6 @@ def test_owner_role_command_updates_the_database_cache(tmp_path: Path) -> None:
         "user",
         "admin",
     ]
-
-
-def test_status_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--status"])
-    assert parse_args().status
-
-
-def test_check_config_cli_flag_is_parsed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", "--check-config"])
-    assert parse_args().check_config
-
-
-@pytest.mark.parametrize(
-    "flag",
-    ["--init-database", "--check-database", "--backup-database", "--list-backups"],
-)
-def test_database_cli_flags_are_parsed(
-    flag: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(sys, "argv", ["novariusirc", flag])
-    assert getattr(parse_args(), flag.removeprefix("--").replace("-", "_"))
 
 
 def test_draft_capabilities_require_explicit_namespace() -> None:

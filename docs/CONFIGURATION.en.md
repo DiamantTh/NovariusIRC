@@ -40,14 +40,19 @@ complete starter configuration is
 ## Loading and validation
 
 ```console
-novariusirc --check-config --config ./config
-novariusirc --status --config ./config
+novariusirc config check --config ./config
+novariusirc config status --config ./config
 novariusirc --config ./config
 ```
 
-`--check-config` does not connect to IRC. It validates the TOML structure,
+`config check` does not connect to IRC. It validates the TOML structure,
 required values, limits, referenced TLS files, writable runtime paths, and
 importable built-in modules.
+
+The Typer CLI groups operational actions as `config`, `database`, `ctl`, and
+`console`. Instance selectors such as `--instance` and `--config` may appear
+before or after a subcommand. The earlier individual flags remain as a quiet
+compatibility path, but are no longer the documented primary interface.
 
 The `--config` argument accepts:
 
@@ -314,7 +319,7 @@ control socket.
 `rss_announcer` is the active built-in feature module. The old `moderation`
 name exists only as a compatibility notice; moderation is already a core
 service and should not be listed here. Unknown or unimportable modules make
-`--check-config` fail.
+`config check` fail.
 
 <a id="paths-workers"></a>
 ## `[paths]` and `[workers]`
@@ -349,8 +354,8 @@ with an explicit error until those are available.
 An enabled SQLite database must be created explicitly:
 
 ```console
-novariusirc --init-database --config ./config
-novariusirc --check-database --config ./config
+novariusirc database init --config ./config
+novariusirc database check --config ./config
 ```
 
 Initialization enables foreign keys, WAL, `synchronous = FULL`, runs the
@@ -381,17 +386,17 @@ Names use only the stable bot name and UTC, for example
 `MyBot_20260901T201530Z.tar`:
 
 ```console
-novariusirc --backup-database --config ./config
-novariusirc --list-backups --config ./config
+novariusirc database backup --config ./config
+novariusirc database backups --config ./config
 ```
 
 For `compression = "bzip3"`, `bzip3` must be installed in the execution path.
-Restoring is offline-only and explicitly requires `--replace-database`;
-`--restore-data` also copies archived auxiliary files back:
+Restoring is offline-only and explicitly requires `--replace`;
+`--data` also copies archived auxiliary files back:
 
 ```console
-novariusirc --restore-database ./backups/MyBot_20260901T201530Z.tar \
-  --replace-database --restore-data --config ./config
+novariusirc database restore ./backups/MyBot_20260901T201530Z.tar \
+  --replace --data --config ./config
 ```
 
 <a id="feeds"></a>

@@ -35,7 +35,7 @@ configuration, referenced TLS files, and enabled built-in modules, but does not
 create log directories, start feeds, or open a network connection:
 
 ```bash
-poetry run novariusirc --check-config --config ./config
+poetry run novariusirc config check --config ./config
 ```
 
 The optional database layer currently provides the complete SQLite lifecycle.
@@ -43,14 +43,14 @@ After enabling `[database]`, initialize it explicitly; normal startup never
 silently recreates a missing database:
 
 ```bash
-poetry run novariusirc --init-database --config ./config
-poetry run novariusirc --check-database --config ./config
+poetry run novariusirc database init --config ./config
+poetry run novariusirc database check --config ./config
 ```
 
 Show the configured instance status without opening an IRC connection:
 
 ```bash
-poetry run novariusirc --status --config ./config
+poetry run novariusirc config status --config ./config
 ```
 
 For local operator control, `-t` starts the bot together with an interactive
@@ -58,7 +58,7 @@ terminal console. It executes registered bot commands as the local owner and
 does not open a TCP listener or use DCC:
 
 ```bash
-poetry run novariusirc -t --config ./config
+poetry run novariusirc console --config ./config
 ```
 
 Use `!help`, `!status`, or `exit` in the console.
@@ -69,7 +69,7 @@ the terminal console; it is neither a TCP service nor an operating-system
 shell. With the bot running, send one command through it:
 
 ```bash
-poetry run novariusirc --ctl "!status" --config ./config
+poetry run novariusirc ctl "!status" --config ./config
 ```
 
 ## Container
