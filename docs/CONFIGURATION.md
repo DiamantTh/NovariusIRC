@@ -297,12 +297,19 @@ standardmäßig deaktiviert. Bei `enabled = true` startet sie den Listener an
 | `enabled` | Boolean | `false` | Startet die rein lesende Monitoring-API. |
 | `host` | Text | `127.0.0.1` | Bind-Adresse. `0.0.0.0` nur für eine bewusst veröffentlichte Container-API. |
 | `port` | Ganzzahl | `9688` | TCP-Port der API. |
+| `allowed_networks` | Liste aus IP/CIDR | leer | Optionale TCP-Client-Allowlist, z. B. `["127.0.0.1", "192.0.2.0/24"]`. |
 
 Verfügbar sind `/_health` (Prozess läuft), `/_ready` (IRC-Registrierung
 abgeschlossen) und `/v1/status` (secret-freier Betriebsstatus einschließlich
 IRC-Queue-Auslastung). Ein Docker-Healthcheck braucht keine veröffentlichte
 Compose-Portzuordnung: er ruft `/_health` innerhalb des Containers auf
 `127.0.0.1` auf.
+
+`allowed_networks` prüft ausschließlich die tatsächliche TCP-Client-Adresse;
+`X-Forwarded-For` und ähnliche Header werden nicht vertraut. Leer bedeutet
+keine zusätzliche Allowlist — die Bind-Adresse `host` begrenzt weiterhin, wo
+der Listener überhaupt erreichbar ist. Die API bleibt read-only; lokale
+Verwaltung läuft getrennt über den Unix-Control-Socket.
 
 <a id="modules"></a>
 ## `[modules]`

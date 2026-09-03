@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import ipaddress
 import os
 import re
 import tomllib
@@ -448,6 +449,7 @@ class WebAPIConfig(ConfigModel):
     enabled: bool = False
     host: str = "127.0.0.1"
     port: int = Field(default=9688, ge=1, le=65535)
+    allowed_networks: list[str] = Field(default_factory=list)
 
     @field_validator("host")
     @classmethod
@@ -458,6 +460,23 @@ class WebAPIConfig(ConfigModel):
         ):
             raise ValueError("web_api.host must be a non-empty host or IP address")
         return value
+
+    @field_validator("allowed_networks")
+    @classmethod
+    def validate_allowed_networks(cls, values: list[str]) -> list[str]:
+        """Accept canonical client IP addresses or CIDR networks only."""
+        networks: list[str] = []
+        for value in values:
+            try:
+                network = ipaddress.ip_network(value.strip(), strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    "web_api.allowed_networks entries must be IP addresses or CIDR networks"
+                ) from exc
+            canonical = str(network)
+            if canonical not in networks:
+                networks.append(canonical)
+        return networks
 
     def resolve_env(self) -> None:
         enabled = os.getenv(ENV_WEB_API_ENABLED)

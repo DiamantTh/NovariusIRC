@@ -82,6 +82,16 @@ class TestMonitoringRoutes(AsyncHTTPTestCase):
         }
         assert payload["uptime_seconds"] >= 3
 
+    def test_optional_network_allowlist_uses_the_tcp_peer(self) -> None:
+        self.web_api.config.allowed_networks = ["192.0.2.0/24"]
+        response = self.fetch("/v1/status")
+        assert response.code == 403
+        assert json.loads(response.body) == {"status": "forbidden"}
+
+        self.web_api.config.allowed_networks = ["127.0.0.1"]
+        response = self.fetch("/v1/status")
+        assert response.code == 200
+
     def test_unknown_route_is_not_found(self) -> None:
         response = self.fetch("/not-here")
 

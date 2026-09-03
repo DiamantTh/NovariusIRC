@@ -34,7 +34,12 @@ def test_package_version_matches_project_metadata() -> None:
 
 def test_web_api_defaults_to_local_reserved_port(monkeypatch: pytest.MonkeyPatch) -> None:
     config = WebAPIConfig()
-    assert (config.enabled, config.host, config.port) == (False, "127.0.0.1", 9688)
+    assert (config.enabled, config.host, config.port, config.allowed_networks) == (
+        False,
+        "127.0.0.1",
+        9688,
+        [],
+    )
 
     monkeypatch.setenv("NOVARIUSIRC_WEB_API_ENABLED", "true")
     monkeypatch.setenv("NOVARIUSIRC_WEB_API_HOST", "0.0.0.0")
@@ -42,6 +47,14 @@ def test_web_api_defaults_to_local_reserved_port(monkeypatch: pytest.MonkeyPatch
     config.resolve_env()
 
     assert (config.enabled, config.host, config.port) == (True, "0.0.0.0", 19688)
+
+
+def test_web_api_network_allowlist_is_validated_and_canonicalized() -> None:
+    config = WebAPIConfig(allowed_networks=["192.0.2.17", "192.0.2.0/24", "192.0.2.17"])
+    assert config.allowed_networks == ["192.0.2.17/32", "192.0.2.0/24"]
+
+    with pytest.raises(ValueError, match="IP addresses or CIDR networks"):
+        WebAPIConfig(allowed_networks=["not-a-network"])
 
 
 @pytest.mark.parametrize("flag", ["-v", "-V", "--version"])

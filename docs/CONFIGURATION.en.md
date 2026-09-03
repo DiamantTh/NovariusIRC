@@ -291,11 +291,18 @@ therefore locally at `127.0.0.1:9688` by default.
 | `enabled` | Boolean | `false` | Starts the read-only monitoring API. |
 | `host` | text | `127.0.0.1` | Bind address. Use `0.0.0.0` only for a deliberately published container API. |
 | `port` | integer | `9688` | TCP port of the API. |
+| `allowed_networks` | list of IP/CIDR | empty | Optional TCP-client allowlist, for example `["127.0.0.1", "192.0.2.0/24"]`. |
 
 Available endpoints are `/_health` (process running), `/_ready` (IRC
 registration complete), and `/v1/status` (secret-free operational status,
 including IRC queue utilization). A Docker healthcheck needs no published
 Compose port mapping: it calls `/_health` on `127.0.0.1` inside the container.
+
+`allowed_networks` checks the actual TCP client address only; it never trusts
+`X-Forwarded-For` or similar headers. An empty list means no extra allowlist —
+the `host` bind address still determines where the listener can be reached.
+The API remains read-only; local administration stays separate on the Unix
+control socket.
 
 <a id="modules"></a>
 ## `[modules]`

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import time
 from dataclasses import dataclass
@@ -128,10 +129,25 @@ class WebAPIServer:
             default_handler_class=_NotFoundHandler,
         )
 
+    def allows_client(self, remote_ip: str) -> bool:
+        """Check the TCP peer address, never an untrusted forwarding header."""
+        if not self.config.allowed_networks:
+            return True
+        try:
+            address = ipaddress.ip_address(remote_ip)
+        except ValueError:
+            return False
+        return any(
+            address in ipaddress.ip_network(network, strict=False)
+            for network in self.config.allowed_networks
+        )
+
     async def start(self) -> None:
         if not self.config.enabled or self._server is not None:
             return
-        server = HTTPServer(self.application())
+        # Do not trust X-Forwarded-For unless a dedicated proxy integration is
+        # introduced. The allowlist intentionally sees the TCP peer address.
+        server = HTTPServer(self.application(), xheaders=False)
         server.listen(self.config.port, address=self.config.host)
         self._server = server
         self.logger.info("Monitoring API listening on %s:%s", self.config.host, self.config.port)
@@ -152,6 +168,11 @@ class _BaseHandler(RequestHandler):
     def set_default_headers(self) -> None:
         self.set_header("Cache-Control", "no-store")
         self.set_header("X-Content-Type-Options", "nosniff")
+
+    def prepare(self) -> None:
+        if not self.web_api.allows_client(self.request.remote_ip):
+            self.set_status(403)
+            self.finish({"status": "forbidden"})
 
 
 class _HealthHandler(_BaseHandler):

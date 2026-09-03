@@ -135,6 +135,10 @@ enabled = false
 # veröffentlichte Container-API wäre host = "0.0.0.0" erforderlich.
 host = "127.0.0.1"
 port = 9688
+# Optionale Begrenzung auf TCP-Client-IP-Adressen oder CIDR-Netze. Leer bedeutet:
+# keine zusätzliche Begrenzung; die Bind-Adresse oben bleibt dennoch maßgeblich.
+# Forwarded-Header werden absichtlich nicht ausgewertet.
+# allowed_networks = ["127.0.0.1", "::1", "192.0.2.0/24"]
 
 [plugins]
 enabled = true
