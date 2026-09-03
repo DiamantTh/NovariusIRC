@@ -128,6 +128,15 @@ module_stop_timeout_seconds = 30
 enabled = false
 socket_path = "./run/novariusirc.sock"
 
+[web_api]
+# Vorbereitet für die optionale Tornado-API. Solange sie noch nicht eingebaut
+# ist, startet diese Konfiguration bewusst keinen HTTP-Listener.
+enabled = false
+# 127.0.0.1 nur innerhalb des jeweiligen Hosts/Containers; für eine bewusst
+# veröffentlichte Container-API wäre host = "0.0.0.0" erforderlich.
+host = "127.0.0.1"
+port = 9688
+
 [plugins]
 enabled = true
 directory = "plugins"

@@ -13,6 +13,7 @@
 - [Owner-Bootstrap](#owner-bootstrap)
 - [Logging](#logging)
 - [Befehle, Lifecycle und Control](#commands-lifecycle-control)
+- [Web-API](#web-api)
 - [Eingebaute Module](#modules)
 - [Pfade und Worker](#paths-workers)
 - [Datenbank](#database)
@@ -284,6 +285,22 @@ Ohne passenden Eintrag ist das inhaltliche Kanal-Logging ausgeschaltet.
 Der Control-Endpunkt ist kein TCP-Listener und keine Shell. Er führt dieselben
 registrierten Bot-Befehle wie die Terminalsteuerung aus.
 
+<a id="web-api"></a>
+## `[web_api]`
+
+Die spätere Web-API nutzt Tornado. Sie ist standardmäßig deaktiviert; die
+aktuelle Version startet deshalb unabhängig von diesen Werten keinen
+HTTP-Listener. `host` und `port` reservieren die spätere Betriebsadresse.
+
+| Name | Typ | Standard | Beschreibung |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `false` | Bereitet die spätere API-Aktivierung vor; aktuell ohne Listener-Wirkung. |
+| `host` | Text | `127.0.0.1` | Bind-Adresse. `0.0.0.0` nur für eine bewusst veröffentlichte Container-API. |
+| `port` | Ganzzahl | `9688` | TCP-Port der späteren API. |
+
+Ein Docker-Healthcheck braucht keine veröffentlichte Compose-Portzuordnung:
+er ruft den späteren Listener innerhalb des Containers auf `127.0.0.1` auf.
+
 <a id="modules"></a>
 ## `[modules]`
 
@@ -527,6 +544,9 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | `NOVARIUSIRC_DATABASE_BACKEND` | `database.backend` | Registrierter Backendname oder Alias. |
 | `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite-Dateipfad. |
 | `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Verbindungs-DSN einer Serverdatenbank; Geheimwert. |
+| `NOVARIUSIRC_WEB_API_ENABLED` | `web_api.enabled` | Boolean-Syntax wie bei TLS. |
+| `NOVARIUSIRC_WEB_API_HOST` | `web_api.host` | Bind-Adresse der späteren API. |
+| `NOVARIUSIRC_WEB_API_PORT` | `web_api.port` | TCP-Port zwischen 1 und 65535. |
 | `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | Einmalige Owner-Hostmask. |
 | `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | Einmaliger Owner-IRC-Kontoname. |
 | `NOVARIUSIRC_OWNER_CERTFP` | `owner_bootstrap.certfp` | Einmaliger Owner-CertFP. |

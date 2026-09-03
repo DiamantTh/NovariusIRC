@@ -21,7 +21,7 @@ from novariusirc.__main__ import (
 )
 from novariusirc.core.auth import AuthManager
 from novariusirc.core.commands import CommandRegistry
-from novariusirc.core.config import Config, DatabaseConfig
+from novariusirc.core.config import Config, DatabaseConfig, WebAPIConfig
 from novariusirc.core.database import SQLiteDatabase
 from novariusirc.version import SIMPLE_VERSION, detailed_version
 
@@ -30,6 +30,18 @@ def test_package_version_matches_project_metadata() -> None:
     project_file = Path(__file__).parents[1] / "pyproject.toml"
     project = tomllib.loads(project_file.read_text(encoding="utf-8"))
     assert __version__ == project["project"]["version"]
+
+
+def test_web_api_defaults_to_local_reserved_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = WebAPIConfig()
+    assert (config.enabled, config.host, config.port) == (False, "127.0.0.1", 9688)
+
+    monkeypatch.setenv("NOVARIUSIRC_WEB_API_ENABLED", "true")
+    monkeypatch.setenv("NOVARIUSIRC_WEB_API_HOST", "0.0.0.0")
+    monkeypatch.setenv("NOVARIUSIRC_WEB_API_PORT", "19688")
+    config.resolve_env()
+
+    assert (config.enabled, config.host, config.port) == (True, "0.0.0.0", 19688)
 
 
 @pytest.mark.parametrize("flag", ["-v", "-V", "--version"])

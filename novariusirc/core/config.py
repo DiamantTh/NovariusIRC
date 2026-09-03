@@ -50,6 +50,10 @@ ENV_DATABASE_BACKEND = "NOVARIUSIRC_DATABASE_BACKEND"
 ENV_DATABASE_PATH = "NOVARIUSIRC_DATABASE_PATH"
 ENV_DATABASE_DSN = "NOVARIUSIRC_DATABASE_DSN"
 
+ENV_WEB_API_ENABLED = "NOVARIUSIRC_WEB_API_ENABLED"
+ENV_WEB_API_HOST = "NOVARIUSIRC_WEB_API_HOST"
+ENV_WEB_API_PORT = "NOVARIUSIRC_WEB_API_PORT"
+
 ENV_OWNER_HOSTMASK = "NOVARIUSIRC_OWNER_HOSTMASK"
 ENV_OWNER_ACCOUNT = "NOVARIUSIRC_OWNER_ACCOUNT"
 ENV_OWNER_CERTFP = "NOVARIUSIRC_OWNER_CERTFP"
@@ -438,6 +442,35 @@ class ControlConfig(ConfigModel):
     socket_path: str = "./run/novariusirc.sock"
 
 
+class WebAPIConfig(ConfigModel):
+    """Reserved listener configuration for the optional Tornado API."""
+
+    enabled: bool = False
+    host: str = "127.0.0.1"
+    port: int = Field(default=9688, ge=1, le=65535)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        value = value.strip()
+        if not value or any(
+            character.isspace() or character in "\r\n\0" for character in value
+        ):
+            raise ValueError("web_api.host must be a non-empty host or IP address")
+        return value
+
+    def resolve_env(self) -> None:
+        enabled = os.getenv(ENV_WEB_API_ENABLED)
+        if enabled:
+            self.enabled = enabled.strip().lower() in {"1", "true", "yes", "on"}
+        host = os.getenv(ENV_WEB_API_HOST)
+        if host:
+            self.host = host
+        port = os.getenv(ENV_WEB_API_PORT)
+        if port:
+            self.port = int(port)
+
+
 class PluginsConfig(ConfigModel):
     enabled: bool = True
     directory: str = "plugins"
@@ -644,6 +677,7 @@ class Config(ConfigModel):
     commands: CommandsConfig = Field(default_factory=CommandsConfig)
     lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
     control: ControlConfig = Field(default_factory=ControlConfig)
+    web_api: WebAPIConfig = Field(default_factory=WebAPIConfig)
     plugins: PluginsConfig = Field(default_factory=PluginsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     feeds: FeedsConfig = Field(default_factory=FeedsConfig)
@@ -794,6 +828,8 @@ class Config(ConfigModel):
         config.paths.resolve_env()
         config.database.resolve_env()
         config.database = DatabaseConfig.model_validate(config.database.model_dump())
+        config.web_api.resolve_env()
+        config.web_api = WebAPIConfig.model_validate(config.web_api.model_dump())
         config.owner_bootstrap.resolve_env()
         config.owner_bootstrap = OwnerBootstrapConfig.model_validate(
             config.owner_bootstrap.model_dump()
@@ -848,6 +884,8 @@ class Config(ConfigModel):
         config.paths.resolve_env()
         config.database.resolve_env()
         config.database = DatabaseConfig.model_validate(config.database.model_dump())
+        config.web_api.resolve_env()
+        config.web_api = WebAPIConfig.model_validate(config.web_api.model_dump())
         config.owner_bootstrap.resolve_env()
         config.owner_bootstrap = OwnerBootstrapConfig.model_validate(
             config.owner_bootstrap.model_dump()

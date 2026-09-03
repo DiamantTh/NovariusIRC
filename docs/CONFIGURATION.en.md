@@ -13,6 +13,7 @@
 - [Owner bootstrap](#owner-bootstrap)
 - [Logging](#logging)
 - [Commands, lifecycle, and control](#commands-lifecycle-control)
+- [Web API](#web-api)
 - [Built-in modules](#modules)
 - [Paths and workers](#paths-workers)
 - [Database](#database)
@@ -278,6 +279,22 @@ Message-level channel logging is disabled when no entry matches.
 The control endpoint is neither a TCP listener nor a shell. It executes the
 same registered bot commands as the terminal console.
 
+<a id="web-api"></a>
+## `[web_api]`
+
+The future web API uses Tornado. It is disabled by default, so the current
+version starts no HTTP listener regardless of these values. `host` and `port`
+reserve its future operating address.
+
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | Boolean | `false` | Prepares later API activation; currently has no listener effect. |
+| `host` | text | `127.0.0.1` | Bind address. Use `0.0.0.0` only for a deliberately published container API. |
+| `port` | integer | `9688` | TCP port of the future API. |
+
+A Docker healthcheck needs no published Compose port mapping: it calls the
+future listener on `127.0.0.1` inside the container.
+
 <a id="modules"></a>
 ## `[modules]`
 
@@ -519,6 +536,9 @@ the base structure is validated before overrides are applied.
 | `NOVARIUSIRC_DATABASE_BACKEND` | `database.backend` | Registered backend name or alias. |
 | `NOVARIUSIRC_DATABASE_PATH` | `database.path` | SQLite file path. |
 | `NOVARIUSIRC_DATABASE_DSN` | `database.dsn` | Server-database connection DSN; secret value. |
+| `NOVARIUSIRC_WEB_API_ENABLED` | `web_api.enabled` | Boolean syntax as for TLS. |
+| `NOVARIUSIRC_WEB_API_HOST` | `web_api.host` | Bind address of the future API. |
+| `NOVARIUSIRC_WEB_API_PORT` | `web_api.port` | TCP port between 1 and 65535. |
 | `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | One-time owner hostmask. |
 | `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | One-time owner IRC account name. |
 | `NOVARIUSIRC_OWNER_CERTFP` | `owner_bootstrap.certfp` | One-time owner CertFP. |
