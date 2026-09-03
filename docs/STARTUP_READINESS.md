@@ -68,9 +68,9 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
    offline ausgeführten Restore-Befehl über den lokalen Control-Socket ergänzen.
 2. Lokale Monitoring-Ausgabe für Verbindungsstatus, Queue-Auslastung,
    letzten erfolgreichen Backup-Lauf und DB-Schema bereitstellen. Falls daraus
-   eine Web-API entsteht, wird sie direkt mit FastAPI gebaut: optional über
-   `[web_api]`, standardmäßig ohne Listener und zunächst rein lesend. `aiohttp`
-   bleibt ausschließlich HTTP-Client des Core.
+   eine Web-API entsteht, wird sie mit Tornado gebaut: optional über
+   `[web_api]`, standardmäßig ohne Listener und zunächst rein lesend.
+   `tornado-swagger` kommt erst mit der eigentlichen API hinzu.
 3. Betriebsanleitung für Container, systemd, Verzeichnisrechte und Backupziele
    pflegen.
 

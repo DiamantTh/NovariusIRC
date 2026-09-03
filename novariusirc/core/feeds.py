@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-import aiohttp
 import feedparser
+from tornado.httpclient import AsyncHTTPClient, HTTPClientError, HTTPRequest
 
 from .config import FeedDefinition, FeedsConfig
 from .database import StoredFeedState
@@ -50,7 +50,7 @@ class FeedEngine:
     ):
         self.config = config
         self.logger = logger.getChild("feeds")
-        self.session: aiohttp.ClientSession | None = None
+        self.http_client: AsyncHTTPClient | None = None
         self.subscribers: list[Subscriber] = []
         self.feed_states: dict[str, FeedState] = {}
         self.feed_definitions: dict[str, FeedDefinition] = {}
@@ -96,10 +96,14 @@ class FeedEngine:
             self.logger.info("Feed engine disabled")
             return
         await self._restore_states()
-        if self.session is None:
-            timeout = aiohttp.ClientTimeout(total=self.config.http_timeout)
-            connector = aiohttp.TCPConnector(ssl=self._ssl_context())
-            self.session = aiohttp.ClientSession(timeout=timeout, connector=connector)
+        if self.http_client is None:
+            # A private client belongs to this feed engine. It shares the
+            # bot's asyncio event loop and can later coexist with Tornado's
+            # HTTP server without an adapter or second loop.
+            self.http_client = AsyncHTTPClient(
+                force_instance=True,
+                max_body_size=self.config.max_body_size,
+            )
         self._stop_event.clear()
         self._task = asyncio.create_task(self._run())
 
@@ -109,9 +113,9 @@ class FeedEngine:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-        if self.session:
-            await self.session.close()
-            self.session = None
+        if self.http_client:
+            self.http_client.close()
+            self.http_client = None
         self._task = None
 
     async def _run(self) -> None:
@@ -171,36 +175,43 @@ class FeedEngine:
             headers["If-Modified-Since"] = state.last_modified
         headers["User-Agent"] = self._next_user_agent()
 
-        if not self.session:
+        if not self.http_client:
             return
 
         try:
-            async with self.session.get(feed.url, headers=headers) as resp:
-                if resp.status == 304:
-                    return
-                if resp.status >= 400:
-                    self.logger.warning(
-                        "Feed %s returned HTTP %s", feed.url, resp.status
-                    )
-                    return
-                content = await resp.content.read(self.config.max_body_size + 1)
-                if len(content) > self.config.max_body_size:
-                    self.logger.warning(
-                        "Feed %s exceeded max body size (%s bytes)",
-                        feed.url,
-                        len(content),
-                    )
-                    return
-                state.etag = resp.headers.get("ETag") or state.etag
-                state.last_modified = (
-                    resp.headers.get("Last-Modified") or state.last_modified
-                )
+            request = HTTPRequest(
+                feed.url,
+                headers=headers,
+                request_timeout=self.config.http_timeout,
+                ssl_options=self._ssl_context(),
+            )
+            # Non-2xx replies, especially 304, are normal feed protocol
+            # responses and must be inspected instead of raised immediately.
+            response = await self.http_client.fetch(request, raise_error=False)
         except TimeoutError:
             self.logger.warning("Timeout fetching feed %s", feed.url)
             return
-        except (aiohttp.ClientError, OSError) as exc:
+        except (HTTPClientError, OSError) as exc:
             self.logger.warning("Failed to fetch feed %s: %s", feed.url, exc)
             return
+
+        if response.code == 304:
+            return
+        if response.code >= 400 or response.error:
+            self.logger.warning("Feed %s returned HTTP %s", feed.url, response.code)
+            return
+        content = response.body
+        if len(content) > self.config.max_body_size:
+            # Tornado enforces this while reading; retain the explicit guard
+            # as a defence in depth check on the completed response.
+            self.logger.warning(
+                "Feed %s exceeded max body size (%s bytes)",
+                feed.url,
+                len(content),
+            )
+            return
+        state.etag = response.headers.get("ETag") or state.etag
+        state.last_modified = response.headers.get("Last-Modified") or state.last_modified
 
         parsed = await asyncio.to_thread(feedparser.parse, content)
         entries = parsed.entries or []

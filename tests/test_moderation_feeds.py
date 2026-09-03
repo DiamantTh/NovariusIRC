@@ -3,12 +3,24 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from types import MethodType
+from types import MethodType, SimpleNamespace
 
 from novariusirc.core.config import DatabaseConfig, FeedDefinition, FeedsConfig
 from novariusirc.core.database import SQLiteDatabase
 from novariusirc.core.feeds import FeedEngine, FeedState
 from novariusirc.core.moderation import ModerationManager
+
+
+class FeedHTTPClientStub:
+    """Small Tornado-client substitute for feed protocol tests."""
+
+    def __init__(self, response: SimpleNamespace) -> None:
+        self.response = response
+        self.requests = []
+
+    async def fetch(self, request, *, raise_error: bool):
+        self.requests.append((request, raise_error))
+        return self.response
 
 
 def test_rate_limit_counts_messages_and_warnings_escalate() -> None:
@@ -113,3 +125,78 @@ def test_feed_engine_uses_database_state(tmp_path: Path) -> None:
     asyncio.run(restored._restore_states())
 
     assert restored.feed_states[feed.url] == FeedState(etag="one", seen_ids=["a", "b"])
+
+
+def test_feed_engine_configures_tornado_body_limit(monkeypatch) -> None:
+    created: dict[str, object] = {}
+
+    class LifecycleClient:
+        def close(self) -> None:
+            created["closed"] = True
+
+    def build_client(*, force_instance: bool, max_body_size: int) -> LifecycleClient:
+        created["force_instance"] = force_instance
+        created["max_body_size"] = max_body_size
+        return LifecycleClient()
+
+    monkeypatch.setattr("novariusirc.core.feeds.AsyncHTTPClient", build_client)
+    engine = FeedEngine(
+        FeedsConfig(enabled=True, max_body_size=4096), logging.getLogger("test")
+    )
+
+    asyncio.run(engine.start())
+    asyncio.run(engine.stop())
+
+    assert created == {
+        "force_instance": True,
+        "max_body_size": 4096,
+        "closed": True,
+    }
+
+
+def test_feed_fetch_uses_tornado_request_limits_and_cache_headers() -> None:
+    engine = FeedEngine(
+        FeedsConfig(http_timeout=17, max_body_size=4096), logging.getLogger("test")
+    )
+    feed = FeedDefinition(name="first", url="https://one.test/feed", channel="#one")
+    engine.add_feed(feed)
+    engine.feed_states[feed.url] = FeedState(etag='"old"', last_modified="yesterday")
+    client = FeedHTTPClientStub(
+        SimpleNamespace(
+            code=200,
+            error=None,
+            headers={"ETag": '"new"', "Last-Modified": "today"},
+            body=b"""<?xml version=\"1.0\"?><rss><channel><item><guid>one</guid><title>One</title></item></channel></rss>""",
+        )
+    )
+    engine.http_client = client  # type: ignore[assignment]
+    announced: list[str] = []
+
+    async def record(_feed: FeedDefinition, entry: dict) -> None:
+        announced.append(entry["title"])
+
+    engine.subscribe(record)
+    asyncio.run(engine._poll_feed(feed))
+
+    request, raise_error = client.requests[0]
+    assert raise_error is False
+    assert request.request_timeout == 17
+    assert request.headers["If-None-Match"] == '"old"'
+    assert request.headers["If-Modified-Since"] == "yesterday"
+    assert announced == ["One"]
+    assert engine.feed_states[feed.url].etag == '"new"'
+    assert engine.feed_states[feed.url].last_modified == "today"
+
+
+def test_feed_fetch_treats_not_modified_as_success_without_parsing() -> None:
+    engine = FeedEngine(FeedsConfig(), logging.getLogger("test"))
+    feed = FeedDefinition(name="first", url="https://one.test/feed", channel="#one")
+    engine.add_feed(feed)
+    client = FeedHTTPClientStub(
+        SimpleNamespace(code=304, error=None, headers={}, body=b"not XML")
+    )
+    engine.http_client = client  # type: ignore[assignment]
+
+    asyncio.run(engine._poll_feed(feed))
+
+    assert engine.feed_states[feed.url].seen_ids == []
