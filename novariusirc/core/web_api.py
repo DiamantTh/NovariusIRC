@@ -64,6 +64,7 @@ class MonitoringSnapshot:
     data_directory: str | None
     backup_directory: str | None
     memory: dict[str, int | None]
+    extended_monitoring: dict[str, Any] | None
     send_queue_depth: int
     send_queue_capacity: int
     event_queue_depth: int
@@ -123,6 +124,7 @@ class MonitoringSnapshot:
                 "effective_uid": self.effective_uid,
                 "effective_gid": self.effective_gid,
                 "memory": self.memory,
+                "extended_monitoring": self.extended_monitoring,
             },
             "paths": {
                 "logs": self.log_directory,
@@ -237,6 +239,7 @@ class WebAPIServer:
             data_directory=config.paths.data_root if config else None,
             backup_directory=(str(self.backups.directory) if self.backups else None),
             memory=_process_memory_status(),
+            extended_monitoring=_psutil_monitoring_status(),
             send_queue_depth=self.client.send_queue_depth,
             send_queue_capacity=self.client.send_queue_capacity,
             event_queue_depth=self.client.event_queue_depth,
@@ -335,6 +338,46 @@ def _process_memory_status(
         except (OSError, ValueError):
             pass
     return status
+
+
+def _psutil_monitoring_status() -> dict[str, Any] | None:
+    """Return optional process and system diagnostics when psutil is installed."""
+    try:
+        import psutil
+    except ImportError:
+        return None
+    try:
+        process = psutil.Process()
+        cpu_times = process.cpu_times()
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        try:
+            descriptors = process.num_fds()
+        except (AttributeError, psutil.Error):
+            try:
+                descriptors = process.num_handles()
+            except (AttributeError, psutil.Error):
+                descriptors = None
+        return {
+            "process": {
+                "cpu_user_seconds": cpu_times.user,
+                "cpu_system_seconds": cpu_times.system,
+                "threads": process.num_threads(),
+                "open_descriptors": descriptors,
+                "children": len(process.children()),
+            },
+            "system": {
+                "logical_cpus": psutil.cpu_count(logical=True),
+                "physical_cpus": psutil.cpu_count(logical=False),
+                "memory_total_bytes": memory.total,
+                "memory_available_bytes": memory.available,
+                "memory_used_bytes": memory.used,
+                "swap_total_bytes": swap.total,
+                "swap_used_bytes": swap.used,
+            },
+        }
+    except psutil.Error:
+        return None
 
 
 class _BaseHandler(RequestHandler):

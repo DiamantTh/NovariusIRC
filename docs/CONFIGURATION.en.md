@@ -313,6 +313,12 @@ bot process. On Linux, when visible, it additionally exposes current cgroup
 usage and its RAM limit. This supports container and host monitoring without
 an additional Python library.
 
+With the optional `novariusirc[monitoring]` package (`psutil`),
+`runtime.extended_monitoring` additionally provides process CPU time, threads,
+open file descriptors, child processes, and system CPU, RAM, and swap values.
+Without the extra this field is `null`; the bot and base values remain fully
+functional.
+
 `allowed_networks` checks the actual TCP client address only; it never trusts
 `X-Forwarded-For` or similar headers. An empty list means no extra allowlist —
 the `host` bind address still determines where the listener can be reached.

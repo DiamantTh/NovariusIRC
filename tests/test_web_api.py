@@ -9,7 +9,12 @@ from types import SimpleNamespace
 from tornado.testing import AsyncHTTPTestCase
 
 from novariusirc.core.config import WebAPIConfig
-from novariusirc.core.web_api import WebAPIServer, _process_memory_status, _redact_dsn
+from novariusirc.core.web_api import (
+    WebAPIServer,
+    _process_memory_status,
+    _psutil_monitoring_status,
+    _redact_dsn,
+)
 
 
 def test_status_dsn_redaction_removes_credentials_and_parameters() -> None:
@@ -35,6 +40,10 @@ def test_process_memory_status_reads_proc_and_cgroup_v2(tmp_path) -> None:
     assert status["virtual_bytes"] == 10 * os.sysconf("SC_PAGE_SIZE")
     assert status["cgroup_current_bytes"] == 1234
     assert status["cgroup_limit_bytes"] is None
+
+
+def test_psutil_monitoring_is_optional() -> None:
+    assert _psutil_monitoring_status() is None
 
 
 class TestMonitoringRoutes(AsyncHTTPTestCase):
@@ -128,6 +137,7 @@ class TestMonitoringRoutes(AsyncHTTPTestCase):
             "cgroup_current_bytes",
             "cgroup_limit_bytes",
         }
+        assert payload["runtime"]["extended_monitoring"] is None
         assert payload["queues"] == {
             "send": {"depth": 2, "capacity": 256},
             "events": {"depth": 3, "capacity": 128},

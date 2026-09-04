@@ -68,7 +68,8 @@ def detailed_version() -> str:
         features.insert(0, "IPv6")
     optional = (
         f"uvloop={'yes' if _module_available('uvloop') else 'no'}, "
-        f"journald={'yes' if _module_available('systemd.journal') else 'no'}"
+        f"journald={'yes' if _module_available('systemd.journal') else 'no'}, "
+        f"psutil={'yes' if _module_available('psutil') else 'no'}"
     )
     runtime = (
         f"Runtime: {platform.python_implementation()} "
