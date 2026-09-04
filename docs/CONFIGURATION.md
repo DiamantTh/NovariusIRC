@@ -309,7 +309,10 @@ Verfügbar sind `/_health` (Prozess läuft), `/_ready` (IRC-Registrierung
 abgeschlossen) und `/v1/status` (secret-freier Betriebsstatus einschließlich
 IRC-Queue-Auslastung, Laufzeit, Modulen, Pfaden und Sicherungen). Bei einer
 Server-Datenbank wird die DSN nur als Treiber, Host, Port und Datenbankname
-ausgegeben; Benutzer, Passwort und Parameter bleiben verborgen. Ein
+ausgegeben; Benutzer, Passwort und Parameter bleiben verborgen. SQLite meldet
+zusätzlich Zeichensatz, Journal-Modus, Synchronisationsstufe, Foreign-Key-Status
+und Seitengröße. Andere Backends können ihre entsprechenden technischen
+Grundwerte im selben Feld bereitstellen. Ein
 Docker-Healthcheck braucht keine veröffentlichte Compose-Portzuordnung: er
 ruft `/_health` innerhalb des Containers auf `127.0.0.1` auf.
 

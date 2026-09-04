@@ -93,6 +93,7 @@ class TestMonitoringRoutes(AsyncHTTPTestCase):
             "backend": None,
             "schema": None,
             "location": None,
+            "settings": {},
         }
         assert payload["backups"] == {
             "directory": None,

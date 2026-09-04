@@ -41,6 +41,7 @@ class MonitoringSnapshot:
     database_backend: str | None
     database_schema: str | None
     database_location: str | None
+    database_settings: dict[str, str | int | bool]
     last_backup_at: str | None
     last_backup_file: str | None
     bot_name: str | None
@@ -101,6 +102,7 @@ class MonitoringSnapshot:
                 "backend": self.database_backend,
                 "schema": self.database_schema,
                 "location": self.database_location,
+                "settings": self.database_settings,
             },
             "backups": {
                 "directory": self.backup_directory,
@@ -169,11 +171,13 @@ class WebAPIServer:
     def snapshot(self) -> MonitoringSnapshot:
         database_schema: str | None = None
         database_location: str | None = None
+        database_settings: dict[str, str | int | bool] = {}
         if self.database is not None:
             try:
                 database_status = self.database.check()
                 database_schema = database_status.schema_version
                 database_location = database_status.location
+                database_settings = database_status.settings
             except Exception:  # Monitoring must not fail because a status probe cannot inspect SQL.
                 self.logger.warning("Could not read database status for monitoring", exc_info=True)
         last_backup_at: str | None = None
@@ -208,6 +212,7 @@ class WebAPIServer:
                 if self.database is not None and self.database.backend_name == "sqlite"
                 else _redact_dsn(config.database.dsn) if config and config.database.dsn else None
             ),
+            database_settings=database_settings,
             last_backup_at=last_backup_at,
             last_backup_file=last_backup_file,
             bot_name=config.bot.name if config else None,

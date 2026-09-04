@@ -96,6 +96,13 @@ def test_sqlite_database_requires_explicit_initialization(tmp_path: Path) -> Non
     status = database.initialize(create=True)
     assert status.integrity == "ok"
     assert status.schema_version == "0002_persistent_core_state"
+    assert status.settings == {
+        "character_set": "UTF-8",
+        "journal_mode": "wal",
+        "synchronous": "FULL",
+        "foreign_keys": True,
+        "page_size_bytes": 4096,
+    }
     assert database.check() == status
 
 

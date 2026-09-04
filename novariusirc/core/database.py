@@ -69,10 +69,13 @@ def backend_spec(name: str) -> BackendSpec:
 
 @dataclass(frozen=True)
 class DatabaseStatus:
+    """Secret-free backend diagnostics suitable for local monitoring."""
+
     backend: str
     schema_version: str
     integrity: str
     location: str
+    settings: dict[str, str | int | bool]
 
 
 @dataclass(frozen=True)
@@ -671,7 +674,23 @@ class SQLiteDatabase:
             raise DatabaseError(
                 f"database belongs to bot {stored_name!r}, not {self.instance_name!r}"
             )
-        return DatabaseStatus("sqlite", str(revision), integrity, str(self.path))
+        synchronous = int(connection.execute(text("PRAGMA synchronous")).scalar_one())
+        synchronous_mode = {0: "OFF", 1: "NORMAL", 2: "FULL", 3: "EXTRA"}.get(
+            synchronous, str(synchronous)
+        )
+        return DatabaseStatus(
+            "sqlite",
+            str(revision),
+            integrity,
+            str(self.path),
+            {
+                "character_set": str(connection.execute(text("PRAGMA encoding")).scalar_one()),
+                "journal_mode": str(connection.execute(text("PRAGMA journal_mode")).scalar_one()),
+                "synchronous": synchronous_mode,
+                "foreign_keys": bool(connection.execute(text("PRAGMA foreign_keys")).scalar_one()),
+                "page_size_bytes": int(connection.execute(text("PRAGMA page_size")).scalar_one()),
+            },
+        )
 
 
 def create_database(config: DatabaseConfig, instance_name: str) -> DatabaseBackend:
