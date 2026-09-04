@@ -9,6 +9,7 @@ import platform
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -62,6 +63,7 @@ class MonitoringSnapshot:
     log_directory: str | None
     data_directory: str | None
     backup_directory: str | None
+    memory: dict[str, int | None]
     send_queue_depth: int
     send_queue_capacity: int
     event_queue_depth: int
@@ -120,6 +122,7 @@ class MonitoringSnapshot:
                 "architecture": self.architecture,
                 "effective_uid": self.effective_uid,
                 "effective_gid": self.effective_gid,
+                "memory": self.memory,
             },
             "paths": {
                 "logs": self.log_directory,
@@ -233,6 +236,7 @@ class WebAPIServer:
             log_directory=config.paths.log_root if config else None,
             data_directory=config.paths.data_root if config else None,
             backup_directory=(str(self.backups.directory) if self.backups else None),
+            memory=_process_memory_status(),
             send_queue_depth=self.client.send_queue_depth,
             send_queue_capacity=self.client.send_queue_capacity,
             event_queue_depth=self.client.event_queue_depth,
@@ -294,6 +298,43 @@ def _redact_dsn(value: str) -> str:
         return f"{parsed.scheme}://{host}{port}{parsed.path}"
     except ValueError:
         return "configured"
+
+
+def _process_memory_status(
+    proc_root: Path = Path("/proc/self"), cgroup_root: Path = Path("/sys/fs/cgroup")
+) -> dict[str, int | None]:
+    """Read current process and cgroup RAM values without a monitoring dependency."""
+    status: dict[str, int | None] = {
+        "resident_bytes": None,
+        "virtual_bytes": None,
+        "cgroup_current_bytes": None,
+        "cgroup_limit_bytes": None,
+    }
+    try:
+        pages = (proc_root / "statm").read_text(encoding="ascii").split()
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        status["virtual_bytes"] = int(pages[0]) * page_size
+        status["resident_bytes"] = int(pages[1]) * page_size
+    except (IndexError, OSError, ValueError):
+        pass
+
+    try:
+        status["cgroup_current_bytes"] = int(
+            (cgroup_root / "memory.current").read_text(encoding="ascii").strip()
+        )
+        limit = (cgroup_root / "memory.max").read_text(encoding="ascii").strip()
+        status["cgroup_limit_bytes"] = None if limit == "max" else int(limit)
+    except (OSError, ValueError):
+        try:
+            memory_root = cgroup_root / "memory"
+            status["cgroup_current_bytes"] = int(
+                (memory_root / "memory.usage_in_bytes").read_text(encoding="ascii").strip()
+            )
+            limit = (memory_root / "memory.limit_in_bytes").read_text(encoding="ascii").strip()
+            status["cgroup_limit_bytes"] = int(limit)
+        except (OSError, ValueError):
+            pass
+    return status
 
 
 class _BaseHandler(RequestHandler):

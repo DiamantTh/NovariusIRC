@@ -308,6 +308,11 @@ page size. Other backends can expose their corresponding basic technical
 values in the same field. A Docker healthcheck needs no published Compose port
 mapping: it calls `/_health` on `127.0.0.1` inside the container.
 
+The runtime section also contains current virtual and resident memory for the
+bot process. On Linux, when visible, it additionally exposes current cgroup
+usage and its RAM limit. This supports container and host monitoring without
+an additional Python library.
+
 `allowed_networks` checks the actual TCP client address only; it never trusts
 `X-Forwarded-For` or similar headers. An empty list means no extra allowlist —
 the `host` bind address still determines where the listener can be reached.

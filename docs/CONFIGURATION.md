@@ -316,6 +316,11 @@ Grundwerte im selben Feld bereitstellen. Ein
 Docker-Healthcheck braucht keine veröffentlichte Compose-Portzuordnung: er
 ruft `/_health` innerhalb des Containers auf `127.0.0.1` auf.
 
+Der Laufzeitabschnitt enthält außerdem den aktuellen virtuellen und residenten
+Speicher des Bot-Prozesses. Unter Linux werden, falls sichtbar, zusätzlich die
+aktuelle cgroup-Nutzung und deren RAM-Grenze ausgegeben. Das erlaubt Container-
+und Host-Monitoring ohne zusätzliche Python-Bibliothek.
+
 `allowed_networks` prüft ausschließlich die tatsächliche TCP-Client-Adresse;
 `X-Forwarded-For` und ähnliche Header werden nicht vertraut. Leer bedeutet
 keine zusätzliche Allowlist — die Bind-Adresse `host` begrenzt weiterhin, wo

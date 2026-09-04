@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from types import SimpleNamespace
 
 from tornado.testing import AsyncHTTPTestCase
 
 from novariusirc.core.config import WebAPIConfig
-from novariusirc.core.web_api import WebAPIServer, _redact_dsn
+from novariusirc.core.web_api import WebAPIServer, _process_memory_status, _redact_dsn
 
 
 def test_status_dsn_redaction_removes_credentials_and_parameters() -> None:
@@ -17,6 +18,23 @@ def test_status_dsn_redaction_removes_credentials_and_parameters() -> None:
         == "postgresql+psycopg://example.test:5432/novarius"
     )
     assert _redact_dsn("not a DSN") == "configured"
+
+
+def test_process_memory_status_reads_proc_and_cgroup_v2(tmp_path) -> None:
+    proc_root = tmp_path / "proc"
+    cgroup_root = tmp_path / "cgroup"
+    proc_root.mkdir()
+    cgroup_root.mkdir()
+    (proc_root / "statm").write_text("10 4 0 0 0 0 0\n", encoding="ascii")
+    (cgroup_root / "memory.current").write_text("1234\n", encoding="ascii")
+    (cgroup_root / "memory.max").write_text("max\n", encoding="ascii")
+
+    status = _process_memory_status(proc_root, cgroup_root)
+
+    assert status["resident_bytes"] == 4 * os.sysconf("SC_PAGE_SIZE")
+    assert status["virtual_bytes"] == 10 * os.sysconf("SC_PAGE_SIZE")
+    assert status["cgroup_current_bytes"] == 1234
+    assert status["cgroup_limit_bytes"] is None
 
 
 class TestMonitoringRoutes(AsyncHTTPTestCase):
@@ -104,6 +122,12 @@ class TestMonitoringRoutes(AsyncHTTPTestCase):
         assert payload["paths"] == {"logs": None, "data": None}
         assert payload["runtime"]["python"]
         assert payload["runtime"]["platform"]
+        assert set(payload["runtime"]["memory"]) == {
+            "resident_bytes",
+            "virtual_bytes",
+            "cgroup_current_bytes",
+            "cgroup_limit_bytes",
+        }
         assert payload["queues"] == {
             "send": {"depth": 2, "capacity": 256},
             "events": {"depth": 3, "capacity": 128},
