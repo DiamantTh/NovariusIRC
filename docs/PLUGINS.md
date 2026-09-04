@@ -16,6 +16,18 @@ The name `example_greetings` resolves to either
 Paths, dotted imports, and parent-directory references are rejected. A module
 must define exactly one subclass of `BasePlugin`.
 
+New plugins should use the package form and include `novarius_plugin.toml`:
+
+```text
+plugins/weather/
+  novarius_plugin.toml
+  __init__.py
+  commands.py
+```
+
+The manifest is read before importing package code and its `[plugin].name`
+must equal the configured name. Single-file plugins remain compatibility-only.
+
 ## Commands
 
 External and built-in commands use the same `CommandRegistry`. Consequently,
@@ -89,3 +101,69 @@ A plugin is executable Python code with the same operating-system permissions
 as the bot. The allow-list prevents accidental loading; it is not a sandbox.
 Only install and enable code you trust, and keep API credentials in included
 secret configuration or environment variables rather than in the plugin file.
+
+## Current model and deliberate limits
+
+Novarius plugins are Python extensions, not a Python spelling of Eggdrop Tcl.
+They use the shared command registry and receive structured IRC events, but
+they do **not** receive an unrestricted second bot framework. Before porting a
+script, check whether its task belongs in the core, a built-in module, or an
+external plugin.
+
+The current in-process model has these limits:
+
+- Plugin code runs in the bot process under the bot's Unix user. The allow-list
+  is an activation safeguard, not a security sandbox.
+- Hooks are ordered. A slow hook delays later application events, even though
+  it cannot block IRC `PING`/`PONG`; use timeouts and short work units.
+- A plugin must not modify the bot configuration, migrations, role bindings,
+  control socket, or another plugin's state.
+- A plugin must not assume IRCv3. Account tags, server time, and several hooks
+  are absent on older networks and must be treated as optional input.
+- Plugin exceptions during a hook are logged; load failures abort startup of
+  the configured plugin set rather than silently leaving a partial set active.
+
+## Storage and files
+
+Separate executable plugin code from mutable plugin data. A recommended
+instance layout is:
+
+```text
+plugins/
+  code/
+    weather.py
+  data/
+    weather/
+      cache.json
+```
+
+The current `plugins.directory` is the code directory. Mutable state should
+use a plugin-specific directory below the instance data root, for example
+`data/plugins/weather/`; it must never be written beside code merely because
+the code directory is convenient. Small structured state can later use the
+shared SQL storage under a plugin-specific namespace. Large caches, downloads,
+or evidence remain files with metadata in SQL where appropriate.
+
+The core does not yet expose a stable plugin-storage API. Until it does, a
+plugin's storage format is private to that plugin and must be documented by
+the plugin author.
+
+## Planned worker model
+
+The intended hardening direction is a plugin worker process with local IPC:
+
+```text
+IRC core  <->  authenticated local IPC  <->  plugin worker  <->  plugin data
+```
+
+The core retains IRC connectivity, roles, database migrations, control, and
+policy decisions. A worker receives only permitted events and can request a
+limited reply or its own storage operation. A crash, timeout, or restart then
+affects that plugin rather than the IRC connection.
+
+A separate Python process alone is fault isolation, not a security sandbox.
+Meaningful isolation additionally requires a separate Unix UID where practical,
+only the plugin's data directory mounted writable, read-only code, no Docker
+socket, and a narrowly defined IPC capability set. This worker protocol and
+capability manifest are future work; external plugins therefore remain an
+advanced, trusted-operator feature for this release.

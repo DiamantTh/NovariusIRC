@@ -9,6 +9,7 @@ import inspect
 import logging
 import re
 import sys
+import tomllib
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -53,6 +54,7 @@ class BasePlugin:
     config: Config
     client: object | None
     logger: logging.Logger
+    storage_path: Path
 
     async def on_load(self) -> None:
         """Run after services and commands have been registered."""
@@ -114,6 +116,10 @@ class BasePlugin:
         self.config = config
         self.client = client
         self.logger = logger.getChild(self.name)
+
+    def _bind_storage(self, path: Path) -> None:
+        path.mkdir(parents=True, exist_ok=True)
+        self.storage_path = path
 
     def get_commands(self) -> list[tuple[Callable[..., Any], dict[str, Any]]]:
         commands: list[tuple[Callable[..., Any], dict[str, Any]]] = []
@@ -196,17 +202,25 @@ class PluginLoader:
         for plugin in self.plugins.values():
             plugin.client = client
 
-    def _resolve_plugin(self, configured_name: str) -> tuple[Path, bool]:
+    def _resolve_plugin(self, configured_name: str) -> tuple[Path, bool, Path]:
         if not PLUGIN_NAME_RE.fullmatch(configured_name):
             raise ValueError(f"Invalid plugin name: {configured_name!r}")
 
         file_path = self.plugin_dir / f"{configured_name}.py"
         if file_path.is_file():
-            return file_path, False
+            return file_path, False, file_path.parent
 
-        package_init = self.plugin_dir / configured_name / "__init__.py"
-        if package_init.is_file():
-            return package_init, True
+        package_dir = self.plugin_dir / configured_name
+        package_init = package_dir / "__init__.py"
+        manifest = package_dir / "novarius_plugin.toml"
+        if package_init.is_file() and manifest.is_file():
+            try:
+                metadata = tomllib.loads(manifest.read_text(encoding="utf-8"))
+                if metadata.get("plugin", {}).get("name") != configured_name:
+                    raise ValueError("[plugin].name must match the configured plugin name")
+            except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
+                raise ValueError(f"Invalid plugin manifest {manifest}: {exc}") from exc
+            return package_init, True, package_dir
 
         raise FileNotFoundError(
             f"Configured plugin {configured_name!r} was not found in {self.plugin_dir}"
@@ -251,7 +265,7 @@ class PluginLoader:
         return loaded
 
     async def load(self, configured_name: str) -> None:
-        plugin_path, is_package = self._resolve_plugin(configured_name)
+        plugin_path, is_package, _package_dir = self._resolve_plugin(configured_name)
         module_name = f"novariusirc_external_{configured_name}"
         search_locations = [str(plugin_path.parent)] if is_package else None
         spec = importlib.util.spec_from_file_location(
@@ -276,6 +290,7 @@ class PluginLoader:
 
             owner = f"external:{plugin.name}"
             plugin._bind_services(self.config, self.client, self.logger)
+            plugin._bind_storage(Path(self.config.paths.data_root) / "plugins" / plugin.name)
             for handler, metadata in plugin.get_commands():
                 self.commands.register(
                     metadata["name"],

@@ -452,7 +452,12 @@ def register_runtime_commands(
             status=connection,
             uptime=uptime_seconds,
         )
-        diagnostic_keys = ("Runtime: {value}", "Features: {value}", "Optional: {value}")
+        diagnostic_keys = (
+            "Runtime: {value}",
+            "Environment: {value}",
+            "Features: {value}",
+            "Optional: {value}",
+        )
         localized_diagnostics = [
             ctx.tr(key, value=line.partition(": ")[2])
             for key, line in zip(diagnostic_keys, diagnostics, strict=True)

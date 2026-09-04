@@ -9,6 +9,7 @@ import socket
 import ssl
 from importlib.resources import files
 from importlib.util import find_spec
+from pathlib import Path
 from typing import Any
 
 BOT_NAME = "NovariusIRC"
@@ -53,6 +54,13 @@ def _module_available(module: str) -> bool:
         return False
 
 
+def runtime_environment() -> str:
+    """Return a deliberately coarse deployment classification without IDs."""
+    if Path("/.dockerenv").exists() or Path("/run/.containerenv").exists():
+        return "container"
+    return "host"
+
+
 def detailed_version() -> str:
     """Return local runtime diagnostics without instance configuration."""
     features = ["TLS", "IRCv3", "SASL", "Unix control", "process workers"]
@@ -70,6 +78,7 @@ def detailed_version() -> str:
         (
             NATIVE_VERSION,
             runtime,
+            f"Environment: {runtime_environment()}",
             f"Features: {', '.join(features)}",
             f"Optional: {optional}",
         )

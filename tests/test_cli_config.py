@@ -273,6 +273,7 @@ def test_irc_version_is_simple_and_botinfo_is_detailed() -> None:
     assert f"software={detailed_version().splitlines()[0]}" in botinfo
     assert "network=TestNet; status=connected" in botinfo
     assert "Runtime:" in botinfo
+    assert "Environment:" in botinfo
 
 
 def test_owner_role_command_updates_the_database_cache(tmp_path: Path) -> None:

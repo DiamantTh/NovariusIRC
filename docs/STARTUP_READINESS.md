@@ -1,10 +1,11 @@
-# Release- und Betriebsstand
+# Betriebsstand und nächste Entwicklungsstufen
 
 Stand: 1. September 2026
 
-Dieses Dokument beschreibt den Stand für einen normalen Betrieb von Core und
-eingebauten Modulen. Externe Plugins, eine Weboberfläche und Moderationsausbau
-sind bewusst nicht Teil dieser Release-Checkliste.
+Dieses Dokument trennt den nutzbaren Core-/Modulbetrieb von noch offenen
+Release-Arbeiten und späteren Konzepten. Externe Plugins, eine öffentliche
+Weboberfläche und der Moderationsausbau sind nicht Teil des heutigen
+Betriebsversprechens.
 
 ## Kurzbewertung
 
@@ -44,7 +45,7 @@ IRC-Netz und dessen Services.
 | Logging | fertig | Core-, IRC-, Raw- und Moderationslogs; Zeitzone konfigurierbar |
 | Datenbankbasis | fertig | SQLAlchemy Core, mitgelieferte Alembic-Revisionen, stabiler Botname, explizite Initialisierung, sichere SQLite-Kopie-vor-Upgrade, WAL, Foreign Keys, Integritäts- und Schemacheck |
 
-## Vor Release noch erforderlich
+## Vor einem Release noch erforderlich
 
 ### P0 – Betriebsdaten und Wiederherstellung
 
@@ -57,21 +58,22 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 1. Reproduzierbare lokale Prüfungen für Python 3.12 und das Container-Image
    dokumentieren. Es werden bewusst keine Forgejo-Runner oder Push-/PR-Jobs
    betrieben.
-2. Release-Notizen, unterstützte Upgradepfade und ein reproduzierbares
-   Build-/Installationsverfahren festlegen.
+2. Release-Notizen als veröffentlichte Fassung, unterstützte Upgradepfade und
+   ein reproduzierbares Build-/Installationsverfahren festlegen.
 3. Einen dokumentierten Testlauf gegen mindestens ein modernes und ein
    klassisches IRC-Netz durchführen.
 
-### P1 – Betrieb vereinfachen
+## Bereits geplant, aber nicht Release-Voraussetzung
 
-1. `db status`, `db backup`, `db backups`, `db check` und später einen bewusst
-   offline ausgeführten Restore-Befehl über den lokalen Control-Socket ergänzen.
-2. Die lokale, rein lesende Tornado-API liefert bereits `/_health`, `/_ready`
-   und `/v1/status`. Als Nächstes Queue-Auslastung, letzten erfolgreichen
-   Backup-Lauf und DB-Schema in den Status aufnehmen. `tornado-swagger` kommt
-   erst mit weiteren dokumentierten `/v1/...`-Routen hinzu.
-3. Betriebsanleitung für Container, systemd, Verzeichnisrechte und Backupziele
-   pflegen.
+- Die lokale, rein lesende Tornado-API liefert `/_health`, `/_ready` und
+  `/v1/status`. Sie bleibt ohne Panel und ohne schreibende HTTP-Endpunkte.
+  Später können DB-Schema und letzter erfolgreicher Backup-Lauf hinzukommen.
+- Plugin-Worker als Childprozesse: Fehlerisolation überall; optionale stärkere
+  Containerhärtung, aber kein Unix-User-Zwang im normalen Betrieb.
+- Persistente Moderationsaktionen mit verständlichen Gründen als Grundlage für
+  spätere Evidence- und Einspruchsabläufe. Das ist keine DSA-Zusage.
+- Getestete Serverdatenbanken, öffentliche API-Authentifizierung, OpenAPI und
+  ein Webinterface bleiben eigenständige spätere Vorhaben.
 
 ## Bewusste Entscheidungen
 
