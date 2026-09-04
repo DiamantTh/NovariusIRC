@@ -494,6 +494,7 @@ class PluginsConfig(ConfigModel):
     enabled: bool = True
     directory: str = "plugins"
     load: list[str] = Field(default_factory=list)
+    dependency_install: Literal["prompt", "always", "never"] = "prompt"
     settings: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @field_validator("load")

@@ -515,6 +515,7 @@ for completeness; built-in features belong under `[modules]`.
 | `enabled` | Boolean | `true` | Globally allow loading external extensions. |
 | `directory` | path | `plugins` | Directory relative to `config.toml`. |
 | `load` | list of text | `[]` | Explicit allowlist; names may contain letters, digits, `_`, and `-`. |
+| `dependency_install` | `prompt`, `always`, `never` | `prompt` | Missing dependencies from a package `pyproject.toml`: ask, install with pip, or fail. |
 | `settings` | table | `{}` | Free-form extension settings grouped by name. |
 
 <a id="environment"></a>

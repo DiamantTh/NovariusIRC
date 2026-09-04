@@ -16,6 +16,7 @@ dependencies = [
     "alembic>=1.18.0,<2.0.0",
     "tzdata>=2025.3,<2027.0",
     "typer (>=0.27.2,<0.28.0)",
+    "packaging>=26.0,<27.0",
 ]
 
 [project.optional-dependencies]

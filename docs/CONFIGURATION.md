@@ -525,6 +525,7 @@ der Vollständigkeit halber aufgeführt; eingebaute Funktionen gehören unter
 | `enabled` | Boolean | `true` | Laden externer Erweiterungen global zulassen. |
 | `directory` | Pfad | `plugins` | Verzeichnis relativ zu `config.toml`. |
 | `load` | Textliste | `[]` | Explizite Allowlist; Namen dürfen Buchstaben, Ziffern, `_` und `-` enthalten. |
+| `dependency_install` | `prompt`, `always`, `never` | `prompt` | Fehlende Abhängigkeiten aus dem Paket-`pyproject.toml`: fragen, per pip installieren oder mit Fehler abbrechen. |
 | `settings` | Tabelle | `{}` | Erweiterungsspezifische freie Schlüssel, gruppiert nach Name. |
 
 <a id="environment"></a>

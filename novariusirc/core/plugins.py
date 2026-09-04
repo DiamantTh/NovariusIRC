@@ -8,13 +8,17 @@ import importlib.util
 import inspect
 import logging
 import re
+import subprocess
 import sys
 import tomllib
 from collections.abc import Callable
 from datetime import datetime
+from importlib import metadata
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+
+from packaging.requirements import InvalidRequirement, Requirement
 
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry, command
@@ -41,7 +45,14 @@ HOOK_NAMES = (
     "on_tagmsg",
 )
 
-__all__ = ["BasePlugin", "CommandContext", "Plugin", "PluginManager", "command"]
+__all__ = [
+    "BasePlugin",
+    "CommandContext",
+    "Plugin",
+    "PluginDependencyError",
+    "PluginManager",
+    "command",
+]
 
 
 class BasePlugin:
@@ -131,6 +142,10 @@ class BasePlugin:
             if callable(handler) and metadata:
                 commands.append((handler, dict(metadata)))
         return commands
+
+
+class PluginDependencyError(RuntimeError):
+    """Raised when an enabled plugin cannot use its declared dependencies."""
 
 
 class Plugin:
@@ -227,6 +242,89 @@ class PluginLoader:
         )
 
     @staticmethod
+    def _declared_dependencies(package_dir: Path) -> list[Requirement]:
+        """Read runtime dependencies from an optional PEP 621 project file."""
+        project_file = package_dir / "pyproject.toml"
+        if not project_file.is_file():
+            return []
+        try:
+            project = tomllib.loads(project_file.read_text(encoding="utf-8")).get("project", {})
+            dependencies = project.get("dependencies", [])
+            if not isinstance(dependencies, list) or not all(
+                isinstance(item, str) for item in dependencies
+            ):
+                raise ValueError("[project].dependencies must be a list of requirement strings")
+            return [Requirement(item) for item in dependencies]
+        except (OSError, tomllib.TOMLDecodeError, InvalidRequirement, ValueError) as exc:
+            raise PluginDependencyError(
+                f"Invalid plugin dependency declaration in {project_file}: {exc}"
+            ) from exc
+
+    @staticmethod
+    def _missing_dependencies(requirements: list[Requirement]) -> list[Requirement]:
+        missing: list[Requirement] = []
+        for requirement in requirements:
+            if requirement.marker and not requirement.marker.evaluate():
+                continue
+            try:
+                installed_version = metadata.version(requirement.name)
+            except metadata.PackageNotFoundError:
+                missing.append(requirement)
+                continue
+            if requirement.specifier and not requirement.specifier.contains(
+                installed_version, prereleases=True
+            ):
+                missing.append(requirement)
+        return missing
+
+    def _install_dependencies(self, plugin_name: str, requirements: list[Requirement]) -> None:
+        rendered = [str(requirement) for requirement in requirements]
+        policy = self.config.plugins.dependency_install
+        if policy == "never":
+            raise PluginDependencyError(
+                f"Plugin {plugin_name!r} needs missing dependencies: {', '.join(rendered)}; "
+                "set plugins.dependency_install to 'prompt' or 'always', or install them manually"
+            )
+        if policy == "prompt":
+            if not sys.stdin.isatty():
+                raise PluginDependencyError(
+                    f"Plugin {plugin_name!r} needs missing dependencies: {', '.join(rendered)}; "
+                    "non-interactive startup requires plugins.dependency_install = 'always' "
+                    "or manual installation"
+                )
+            answer = input(
+                f"Plugin {plugin_name!r} requires {', '.join(rendered)}. Install now? [y/N] "
+            )
+            if answer.strip().lower() not in {"y", "yes"}:
+                raise PluginDependencyError(
+                    f"Installation of dependencies for plugin {plugin_name!r} was declined"
+                )
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", *rendered],
+                check=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise PluginDependencyError(
+                f"Could not install dependencies for plugin {plugin_name!r}: {exc}"
+            ) from exc
+
+    def _ensure_dependencies(self, plugin_name: str, package_dir: Path) -> None:
+        missing = self._missing_dependencies(self._declared_dependencies(package_dir))
+        if not missing:
+            return
+        self.logger.info(
+            "Plugin %s has missing dependencies: %s", plugin_name, ", ".join(map(str, missing))
+        )
+        self._install_dependencies(plugin_name, missing)
+        still_missing = self._missing_dependencies(missing)
+        if still_missing:
+            raise PluginDependencyError(
+                f"Plugin {plugin_name!r} still has unresolved dependencies: "
+                + ", ".join(map(str, still_missing))
+            )
+
+    @staticmethod
     def _plugin_class(module: ModuleType) -> type[BasePlugin]:
         candidates = [
             value
@@ -265,7 +363,9 @@ class PluginLoader:
         return loaded
 
     async def load(self, configured_name: str) -> None:
-        plugin_path, is_package, _package_dir = self._resolve_plugin(configured_name)
+        plugin_path, is_package, package_dir = self._resolve_plugin(configured_name)
+        if is_package:
+            self._ensure_dependencies(configured_name, package_dir)
         module_name = f"novariusirc_external_{configured_name}"
         search_locations = [str(plugin_path.parent)] if is_package else None
         spec = importlib.util.spec_from_file_location(

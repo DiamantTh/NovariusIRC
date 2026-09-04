@@ -28,6 +28,26 @@ plugins/weather/
 The manifest is read before importing package code and its `[plugin].name`
 must equal the configured name. Single-file plugins remain compatibility-only.
 
+### Dependencies
+
+Runtime dependencies belong in the package's standard `pyproject.toml`, not in
+the instance configuration or a second Novarius-specific dependency file:
+
+```toml
+[project]
+name = "novarius-weather"
+dependencies = ["httpx>=0.28,<1"]
+```
+
+Before importing every enabled package plugin, NovariusIRC checks these runtime
+requirements against the running Python environment. It never upgrades already
+installed packages. `[plugins].dependency_install` controls a missing package:
+`prompt` asks on an interactive terminal, `always` runs `python -m pip install`
+for exactly the declared requirements, and `never` stops the plugin load with a
+clear error. Non-interactive service/container starts must use `always` or
+install dependencies in the image/environment beforehand. This protects against
+an unattended prompt, but does not turn external dependencies into a sandbox.
+
 ## Commands
 
 External and built-in commands use the same `CommandRegistry`. Consequently,
@@ -162,8 +182,8 @@ limited reply or its own storage operation. A crash, timeout, or restart then
 affects that plugin rather than the IRC connection.
 
 A separate Python process alone is fault isolation, not a security sandbox.
-Meaningful isolation additionally requires a separate Unix UID where practical,
-only the plugin's data directory mounted writable, read-only code, no Docker
-socket, and a narrowly defined IPC capability set. This worker protocol and
-capability manifest are future work; external plugins therefore remain an
-advanced, trusted-operator feature for this release.
+For normal local operation it runs under the bot user. Container deployments
+can optionally add a separate Unix UID, a writable plugin-data mount, read-only
+code, no Docker socket, and a narrowly defined IPC capability set. This worker
+protocol and capability manifest are future work; external plugins therefore
+remain an advanced, trusted-operator feature for this release.

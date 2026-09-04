@@ -147,6 +147,9 @@ directory = "plugins"
 # Der Name verweist auf plugins/<name>.py oder plugins/<name>/__init__.py.
 load = []
 # Beispiel: load = ["example_greetings"]
+# Abhängigkeiten aus plugins/<name>/pyproject.toml beim Start behandeln:
+# prompt = interaktiv fragen (Standard), always = installieren, never = mit Hinweis abbrechen.
+dependency_install = "prompt"
 
 [modules]
 # Eingebaute Module explizit aktivieren oder deaktivieren

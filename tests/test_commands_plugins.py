@@ -10,7 +10,12 @@ from novariusirc.core.auth import hostmask_match
 from novariusirc.core.commands import CommandContext, CommandRegistry
 from novariusirc.core.config import Config
 from novariusirc.core.feeds import FeedEngine
-from novariusirc.core.plugins import Plugin, PluginLoader, PluginManager
+from novariusirc.core.plugins import (
+    Plugin,
+    PluginDependencyError,
+    PluginLoader,
+    PluginManager,
+)
 from novariusirc.irc.protocol import irc_casefold
 
 
@@ -190,6 +195,63 @@ def test_plugin_configuration_rejects_paths() -> None:
         assert "invalid plugin names" in str(exc)
     else:
         raise AssertionError("unsafe plugin path was accepted")
+
+
+def test_package_plugin_checks_declared_dependencies_before_import(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "demo"
+    plugin_dir.mkdir()
+    (plugin_dir / "novarius_plugin.toml").write_text(
+        "[plugin]\nname = \"demo\"\n", encoding="utf-8"
+    )
+    (plugin_dir / "pyproject.toml").write_text(
+        "[project]\nname = \"demo-plugin\"\ndependencies = [\"definitely-not-installed>=1\"]\n",
+        encoding="utf-8",
+    )
+    (plugin_dir / "__init__.py").write_text(
+        "from novariusirc.core.plugins import BasePlugin\n\nclass Demo(BasePlugin):\n    name = \"demo\"\n",
+        encoding="utf-8",
+    )
+    config = minimal_config(
+        enabled=True, directory=str(tmp_path), load=["demo"], dependency_install="never"
+    )
+    loader = PluginLoader(
+        tmp_path,
+        config.plugins.load,
+        CommandRegistry(),
+        config,
+        logging.getLogger("test.plugins"),
+        None,
+    )
+
+    with pytest.raises(PluginDependencyError, match="needs missing dependencies"):
+        asyncio.run(loader.load("demo"))
+
+
+def test_package_plugin_loads_when_declared_dependency_is_available(tmp_path: Path) -> None:
+    plugin_dir = tmp_path / "demo"
+    plugin_dir.mkdir()
+    (plugin_dir / "novarius_plugin.toml").write_text(
+        "[plugin]\nname = \"demo\"\n", encoding="utf-8"
+    )
+    (plugin_dir / "pyproject.toml").write_text(
+        "[project]\nname = \"demo-plugin\"\ndependencies = [\"packaging>=26\"]\n",
+        encoding="utf-8",
+    )
+    (plugin_dir / "__init__.py").write_text(
+        "from novariusirc.core.plugins import BasePlugin\n\nclass Demo(BasePlugin):\n    name = \"demo\"\n",
+        encoding="utf-8",
+    )
+    config = minimal_config(enabled=True, directory=str(tmp_path), load=["demo"])
+    loader = PluginLoader(
+        tmp_path,
+        config.plugins.load,
+        CommandRegistry(),
+        config,
+        logging.getLogger("test.plugins"),
+        None,
+    )
+
+    assert asyncio.run(loader.load_all()) == 1
 
 
 def test_enabled_sasl_requires_complete_credentials() -> None:
