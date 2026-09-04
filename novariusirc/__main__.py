@@ -616,7 +616,15 @@ async def async_main(args: CLIArguments) -> None:
     plugins.set_client(client)
     register_runtime_commands(commands, client, plugins, feeds, start_time)
     web_api = WebAPIServer(
-        config.web_api, client, feeds, database, start_time, logger
+        config.web_api,
+        client,
+        feeds,
+        database,
+        start_time,
+        logger,
+        backups=backups,
+        runtime_config=config,
+        plugins=plugins,
     )
     loop = asyncio.get_running_loop()
     handled_signals = (signal.SIGINT, signal.SIGTERM)

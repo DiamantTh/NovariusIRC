@@ -307,9 +307,11 @@ standardmäßig deaktiviert. Bei `enabled = true` startet sie den Listener an
 
 Verfügbar sind `/_health` (Prozess läuft), `/_ready` (IRC-Registrierung
 abgeschlossen) und `/v1/status` (secret-freier Betriebsstatus einschließlich
-IRC-Queue-Auslastung). Ein Docker-Healthcheck braucht keine veröffentlichte
-Compose-Portzuordnung: er ruft `/_health` innerhalb des Containers auf
-`127.0.0.1` auf.
+IRC-Queue-Auslastung, Laufzeit, Modulen, Pfaden und Sicherungen). Bei einer
+Server-Datenbank wird die DSN nur als Treiber, Host, Port und Datenbankname
+ausgegeben; Benutzer, Passwort und Parameter bleiben verborgen. Ein
+Docker-Healthcheck braucht keine veröffentlichte Compose-Portzuordnung: er
+ruft `/_health` innerhalb des Containers auf `127.0.0.1` auf.
 
 `allowed_networks` prüft ausschließlich die tatsächliche TCP-Client-Adresse;
 `X-Forwarded-For` und ähnliche Header werden nicht vertraut. Leer bedeutet

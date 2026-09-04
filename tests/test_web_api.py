@@ -8,7 +8,15 @@ from types import SimpleNamespace
 from tornado.testing import AsyncHTTPTestCase
 
 from novariusirc.core.config import WebAPIConfig
-from novariusirc.core.web_api import WebAPIServer
+from novariusirc.core.web_api import WebAPIServer, _redact_dsn
+
+
+def test_status_dsn_redaction_removes_credentials_and_parameters() -> None:
+    assert (
+        _redact_dsn("postgresql+psycopg://monitor:secret@example.test:5432/novarius?sslmode=require")
+        == "postgresql+psycopg://example.test:5432/novarius"
+    )
+    assert _redact_dsn("not a DSN") == "configured"
 
 
 class TestMonitoringRoutes(AsyncHTTPTestCase):
@@ -73,9 +81,28 @@ class TestMonitoringRoutes(AsyncHTTPTestCase):
             "registered": False,
             "network": "example.test",
             "nick": "NovariusBot",
+            "server": None,
+            "port": None,
+            "tls": None,
+            "configured_channels": None,
         }
         assert payload["feeds"] == {"enabled": True, "running": True, "configured": 1}
-        assert payload["database"] == {"enabled": False, "backend": None}
+        assert payload["bot"] == {"name": None, "command_prefix": None, "language": None}
+        assert payload["database"] == {
+            "enabled": False,
+            "backend": None,
+            "schema": None,
+            "location": None,
+        }
+        assert payload["backups"] == {
+            "directory": None,
+            "last_successful_at": None,
+            "last_successful_file": None,
+        }
+        assert payload["modules"] == {"built_in": [], "external": []}
+        assert payload["paths"] == {"logs": None, "data": None}
+        assert payload["runtime"]["python"]
+        assert payload["runtime"]["platform"]
         assert payload["queues"] == {
             "send": {"depth": 2, "capacity": 256},
             "events": {"depth": 3, "capacity": 128},

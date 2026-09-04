@@ -300,8 +300,11 @@ therefore locally at `127.0.0.1:9688` by default.
 
 Available endpoints are `/_health` (process running), `/_ready` (IRC
 registration complete), and `/v1/status` (secret-free operational status,
-including IRC queue utilization). A Docker healthcheck needs no published
-Compose port mapping: it calls `/_health` on `127.0.0.1` inside the container.
+including IRC queue utilization, runtime, modules, paths, and backups). For a
+server database, its DSN is reduced to driver, host, port, and database name;
+user name, password, and parameters remain hidden. A Docker healthcheck needs
+no published Compose port mapping: it calls `/_health` on `127.0.0.1` inside
+the container.
 
 `allowed_networks` checks the actual TCP client address only; it never trusts
 `X-Forwarded-For` or similar headers. An empty list means no extra allowlist —
