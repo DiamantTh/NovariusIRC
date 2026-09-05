@@ -155,6 +155,14 @@ dependency_install = "prompt"
 # Eingebaute Module explizit aktivieren oder deaktivieren
 enabled = ["rss_announcer"]
 
+[workers]
+# Gemeinsamer Prozesspool für begrenzte CPU-/Plugin-Arbeit.
+processes = 2
+task_timeout_seconds = 30
+# Optional pro Kindprozess, Linux/Unix über RLIMIT_AS. Beispiel: 256
+# max_memory_mebibytes = 256
+max_tasks_per_child = 100
+
 [paths]
 log_root = "./logs"
 data_root = "./data"
@@ -177,7 +185,3 @@ directory = "./backups"
 compression = "none"
 compression_min_bytes = 8388608
 include_data = true
-
-[workers]
-# Anzahl Prozesse im Worker-Pool (CPU-lastige Tasks)
-processes = 2

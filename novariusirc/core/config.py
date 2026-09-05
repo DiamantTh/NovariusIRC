@@ -617,6 +617,9 @@ class ModerationConfig(ConfigModel):
 
 class WorkerConfig(ConfigModel):
     processes: int = Field(default=2, ge=1)
+    task_timeout_seconds: float = Field(default=30.0, gt=0)
+    max_memory_mebibytes: int | None = Field(default=None, ge=64)
+    max_tasks_per_child: int = Field(default=100, ge=1)
 
 
 class PathsConfig(ConfigModel):

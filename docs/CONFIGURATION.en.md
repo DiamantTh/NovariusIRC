@@ -345,6 +345,9 @@ service and should not be listed here. Unknown or unimportable modules make
 | `paths.log_root` | path | `./logs` | Root directory for log files. |
 | `paths.data_root` | path | `./data` | Root directory for persistent runtime data. Without a database, feed state is JSON here; with an enabled database it is stored in SQL. |
 | `workers.processes` | integer | `2` | Process count for CPU-heavy work, at least 1. |
+| `workers.task_timeout_seconds` | number | `30` | Hard wait time for one pool task. |
+| `workers.max_memory_mebibytes` | integer or empty | empty | Optional RAM ceiling per child through `RLIMIT_AS`, where Unix supports it. |
+| `workers.max_tasks_per_child` | integer | `100` | Replace a process after this many tasks to bound gradual memory growth. |
 
 Relative runtime paths are resolved against the directory containing
 `config.toml`, not the current working directory. This also applies to the
