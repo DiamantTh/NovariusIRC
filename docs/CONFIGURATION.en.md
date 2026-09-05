@@ -345,8 +345,8 @@ service and should not be listed here. Unknown or unimportable modules make
 | `paths.log_root` | path | `./logs` | Root directory for log files. |
 | `paths.data_root` | path | `./data` | Root directory for persistent runtime data. Without a database, feed state is JSON here; with an enabled database it is stored in SQL. |
 | `workers.processes` | integer | `2` | Process count for CPU-heavy work, at least 1. |
-| `workers.task_timeout_seconds` | number | `30` | Hard wait time for one pool task. |
-| `workers.max_memory_mebibytes` | integer or empty | empty | Optional RAM ceiling per child through `RLIMIT_AS`, where Unix supports it. |
+| `workers.task_timeout_seconds` | number | `30` | Pool wait timeout; does not terminate the running child. |
+| `workers.max_memory_mebibytes` | integer or empty | empty | Optional RLIMIT_AS address-space limit, not an RSS ceiling. |
 | `workers.max_tasks_per_child` | integer | `100` | Replace a process after this many tasks to bound gradual memory growth. |
 
 Relative runtime paths are resolved against the directory containing
@@ -530,6 +530,9 @@ for completeness; built-in features belong under `[modules]`.
 | `directory` | path | `plugins` | Directory relative to `config.toml`. |
 | `load` | list of text | `[]` | Explicit allowlist; names may contain letters, digits, `_`, and `-`. |
 | `dependency_install` | `prompt`, `always`, `never` | `prompt` | Missing dependencies from a package `pyproject.toml`: ask, install with pip, or fail. |
+| `worker_timeout_seconds` | number | `10` | Terminate plugin child on timeout. |
+| `worker_payload_bytes` | integer | `65536` | Maximum JSON message, 1024 to 65536 bytes. |
+| `worker_memory_mebibytes` | optional integer | unset | Per-plugin address-space limit, at least 64 MiB. |
 | `settings` | table | `{}` | Free-form extension settings grouped by name. |
 
 <a id="environment"></a>

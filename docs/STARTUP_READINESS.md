@@ -1,6 +1,6 @@
 # Betriebsstand und nächste Entwicklungsstufen
 
-Stand: 1. September 2026
+Stand: 5. September 2026
 
 Dieses Dokument trennt den nutzbaren Core-/Modulbetrieb von noch offenen
 Release-Arbeiten und späteren Konzepten. Externe Plugins, eine öffentliche
@@ -18,9 +18,9 @@ Vor einem als stabil beworbenen Release fehlen noch automatisierte
 Release-Absicherung und dokumentierte Tests auf realen IRC-Netzen. Persistente
 Core-Daten, Backups und die Offline-Wiederherstellung sind vorhanden.
 
-Verifiziert am 4. September 2026:
+Verifiziert am 5. September 2026:
 
-- 192 von 192 Tests einschließlich lokalem IRC-Integrationstest erfolgreich
+- 200 von 200 Tests einschließlich IRC-Integration und echter Plugin-Kindprozesse erfolgreich
 - Ruff ohne Befund und Poetry-Metadaten gültig
 - `config check`, `config status`, `database init` und `database check`
   funktionieren ohne IRC-Verbindung
@@ -43,6 +43,8 @@ IRC-Netz und dessen Services.
 | Sprache | fertig | Core- und Modulantworten für Deutsch, Englisch und Japanisch |
 | RSS/Atom | fertig | Polling, ETag/Last-Modified, Limits und Vorlagen; mit Datenbank liegt der Feed-Status in SQL statt in JSON-Dateien |
 | Logging | fertig | Core-, IRC-, Raw- und Moderationslogs; Zeitzone konfigurierbar |
+| Monitoring | umgesetzt | Read-only API, Datenbankdetails, RAM-Basiswerte und optionales psutil |
+| Plugin-Worker | Basis umgesetzt | Opt-in-Paketformat, eigene Prozesse, JSON-Pipes, Rechteprüfung im Core, Antwortlimits, Beenden bei Timeout; noch keine vollständige OS-Sandbox |
 | Datenbankbasis | fertig | SQLAlchemy Core, mitgelieferte Alembic-Revisionen, stabiler Botname, explizite Initialisierung, sichere SQLite-Kopie-vor-Upgrade, WAL, Foreign Keys, Integritäts- und Schemacheck |
 
 ## Vor einem Release noch erforderlich
@@ -67,9 +69,10 @@ Archive dürfen nie als angeblich portable Server-Dumps ausgegeben werden.
 
 - Die lokale, rein lesende Tornado-API liefert `/_health`, `/_ready` und
   `/v1/status`. Sie bleibt ohne Panel und ohne schreibende HTTP-Endpunkte.
-  Später können DB-Schema und letzter erfolgreicher Backup-Lauf hinzukommen.
-- Plugin-Worker als Childprozesse: Fehlerisolation überall; optionale stärkere
-  Containerhärtung, aber kein Unix-User-Zwang im normalen Betrieb.
+  DB-Schema und gefundene Backup-Dateien sind bereits enthalten; Dateifunde
+  beweisen keine erfolgreiche externe Sicherung.
+- Plugin-Worker: weitere Eventtypen und gezielte Containerhärtung ausbauen.
+  Befehle und unconsumed Messages sind bereits implementiert.
 - Persistente Moderationsaktionen mit verständlichen Gründen als Grundlage für
   spätere Evidence- und Einspruchsabläufe. Das ist keine DSA-Zusage.
 - Getestete Serverdatenbanken, öffentliche API-Authentifizierung, OpenAPI und

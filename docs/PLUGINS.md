@@ -168,9 +168,47 @@ The core does not yet expose a stable plugin-storage API. Until it does, a
 plugin's storage format is private to that plugin and must be documented by
 the plugin author.
 
-## Planned worker model
+## Worker execution
 
-The intended hardening direction is a plugin worker process with local IPC:
+Package plugins can select a persistent child process in `novarius_plugin.toml`:
+
+```toml
+[plugin]
+name = "weather"
+execution = "worker"
+messages = false
+
+[[commands]]
+name = "weather"
+roles = ["user"]
+help = "Show weather"
+```
+
+In this mode `__init__.py` exports `handle(event, settings)` (sync or async)
+instead of a BasePlugin subclass. Return a list of reply strings:
+
+```python
+def handle(event, settings):
+    return ["Weather is currently unavailable."]
+```
+
+Events contain operation, event, nick, channel, message, language, command and
+args. Only the plugin's own settings are passed. Its working directory is
+`data/plugins/<name>/`; relative data writes persist there. `messages = true`
+also delivers unconsumed messages. Other hooks are not implemented yet.
+
+Private pipes carry JSON with one request in flight and no pending request
+queue. `plugins.worker_timeout_seconds` defaults to 10 seconds;
+`plugins.worker_payload_bytes` defaults to 65536 bytes per request/response.
+Replies allow at most four strings of 400 UTF-8 bytes, without IRC control
+delimiters. The core chooses the original reply target and checks command roles.
+Timeouts, cancellation and malformed replies terminate the worker. Unload also
+terminates it; POSIX kills its process group. Failed workers require reloading.
+Plugin stdout is discarded; the child starts with Python isolated mode and a
+minimal environment. `plugins.worker_memory_mebibytes` optionally applies
+RLIMIT_AS before importing code: this limits virtual address space, not RSS.
+An unavailable requested limit fails startup. Use container RAM limits for
+the whole instance including children.
 
 ```text
 IRC core  <->  authenticated local IPC  <->  plugin worker  <->  plugin data
@@ -184,6 +222,6 @@ affects that plugin rather than the IRC connection.
 A separate Python process alone is fault isolation, not a security sandbox.
 For normal local operation it runs under the bot user. Container deployments
 can optionally add a separate Unix UID, a writable plugin-data mount, read-only
-code, no Docker socket, and a narrowly defined IPC capability set. This worker
-protocol and capability manifest are future work; external plugins therefore
-remain an advanced, trusted-operator feature for this release.
+code and no Docker socket. The current worker still has the bot user's file and
+network permissions. Further event types and capability controls remain future
+work; external plugins remain a trusted-operator feature.

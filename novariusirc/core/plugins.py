@@ -366,6 +366,10 @@ class PluginLoader:
         plugin_path, is_package, package_dir = self._resolve_plugin(configured_name)
         if is_package:
             self._ensure_dependencies(configured_name, package_dir)
+            manifest = tomllib.loads((package_dir / "novarius_plugin.toml").read_text())
+            if manifest["plugin"].get("execution") == "worker":
+                await self._load_worker(configured_name, plugin_path, manifest)
+                return
         module_name = f"novariusirc_external_{configured_name}"
         search_locations = [str(plugin_path.parent)] if is_package else None
         spec = importlib.util.spec_from_file_location(
@@ -414,6 +418,37 @@ class PluginLoader:
             if owner:
                 self.commands.unregister_owner(owner)
             sys.modules.pop(module_name, None)
+            raise
+
+    async def _load_worker(self, name, path, manifest):
+        from .plugin_worker import PluginWorker
+
+        if name in self.plugins:
+            raise ValueError(f"Plugin name already loaded: {name}")
+        worker = PluginWorker(
+            name, path, Path(self.config.paths.data_root).resolve() / "plugins" / name,
+            self.config.plugins.settings.get(name, {}), self.config.plugins,
+        )
+        owner = f"external:{name}"
+        try:
+            for entry in manifest.get("commands", []):
+                async def dispatch(ctx, args, command_name=entry["name"]):
+                    await worker.dispatch(ctx, command_name, args)
+
+                self.commands.register(
+                    entry["name"], dispatch, roles=entry.get("roles", ["user"]),
+                    aliases=entry.get("aliases", []), help_text=entry.get("help", ""),
+                    owner=owner,
+                )
+            await worker.start()
+            self.plugins[name] = worker
+            self._owners[name] = owner
+            self._module_names[name] = ""
+            if manifest["plugin"].get("messages", False):
+                self.hooks["on_message"].append(worker.on_message)
+        except BaseException:
+            self.commands.unregister_owner(owner)
+            await worker.on_unload()
             raise
 
     async def unload(self, plugin_name: str) -> None:

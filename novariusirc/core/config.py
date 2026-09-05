@@ -495,6 +495,9 @@ class PluginsConfig(ConfigModel):
     directory: str = "plugins"
     load: list[str] = Field(default_factory=list)
     dependency_install: Literal["prompt", "always", "never"] = "prompt"
+    worker_timeout_seconds: float = Field(default=10, gt=0)
+    worker_payload_bytes: int = Field(default=65536, ge=1024, le=65536)
+    worker_memory_mebibytes: int | None = Field(default=None, ge=64)
     settings: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
     @field_validator("load")

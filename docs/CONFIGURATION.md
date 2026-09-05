@@ -353,8 +353,8 @@ importierbares Modul lässt `config check` fehlschlagen.
 | `paths.log_root` | Pfad | `./logs` | Stammverzeichnis für Logdateien. |
 | `paths.data_root` | Pfad | `./data` | Stammverzeichnis für persistente Laufzeitdaten. Ohne Datenbank liegen Feed-Zustände dort als JSON; mit aktivierter Datenbank liegen sie in SQL. |
 | `workers.processes` | Ganzzahl | `2` | Prozessanzahl des Pools für CPU-lastige Aufgaben, mindestens 1. |
-| `workers.task_timeout_seconds` | Zahl | `30` | Harte Wartezeit für einen einzelnen Pool-Auftrag. |
-| `workers.max_memory_mebibytes` | Ganzzahl oder leer | leer | Optionale RAM-Obergrenze je Kindprozess via `RLIMIT_AS`, soweit Unix dies unterstützt. |
+| `workers.task_timeout_seconds` | Zahl | `30` | Wartezeit für einen Pool-Auftrag; beendet dessen laufenden Prozess nicht. |
+| `workers.max_memory_mebibytes` | Ganzzahl oder leer | leer | Optionales Adressraumlimit via `RLIMIT_AS`; keine RSS-Grenze. |
 | `workers.max_tasks_per_child` | Ganzzahl | `100` | Prozess nach dieser Auftragszahl ersetzen; begrenzt schleichendes Speicherwachstum. |
 
 Relative Laufzeitpfade werden relativ zum Verzeichnis von `config.toml`
@@ -540,6 +540,9 @@ der Vollständigkeit halber aufgeführt; eingebaute Funktionen gehören unter
 | `directory` | Pfad | `plugins` | Verzeichnis relativ zu `config.toml`. |
 | `load` | Textliste | `[]` | Explizite Allowlist; Namen dürfen Buchstaben, Ziffern, `_` und `-` enthalten. |
 | `dependency_install` | `prompt`, `always`, `never` | `prompt` | Fehlende Abhängigkeiten aus dem Paket-`pyproject.toml`: fragen, per pip installieren oder mit Fehler abbrechen. |
+| `worker_timeout_seconds` | Zahl | `10` | Plugin-Kindprozess bei Zeitüberschreitung beenden. |
+| `worker_payload_bytes` | Ganzzahl | `65536` | Maximale JSON-Nachricht, 1024 bis 65536 Bytes. |
+| `worker_memory_mebibytes` | Ganzzahl, optional | nicht gesetzt | Adressraumlimit je Plugin-Kind, mindestens 64 MiB. |
 | `settings` | Tabelle | `{}` | Erweiterungsspezifische freie Schlüssel, gruppiert nach Name. |
 
 <a id="environment"></a>
