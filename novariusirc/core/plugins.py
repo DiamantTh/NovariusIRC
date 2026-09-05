@@ -217,6 +217,27 @@ class PluginLoader:
         for plugin in self.plugins.values():
             plugin.client = client
 
+    @staticmethod
+    def _read_manifest(manifest: Path, configured_name: str) -> dict[str, Any]:
+        try:
+            metadata = tomllib.loads(manifest.read_text(encoding="utf-8"))
+            plugin = metadata.get("plugin")
+            if not isinstance(plugin, dict) or plugin.get("name") != configured_name:
+                raise ValueError("[plugin].name must match the configured plugin name")
+            execution = plugin.get("execution", "in_process")
+            if execution not in {"in_process", "worker"}:
+                raise ValueError("[plugin].execution must be in_process or worker")
+            if execution == "worker":
+                commands = metadata.get("commands", [])
+                if not isinstance(commands, list) or any(
+                    not isinstance(entry, dict) or not isinstance(entry.get("name"), str)
+                    for entry in commands
+                ):
+                    raise ValueError("worker [[commands]] entries require a name")
+            return metadata
+        except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
+            raise ValueError(f"Invalid plugin manifest {manifest}: {exc}") from exc
+
     def _resolve_plugin(self, configured_name: str) -> tuple[Path, bool, Path]:
         if not PLUGIN_NAME_RE.fullmatch(configured_name):
             raise ValueError(f"Invalid plugin name: {configured_name!r}")
@@ -229,12 +250,7 @@ class PluginLoader:
         package_init = package_dir / "__init__.py"
         manifest = package_dir / "novarius_plugin.toml"
         if package_init.is_file() and manifest.is_file():
-            try:
-                metadata = tomllib.loads(manifest.read_text(encoding="utf-8"))
-                if metadata.get("plugin", {}).get("name") != configured_name:
-                    raise ValueError("[plugin].name must match the configured plugin name")
-            except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
-                raise ValueError(f"Invalid plugin manifest {manifest}: {exc}") from exc
+            self._read_manifest(manifest, configured_name)
             return package_init, True, package_dir
 
         raise FileNotFoundError(
@@ -366,7 +382,7 @@ class PluginLoader:
         plugin_path, is_package, package_dir = self._resolve_plugin(configured_name)
         if is_package:
             self._ensure_dependencies(configured_name, package_dir)
-            manifest = tomllib.loads((package_dir / "novarius_plugin.toml").read_text())
+            manifest = self._read_manifest(package_dir / "novarius_plugin.toml", configured_name)
             if manifest["plugin"].get("execution") == "worker":
                 await self._load_worker(configured_name, plugin_path, manifest)
                 return
@@ -475,6 +491,26 @@ class PluginLoader:
     async def unload_all(self) -> None:
         for plugin_name in reversed(tuple(self.plugins)):
             await self.unload(plugin_name)
+
+    def status(self) -> list[dict[str, Any]]:
+        """Return safe state for the local monitoring endpoint."""
+        from .plugin_worker import PluginWorker
+
+        details: list[dict[str, Any]] = []
+        for name, plugin in self.plugins.items():
+            if isinstance(plugin, PluginWorker):
+                process = plugin.process
+                details.append(
+                    {
+                        "name": name,
+                        "execution": "worker",
+                        "running": process is not None and process.returncode is None,
+                        "pid": process.pid if process is not None else None,
+                    }
+                )
+            else:
+                details.append({"name": name, "execution": "in_process", "running": True})
+        return details
 
     async def trigger_hook(self, hook_name: str, ctx: CommandContext) -> None:
         for handler in self.hooks.get(hook_name, ()):

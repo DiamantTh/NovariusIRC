@@ -197,6 +197,9 @@ args. Only the plugin's own settings are passed. Its working directory is
 `data/plugins/<name>/`; relative data writes persist there. `messages = true`
 also delivers unconsumed messages. Other hooks are not implemented yet.
 
+`/v1/status` lists each loaded external plugin with its execution mode. Worker
+entries additionally expose whether the child is running and its local PID.
+
 Private pipes carry JSON with one request in flight and no pending request
 queue. `plugins.worker_timeout_seconds` defaults to 10 seconds;
 `plugins.worker_payload_bytes` defaults to 65536 bytes per request/response.

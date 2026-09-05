@@ -54,6 +54,7 @@ class MonitoringSnapshot:
     configured_channels: int | None
     built_in_modules: tuple[str, ...]
     external_plugins: tuple[str, ...]
+    external_plugin_details: list[dict[str, Any]]
     runtime: str
     python: str
     platform: str
@@ -115,6 +116,7 @@ class MonitoringSnapshot:
             "modules": {
                 "built_in": list(self.built_in_modules),
                 "external": list(self.external_plugins),
+                "external_details": self.external_plugin_details,
             },
             "runtime": {
                 "environment": self.runtime,
@@ -198,6 +200,9 @@ class WebAPIServer:
         external_plugins = (
             tuple(self.plugins.loader.plugins) if self.plugins and self.plugins.loader else ()
         )
+        external_plugin_details = (
+            self.plugins.loader.status() if self.plugins and self.plugins.loader else []
+        )
         effective_uid = os.geteuid() if hasattr(os, "geteuid") else None
         effective_gid = os.getegid() if hasattr(os, "getegid") else None
         return MonitoringSnapshot(
@@ -229,6 +234,7 @@ class WebAPIServer:
             configured_channels=len(config.network.channels) if config else None,
             built_in_modules=self.plugins.active_builtin_modules if self.plugins else (),
             external_plugins=external_plugins,
+            external_plugin_details=external_plugin_details,
             runtime=runtime_environment(),
             python=platform.python_version(),
             platform=platform.system(),

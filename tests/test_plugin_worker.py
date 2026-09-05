@@ -44,6 +44,9 @@ def test_worker_commands_are_isolated_bounded_and_unloaded(tmp_path, behavior):
         assert "novarius_worker_plugin" not in sys.modules
         worker = loader.plugins["demo"]
         process = worker.process
+        assert loader.status() == [
+            {"name": "demo", "execution": "worker", "running": True, "pid": process.pid}
+        ]
         ctx = CommandContext("nick", "nick!user@host", "#test", "!demo", config,
                              Client(), logging.getLogger("test"), ["user"])
         await registry.dispatch(ctx)

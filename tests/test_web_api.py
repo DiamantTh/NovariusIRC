@@ -127,7 +127,11 @@ class TestMonitoringRoutes(AsyncHTTPTestCase):
             "last_successful_at": None,
             "last_successful_file": None,
         }
-        assert payload["modules"] == {"built_in": [], "external": []}
+        assert payload["modules"] == {
+            "built_in": [],
+            "external": [],
+            "external_details": [],
+        }
         assert payload["paths"] == {"logs": None, "data": None}
         assert payload["runtime"]["python"]
         assert payload["runtime"]["platform"]

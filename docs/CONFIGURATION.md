@@ -321,6 +321,9 @@ Speicher des Bot-Prozesses. Unter Linux werden, falls sichtbar, zusätzlich die
 aktuelle cgroup-Nutzung und deren RAM-Grenze ausgegeben. Das erlaubt Container-
 und Host-Monitoring ohne zusätzliche Python-Bibliothek.
 
+Unter `modules.external_details` zeigt der Status geladene externe Plugins,
+deren Ausführungsart und bei Worker-Plugins den lokalen Prozesszustand.
+
 Mit dem optionalen Paket `novariusirc[monitoring]` (`psutil`) enthält
 `runtime.extended_monitoring` zusätzlich Prozess-CPU-Zeit, Threads, offene
 Dateideskriptoren, Kindprozesse sowie CPU-, RAM- und Swap-Werte des Systems.
