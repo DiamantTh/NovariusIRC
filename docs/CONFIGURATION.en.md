@@ -488,6 +488,7 @@ complete example.
 | `enabled` | Boolean | `true` | Allow core moderation globally. |
 | `log_file` | path | `logs/moderation/moderation.log` | Dedicated rotating decision log. |
 | `database_path` | path or empty | `<data_root>/<bot.name>.moderation.sqlite3` | Separate SQLite file for actions and evidence metadata. |
+| `database_dsn` | DSN or empty | empty | Optional separate SQLAlchemy DSN for moderation. With a non-SQLite `[database]`, that configured server database is used automatically. |
 | `rate_limit` | table | see below | Message-rate limiting. |
 | `spam` | table | see below | Repeated-message detection. |
 | `caps` | table | see below | Excessive-uppercase detection. |
@@ -495,10 +496,12 @@ complete example.
 | `warnings` | table | see below | Warning escalation thresholds. |
 | `channels` | table | `{}` | Recursive per-channel overrides. |
 
-The moderation file remains separate from the core database. It stores warns,
+With SQLite, moderation remains in its own file. With PostgreSQL, MariaDB,
+MySQL, or MSSQL, it uses the configured server database (or `database_dsn` when
+set) and creates the same dedicated moderation tables there. It stores warns,
 mutes, kicks, and bans with nick, optional IRCv3 account and hostmask, channel,
 reason, moderator, time, and duration. Active mutes and bans are restored after
-restart. Evidence remains a file; SQLite stores only its reference, type,
+restart. Evidence remains a file; the database stores only its reference, type,
 SHA-256, size, and note.
 
 <a id="moderation-checks"></a>

@@ -90,6 +90,33 @@ def test_moderation_actions_evidence_and_warnings_persist(tmp_path: Path) -> Non
     )
 
 
+def test_moderation_can_use_a_server_style_sqlalchemy_dsn(tmp_path: Path) -> None:
+    dsn = f"sqlite+pysqlite:///{tmp_path / 'server-style.sqlite3'}"
+    manager = ModerationManager(storage_dsn=dsn)
+    asyncio.run(manager.apply_action("ban", "Alice", "#one", "reason"))
+    action = manager.actions[-1]
+    assert action.id is not None
+    assert manager.add_evidence(
+        action.id, kind="log", path="evidence/ban.txt", sha256="b" * 64
+    ) == 1
+    restored = ModerationManager(storage_dsn=dsn)
+    assert asyncio.run(restored.check_message("Alice", "#one", "again")) == (
+        "ban",
+        "User is banned",
+    )
+
+
+def test_moderation_messages_use_the_configured_language() -> None:
+    manager = ModerationManager(language="de")
+    commands = asyncio.run(manager.apply_action("warn", "Alice", "#one", "Grund"))
+    assert commands == ["NOTICE Alice :Grund (Verwarnung 1)"]
+    asyncio.run(manager.apply_action("ban", "Bob", "#one", "Grund"))
+    assert asyncio.run(manager.check_message("Bob", "#one", "nochmal")) == (
+        "ban",
+        "Nutzer ist gebannt",
+    )
+
+
 def test_manual_feed_limits_are_resolved_per_feed() -> None:
     config = FeedsConfig(max_items_per_manual=4)
     engine = FeedEngine(config, logging.getLogger("test.feeds"))

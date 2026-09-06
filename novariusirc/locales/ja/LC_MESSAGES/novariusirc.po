@@ -163,3 +163,30 @@ msgstr "新着項目"
 
 msgid "{name} [{mode}] channels={channels} poll={poll} manual={manual} minimum={minimum}s url={url}"
 msgstr "{name} [{mode}] チャンネル={channels} 取得={poll} 手動={manual} 最小間隔={minimum}秒 URL={url}"
+
+msgid "Role command failed: {error}"
+msgstr "ロールコマンドに失敗しました: {error}"
+
+msgid "User is currently muted"
+msgstr "ユーザーは現在ミュートされています"
+
+msgid "User is banned"
+msgstr "ユーザーはBANされています"
+
+msgid "Rate limit exceeded ({maximum} msgs/min)"
+msgstr "レート制限を超えました（{maximum}件/分）"
+
+msgid "Repeated-message spam detected"
+msgstr "同一メッセージの繰り返しスパムを検出しました"
+
+msgid "Badword detected"
+msgstr "禁止語を検出しました"
+
+msgid "Excessive caps ({percentage:.0f}%)"
+msgstr "大文字の割合が高すぎます（{percentage:.0f}%）"
+
+msgid "Accumulated {count} warnings"
+msgstr "警告が{count}件累積しました"
+
+msgid "Warning {count}"
+msgstr "警告 {count}"

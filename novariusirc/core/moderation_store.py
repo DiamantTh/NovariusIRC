@@ -1,10 +1,51 @@
-"""Small, dedicated SQLite store for moderation history and evidence metadata."""
+"""Dedicated persistent storage for moderation history and evidence metadata."""
 
 from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+    func,
+    select,
+)
+
+server_metadata = MetaData()
+server_actions = Table(
+    "moderation_actions", server_metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("action", String(16), nullable=False), Column("nick", String(128), nullable=False),
+    Column("account", String(256)), Column("hostmask", Text), Column("channel", String(256), nullable=False),
+    Column("reason", Text, nullable=False), Column("moderator", String(128), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False), Column("duration_seconds", Integer),
+    Column("revoked_at", DateTime(timezone=True)),
+)
+Index(
+    "ix_moderation_subject",
+    server_actions.c.channel,
+    server_actions.c.nick,
+    server_actions.c.action,
+    server_actions.c.revoked_at,
+)
+server_evidence = Table(
+    "moderation_evidence", server_metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("action_id", Integer, ForeignKey("moderation_actions.id"), nullable=False),
+    Column("kind", String(64), nullable=False), Column("path", Text, nullable=False),
+    Column("sha256", String(64)), Column("mime_type", String(128)), Column("size_bytes", Integer),
+    Column("note", Text), Column("created_at", DateTime(timezone=True), nullable=False),
+)
 
 
 class ModerationStore:
@@ -72,6 +113,7 @@ class ModerationStore:
             )
             return int(result.lastrowid)
 
+
     def warning_count(self, nick: str, channel: str) -> int:
         with self._connect() as connection:
             return int(connection.execute(
@@ -111,3 +153,65 @@ class ModerationStore:
                  datetime.now(UTC).isoformat()),
             )
             return int(result.lastrowid)
+
+
+class ServerModerationStore:
+    """Portable SQLAlchemy moderation store for PostgreSQL, MariaDB, and peers."""
+
+    def __init__(self, dsn: str):
+        self.engine = create_engine(dsn, pool_pre_ping=True, pool_recycle=1800)
+        server_metadata.create_all(self.engine)
+
+    def record_action(self, **values) -> int:
+        values["created_at"] = values["created_at"].astimezone(UTC)
+        values["duration_seconds"] = values.pop("duration")
+        with self.engine.begin() as connection:
+            result = connection.execute(server_actions.insert().values(**values))
+            return int(result.inserted_primary_key[0])
+
+    def warning_count(self, nick: str, channel: str) -> int:
+        with self.engine.connect() as connection:
+            statement = select(func.count()).select_from(server_actions).where(
+                server_actions.c.action == "warn", server_actions.c.nick == nick,
+                server_actions.c.channel == channel, server_actions.c.revoked_at.is_(None)
+            )
+            return int(connection.execute(statement).scalar_one())
+
+    def active_actions(self) -> list[dict]:
+        from datetime import timedelta
+
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(server_actions).where(
+                server_actions.c.revoked_at.is_(None), server_actions.c.action.in_(("mute", "ban"))
+            )).mappings()
+            now = datetime.now(UTC)
+            active: list[dict] = []
+            for row in rows:
+                action = dict(row)
+                created_at = action["created_at"]
+                # MariaDB and some PostgreSQL configurations return a naive
+                # datetime even for timezone-aware columns.  DB timestamps are
+                # written as UTC, so normalise the value before comparing it.
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=UTC)
+                action["created_at"] = created_at
+                if (
+                    action["duration_seconds"] is None
+                    or created_at + timedelta(seconds=action["duration_seconds"]) > now
+                ):
+                    active.append(action)
+            return active
+
+    def revoke(self, nick: str, channel: str | None, action: str) -> None:
+        condition = [server_actions.c.nick == nick, server_actions.c.action == action,
+                     server_actions.c.revoked_at.is_(None)]
+        if channel is not None:
+            condition.append(server_actions.c.channel == channel)
+        with self.engine.begin() as connection:
+            connection.execute(server_actions.update().where(*condition).values(revoked_at=datetime.now(UTC)))
+
+    def add_evidence(self, action_id: int, **values) -> int:
+        values.update(action_id=action_id, created_at=datetime.now(UTC))
+        with self.engine.begin() as connection:
+            result = connection.execute(server_evidence.insert().values(**values))
+            return int(result.inserted_primary_key[0])

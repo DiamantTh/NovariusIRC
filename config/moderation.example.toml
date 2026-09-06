@@ -8,6 +8,9 @@ log_file = "logs/moderation/moderation.log"
 # Eigene SQLite-Datei für Maßnahmen und Evidence-Metadaten.
 # Ohne Wert: data/<Botname>.moderation.sqlite3
 # database_path = "data/NovariusBot.moderation.sqlite3"
+# Bei PostgreSQL/MariaDB/MySQL/MSSQL nutzt der Bot automatisch die zentrale
+# [database].dsn. Nur für eine abweichende Moderationsdatenbank setzen:
+# database_dsn = "postgresql+psycopg://novarius:secret@db/novarius_moderation"
 
 # Standardmäßige Nachrichtenbegrenzung
 [moderation.rate_limit]

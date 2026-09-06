@@ -164,3 +164,30 @@ msgstr "Neuer Eintrag"
 
 msgid "{name} [{mode}] channels={channels} poll={poll} manual={manual} minimum={minimum}s url={url}"
 msgstr "{name} [{mode}] Kanäle={channels} Abruf={poll} manuell={manual} Minimum={minimum}s URL={url}"
+
+msgid "Role command failed: {error}"
+msgstr "Rollenbefehl fehlgeschlagen: {error}"
+
+msgid "User is currently muted"
+msgstr "Nutzer ist derzeit stummgeschaltet"
+
+msgid "User is banned"
+msgstr "Nutzer ist gebannt"
+
+msgid "Rate limit exceeded ({maximum} msgs/min)"
+msgstr "Nachrichtenlimit überschritten ({maximum} Nachrichten/Min.)"
+
+msgid "Repeated-message spam detected"
+msgstr "Wiederholter Nachrichtenspam erkannt"
+
+msgid "Badword detected"
+msgstr "Unerlaubter Begriff erkannt"
+
+msgid "Excessive caps ({percentage:.0f}%)"
+msgstr "Zu viele Großbuchstaben ({percentage:.0f}%)"
+
+msgid "Accumulated {count} warnings"
+msgstr "{count} Verwarnungen angesammelt"
+
+msgid "Warning {count}"
+msgstr "Verwarnung {count}"

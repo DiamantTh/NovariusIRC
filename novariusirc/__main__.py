@@ -370,7 +370,7 @@ def register_builtin_commands(
                         args[1], args[2], " ".join(args[3:])
                     )
                 except DatabaseError as exc:
-                    await ctx.reply(str(exc))
+                    await ctx.reply(ctx.tr("Role command failed: {error}", error=exc))
                     return
                 auth.set_persistent_bindings(database.list_role_bindings())
                 await ctx.reply(
@@ -610,7 +610,13 @@ async def async_main(args: CLIArguments) -> None:
     tasks = TaskSupervisor(logger)
     plugins = PluginManager(config, commands, feeds, auth, logger, tasks)
     moderation = ModerationManager(
-        config.moderation.model_dump(), storage_path=config.moderation.database_path
+        config.moderation.model_dump(),
+        storage_path=config.moderation.database_path,
+        storage_dsn=(
+            config.moderation.database_dsn
+            or (config.database.dsn if config.database.enabled and config.database.backend != "sqlite" else None)
+        ),
+        language=config.bot.language,
     )
     control = UnixControlServer(config.control.socket_path, commands, config, logger)
 

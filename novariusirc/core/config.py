@@ -609,6 +609,7 @@ class ModerationConfig(ConfigModel):
     enabled: bool = True
     log_file: str = "logs/moderation/moderation.log"
     database_path: str | None = None
+    database_dsn: str | None = None
     rate_limit: ModerationRateLimitConfig = Field(
         default_factory=ModerationRateLimitConfig
     )

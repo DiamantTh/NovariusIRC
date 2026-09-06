@@ -498,6 +498,7 @@ aus. Die vollständige Vorlage steht in
 | `enabled` | Boolean | `true` | Core-Moderation global zulassen. |
 | `log_file` | Pfad | `logs/moderation/moderation.log` | Eigenes rotierendes Entscheidungslog. |
 | `database_path` | Pfad oder leer | `<data_root>/<bot.name>.moderation.sqlite3` | Eigene SQLite-Datei für Maßnahmen und Evidence-Metadaten. |
+| `database_dsn` | DSN oder leer | leer | Optionale eigene SQLAlchemy-DSN für Moderation. Bei einer Nicht-SQLite-`[database]` wird deren Serverdatenbank automatisch verwendet. |
 | `rate_limit` | Tabelle | siehe unten | Begrenzung der Nachrichtenrate. |
 | `spam` | Tabelle | siehe unten | Erkennung direkt wiederholter Nachrichten. |
 | `caps` | Tabelle | siehe unten | Erkennung übermäßiger Großschreibung. |
@@ -505,11 +506,14 @@ aus. Die vollständige Vorlage steht in
 | `warnings` | Tabelle | siehe unten | Eskalationsschwellen für Verwarnungen. |
 | `channels` | Tabelle | `{}` | Rekursive Überschreibungen je Kanal. |
 
-Die Moderationsdatei bleibt getrennt von der Core-Datenbank. Sie speichert
-Warnungen, Mutes, Kicks und Bans mit Nick, optionalem IRCv3-Account und
-Hostmask, Kanal, Grund, Moderator, Zeit und Dauer. Aktive Mutes und Bans
-werden nach dem Neustart wiederhergestellt. Evidence bleibt als Datei; in der
-SQLite-Datei liegen nur Verweis, Typ, SHA-256, Größe und Notiz.
+Bei SQLite bleibt Moderation eine eigene Datei. Mit PostgreSQL, MariaDB, MySQL
+oder MSSQL verwendet sie automatisch die konfigurierte Serverdatenbank (oder
+bei gesetzter Option `database_dsn` eine eigene) und legt dort die separaten
+Moderationstabellen an. Gespeichert werden Warnungen, Mutes, Kicks und Bans mit
+Nick, optionalem IRCv3-Account und Hostmask, Kanal, Grund, Moderator, Zeit und
+Dauer. Aktive Mutes und Bans werden nach dem Neustart wiederhergestellt.
+Evidence bleibt als Datei; die Datenbank enthält nur Verweis, Typ, SHA-256,
+Größe und Notiz.
 
 <a id="moderation-checks"></a>
 ### Prüfungen und Verwarnungen

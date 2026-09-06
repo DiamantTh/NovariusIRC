@@ -12,7 +12,8 @@ from typing import Any
 
 from novariusirc.irc.protocol import irc_casefold
 
-from .moderation_store import ModerationStore
+from .i18n import translate
+from .moderation_store import ModerationStore, ServerModerationStore
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +64,20 @@ class ModerationManager:
         config: dict[str, Any] | None = None,
         casefold: Callable[[str], str] = irc_casefold,
         storage_path: str | None = None,
+        storage_dsn: str | None = None,
+        language: str = "en",
     ):
         self.config = config or {}
         self.casefold = casefold
+        self.language = language
         self.user_status: dict[str, dict[str, UserStatus]] = {}
         self.actions: list[ModerationAction] = []
         self.banned_users: set[tuple[str, str]] = set()
         self.muted_users: dict[tuple[str, str], datetime] = {}
-        self.store = ModerationStore(storage_path) if storage_path else None
+        self.store = (
+            ServerModerationStore(storage_dsn) if storage_dsn else
+            ModerationStore(storage_path) if storage_path else None
+        )
         self._restore_active_actions()
 
     def _restore_active_actions(self) -> None:
@@ -81,7 +88,9 @@ class ModerationManager:
             if action["action"] == "ban":
                 self.banned_users.add(key)
             else:
-                created = datetime.fromisoformat(action["created_at"])
+                created = action["created_at"]
+                if isinstance(created, str):
+                    created = datetime.fromisoformat(created)
                 self.muted_users[key] = created + timedelta(seconds=action["duration_seconds"])
 
     def set_casefold(self, casefold: Callable[[str], str]) -> None:
@@ -112,6 +121,9 @@ class ModerationManager:
         }
         return _merge(global_config, override)
 
+    def _tr(self, message: str, **values: object) -> str:
+        return translate(message, self.language, **values)
+
     def _status(self, nick: str, channel: str) -> UserStatus:
         channel_key = self.casefold(channel)
         nick_key = self.casefold(nick)
@@ -138,10 +150,10 @@ class ModerationManager:
         muted_until = self.muted_users.get(key)
         if muted_until:
             if muted_until > now:
-                return "mute", "User is currently muted"
+                return "mute", self._tr("User is currently muted")
             self.muted_users.pop(key, None)
         if key in self.banned_users:
-            return "ban", "User is banned"
+            return "ban", self._tr("User is banned")
 
         status = self._status(nick, channel)
 
@@ -155,7 +167,7 @@ class ModerationManager:
             if len(status.message_times) > maximum:
                 return self._configured_action(
                     rate
-                ), f"Rate limit exceeded ({maximum} msgs/min)"
+                ), self._tr("Rate limit exceeded ({maximum} msgs/min)", maximum=maximum)
 
         spam = config.get("spam", {})
         if spam.get("enabled", False):
@@ -169,14 +181,14 @@ class ModerationManager:
             ):
                 return self._configured_action(
                     spam, "mute"
-                ), "Repeated-message spam detected"
+                ), self._tr("Repeated-message spam detected")
 
         badwords = config.get("badwords", {})
         if badwords.get("enabled", False):
             for expression in badwords.get("list", []):
                 try:
                     if re.search(expression, message, flags=re.IGNORECASE):
-                        return self._configured_action(badwords), "Badword detected"
+                        return self._configured_action(badwords), self._tr("Badword detected")
                 except re.error as exc:
                     logger.warning("Invalid badword regex %r: %s", expression, exc)
 
@@ -190,7 +202,7 @@ class ModerationManager:
             if percentage >= threshold:
                 return self._configured_action(
                     caps
-                ), f"Excessive caps ({percentage:.0f}%)"
+                ), self._tr("Excessive caps ({percentage:.0f}%)", percentage=percentage)
 
         return None
 
@@ -221,10 +233,10 @@ class ModerationManager:
             if warnings.get("enabled", True):
                 if status.warnings >= int(warnings.get("to_ban", 5)):
                     action = "ban"
-                    reason = f"Accumulated {status.warnings} warnings"
+                    reason = self._tr("Accumulated {count} warnings", count=status.warnings)
                 elif status.warnings >= int(warnings.get("to_kick", 3)):
                     action = "kick"
-                    reason = f"Accumulated {status.warnings} warnings"
+                    reason = self._tr("Accumulated {count} warnings", count=status.warnings)
 
         if action == "mute" and duration is None:
             duration = int(config.get("spam", {}).get("duration_seconds", 300))
@@ -246,7 +258,8 @@ class ModerationManager:
         logger.info("[%s] Applying %s to %s: %s", channel, action, nick, reason)
 
         if action == "warn":
-            return [f"NOTICE {nick} :{reason} (Warning {status.warnings})"]
+            warning = self._tr("Warning {count}", count=status.warnings)
+            return [f"NOTICE {nick} :{reason} ({warning})"]
         if action == "mute":
             self.muted_users[key] = _now() + timedelta(seconds=max(1, duration or 1))
             return [f"MODE {channel} +q {nick}!*@*"]
