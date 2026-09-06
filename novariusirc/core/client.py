@@ -1160,7 +1160,7 @@ class IRCClient:
             clean_message = strip_irc_formatting(message)
             log_irc(pm_logger, "<%s> %s", nick, clean_message, event_time=server_time)
 
-        if channel and await self._moderate_message(nick, channel, message):
+        if channel and await self._moderate_message(nick, channel, message, prefix, account):
             return
 
         # Extract hostmask from prefix (nick!user@host) or fallback to nick
@@ -1250,7 +1250,7 @@ class IRCClient:
             clean_text = strip_irc_formatting(action_text)
             log_irc(pm_logger, "* %s %s", nick, clean_text, event_time=server_time)
 
-        if channel and await self._moderate_message(nick, channel, action_text):
+        if channel and await self._moderate_message(nick, channel, action_text, prefix, account):
             return
         user = self.state.ensure_user(nick, prefix)
         if account is not None:
@@ -1314,7 +1314,9 @@ class IRCClient:
             server_time,
         )
 
-    async def _moderate_message(self, nick: str, channel: str, message: str) -> bool:
+    async def _moderate_message(
+        self, nick: str, channel: str, message: str, hostmask: str = "", account: str | None = None
+    ) -> bool:
         if self._same_identifier(nick, self._current_nick):
             return False
         violation = await self.moderation.check_message(nick, channel, message)
@@ -1322,7 +1324,7 @@ class IRCClient:
             return False
         action, reason = violation
         moderation_commands = await self.moderation.apply_action(
-            action, nick, channel, reason
+            action, nick, channel, reason, account=account, hostmask=hostmask or None
         )
         for moderation_command in moderation_commands:
             await self.send_raw(moderation_command)

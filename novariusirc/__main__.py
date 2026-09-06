@@ -609,7 +609,9 @@ async def async_main(args: CLIArguments) -> None:
     workers = WorkerPool(config.workers, logger)
     tasks = TaskSupervisor(logger)
     plugins = PluginManager(config, commands, feeds, auth, logger, tasks)
-    moderation = ModerationManager(config.moderation.model_dump())
+    moderation = ModerationManager(
+        config.moderation.model_dump(), storage_path=config.moderation.database_path
+    )
     control = UnixControlServer(config.control.socket_path, commands, config, logger)
 
     client = IRCClient(config, commands, auth, plugins, moderation, logger)

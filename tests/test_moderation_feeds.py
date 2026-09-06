@@ -61,6 +61,35 @@ def test_ban_is_channel_scoped_and_sets_mode_before_kick() -> None:
     assert asyncio.run(manager.check_message("Alice", "#two", "x")) is None
 
 
+def test_moderation_actions_evidence_and_warnings_persist(tmp_path: Path) -> None:
+    path = tmp_path / "moderation.sqlite3"
+    manager = ModerationManager(storage_path=str(path))
+    asyncio.run(
+        manager.apply_action(
+            "warn", "Alice", "#one", "reason", account="alice", hostmask="Alice!u@host"
+        )
+    )
+    action = manager.actions[-1]
+    assert action.id is not None
+    evidence_id = manager.add_evidence(
+        action.id, kind="log", path="evidence/one.txt", sha256="a" * 64, size_bytes=12
+    )
+    assert evidence_id == 1
+
+    restored = ModerationManager(storage_path=str(path))
+    assert restored.get_user_warnings("Alice", "#one") == 1
+    asyncio.run(restored.apply_action("warn", "Alice", "#one", "reason"))
+    assert restored.actions[-1].id == 2
+    assert restored.get_user_warnings("Alice", "#one") == 2
+
+    asyncio.run(restored.apply_action("mute", "Bob", "#one", "spam", duration=60))
+    after_restart = ModerationManager(storage_path=str(path))
+    assert asyncio.run(after_restart.check_message("Bob", "#one", "again")) == (
+        "mute",
+        "User is currently muted",
+    )
+
+
 def test_manual_feed_limits_are_resolved_per_feed() -> None:
     config = FeedsConfig(max_items_per_manual=4)
     engine = FeedEngine(config, logging.getLogger("test.feeds"))

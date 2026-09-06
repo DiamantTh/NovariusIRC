@@ -12,6 +12,8 @@ from typing import Any
 
 from novariusirc.irc.protocol import irc_casefold
 
+from .moderation_store import ModerationStore
+
 logger = logging.getLogger(__name__)
 
 VALID_ACTIONS = {"warn", "mute", "kick", "ban"}
@@ -40,6 +42,7 @@ class ModerationAction:
     timestamp: datetime = field(default_factory=_now)
     moderator: str = "system"
     duration: int | None = None
+    id: int | None = None
 
 
 @dataclass
@@ -59,6 +62,7 @@ class ModerationManager:
         self,
         config: dict[str, Any] | None = None,
         casefold: Callable[[str], str] = irc_casefold,
+        storage_path: str | None = None,
     ):
         self.config = config or {}
         self.casefold = casefold
@@ -66,6 +70,19 @@ class ModerationManager:
         self.actions: list[ModerationAction] = []
         self.banned_users: set[tuple[str, str]] = set()
         self.muted_users: dict[tuple[str, str], datetime] = {}
+        self.store = ModerationStore(storage_path) if storage_path else None
+        self._restore_active_actions()
+
+    def _restore_active_actions(self) -> None:
+        if not self.store:
+            return
+        for action in self.store.active_actions():
+            key = (self.casefold(action["channel"]), self.casefold(action["nick"]))
+            if action["action"] == "ban":
+                self.banned_users.add(key)
+            else:
+                created = datetime.fromisoformat(action["created_at"])
+                self.muted_users[key] = created + timedelta(seconds=action["duration_seconds"])
 
     def set_casefold(self, casefold: Callable[[str], str]) -> None:
         """Set the active network's identifier folding function."""
@@ -74,6 +91,7 @@ class ModerationManager:
             self.user_status.clear()
             self.banned_users.clear()
             self.muted_users.clear()
+            self._restore_active_actions()
         self.casefold = casefold
 
     def _channel_config(self, channel: str) -> dict[str, Any]:
@@ -183,6 +201,8 @@ class ModerationManager:
         channel: str,
         reason: str,
         duration: int | None = None,
+        account: str | None = None,
+        hostmask: str | None = None,
     ) -> list[str]:
         action = action.lower()
         if action not in VALID_ACTIONS:
@@ -194,6 +214,8 @@ class ModerationManager:
         key = (self.casefold(channel), self.casefold(nick))
 
         if action == "warn":
+            if self.store:
+                status.warnings = self.store.warning_count(nick, channel)
             status.warnings += 1
             warnings = config.get("warnings", {})
             if warnings.get("enabled", True):
@@ -204,23 +226,29 @@ class ModerationManager:
                     action = "kick"
                     reason = f"Accumulated {status.warnings} warnings"
 
-        self.actions.append(
-            ModerationAction(
+        if action == "mute" and duration is None:
+            duration = int(config.get("spam", {}).get("duration_seconds", 300))
+
+        recorded = ModerationAction(
                 action=action,
                 user=nick,
                 channel=channel,
                 reason=reason,
                 duration=duration,
             )
-        )
+        self.actions.append(recorded)
+        if self.store:
+            recorded.id = self.store.record_action(
+                action=action, nick=nick, account=account, hostmask=hostmask,
+                channel=channel, reason=reason, moderator=recorded.moderator,
+                duration=duration, created_at=recorded.timestamp,
+            )
         logger.info("[%s] Applying %s to %s: %s", channel, action, nick, reason)
 
         if action == "warn":
             return [f"NOTICE {nick} :{reason} (Warning {status.warnings})"]
         if action == "mute":
-            spam_duration = int(config.get("spam", {}).get("duration_seconds", 300))
-            mute_duration = duration if duration is not None else spam_duration
-            self.muted_users[key] = _now() + timedelta(seconds=max(1, mute_duration))
+            self.muted_users[key] = _now() + timedelta(seconds=max(1, duration or 1))
             return [f"MODE {channel} +q {nick}!*@*"]
         if action == "kick":
             return [f"KICK {channel} {nick} :{reason}"]
@@ -233,10 +261,24 @@ class ModerationManager:
         ]
 
     def get_user_warnings(self, nick: str, channel: str) -> int:
-        return self._status(nick, channel).warnings
+        transient = self._status(nick, channel).warnings
+        return self.store.warning_count(nick, channel) if self.store else transient
 
     def reset_warnings(self, nick: str, channel: str) -> None:
         self._status(nick, channel).warnings = 0
+        if self.store:
+            self.store.revoke(nick, channel, "warn")
+
+    def add_evidence(
+        self, action_id: int, *, kind: str, path: str, sha256: str | None = None,
+        mime_type: str | None = None, size_bytes: int | None = None, note: str | None = None,
+    ) -> int:
+        if not self.store:
+            raise RuntimeError("moderation storage is not configured")
+        return self.store.add_evidence(
+            action_id, kind=kind, path=path, sha256=sha256, mime_type=mime_type,
+            size_bytes=size_bytes, note=note,
+        )
 
     async def unban_user(self, nick: str, channel: str | None = None) -> None:
         nick_key = self.casefold(nick)
@@ -248,6 +290,8 @@ class ModerationManager:
                 and (channel is None or key[0] == self.casefold(channel))
             )
         }
+        if self.store:
+            self.store.revoke(nick, channel, "ban")
 
     async def unmute_user(self, nick: str, channel: str | None = None) -> None:
         nick_key = self.casefold(nick)
@@ -259,6 +303,8 @@ class ModerationManager:
                 and (channel is None or key[0] == self.casefold(channel))
             )
         }
+        if self.store:
+            self.store.revoke(nick, channel, "mute")
 
     def rename_user(self, old_nick: str, new_nick: str) -> None:
         old_key = self.casefold(old_nick)

@@ -608,6 +608,7 @@ class ModerationWarningsConfig(ConfigModel):
 class ModerationConfig(ConfigModel):
     enabled: bool = True
     log_file: str = "logs/moderation/moderation.log"
+    database_path: str | None = None
     rate_limit: ModerationRateLimitConfig = Field(
         default_factory=ModerationRateLimitConfig
     )
@@ -775,6 +776,10 @@ class Config(ConfigModel):
         self.backups.directory = resolve(self.backups.directory)
         self.control.socket_path = resolve(self.control.socket_path)
         self.moderation.log_file = resolve(self.moderation.log_file)
+        if not self.moderation.database_path:
+            filename = f"{safe_filename_component(self.bot.name)}.moderation.sqlite3"
+            self.moderation.database_path = str(Path(self.paths.data_root) / filename)
+        self.moderation.database_path = resolve(self.moderation.database_path)
         for attribute in ("certfp_cert_file", "certfp_key_file"):
             value = getattr(self.auth, attribute)
             if value:
