@@ -190,3 +190,9 @@ msgstr "警告が{count}件累積しました"
 
 msgid "Warning {count}"
 msgstr "警告 {count}"
+
+msgid "URL is not allowed"
+msgstr "URL は許可されていません"
+
+msgid "Blocked URL detected"
+msgstr "ブロック対象の URL を検出しました"

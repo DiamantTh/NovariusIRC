@@ -191,3 +191,9 @@ msgstr "{count} Verwarnungen angesammelt"
 
 msgid "Warning {count}"
 msgstr "Verwarnung {count}"
+
+msgid "URL is not allowed"
+msgstr "URL ist nicht erlaubt"
+
+msgid "Blocked URL detected"
+msgstr "Gesperrte URL erkannt"

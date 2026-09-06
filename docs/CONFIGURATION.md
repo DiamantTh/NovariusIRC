@@ -503,6 +503,7 @@ aus. Die vollständige Vorlage steht in
 | `spam` | Tabelle | siehe unten | Erkennung direkt wiederholter Nachrichten. |
 | `caps` | Tabelle | siehe unten | Erkennung übermäßiger Großschreibung. |
 | `badwords` | Tabelle | siehe unten | RegExp-basierter Inhaltsfilter. |
+| `urls` | Tabelle | siehe unten | URL-Allowlist- oder -Denylist-Filter. |
 | `warnings` | Tabelle | siehe unten | Eskalationsschwellen für Verwarnungen. |
 | `channels` | Tabelle | `{}` | Rekursive Überschreibungen je Kanal. |
 
@@ -532,7 +533,15 @@ Größe und Notiz.
 | `caps.action` | Auswahl | `warn` | Aktion bei Erkennung. |
 | `badwords.enabled` | Boolean | `false` | Reguläre Ausdrücke gegen Nachrichtentext prüfen. |
 | `badwords.list` | Textliste | `[]` | Python-RegExp-Muster, ohne Beachtung der Groß-/Kleinschreibung. |
+| `badwords.files` | Pfadliste | `[]` | Zeilenbasierte Badword-RegExp-Dateien, werden nach Änderungen neu geladen; Leerzeilen und `#`-Kommentare werden ignoriert. |
+| `badwords.allowlist` | Textliste | `[]` | RegExp-Ausnahmen zu einem Badword-Treffer. |
+| `badwords.allowlist_files` | Pfadliste | `[]` | Zeilenbasierte Ausnahmedateien. |
 | `badwords.action` | Auswahl | `warn` | Aktion bei Treffer. |
+| `urls.enabled` | Boolean | `false` | HTTP(S)- und `www.`-Links prüfen. |
+| `urls.policy` | `denylist` oder `allowlist` | `denylist` | Passende URLs ablehnen oder jeden Link, der nicht zur Allowlist passt. |
+| `urls.list`, `urls.files` | Listen | `[]` | Bad-URL-Regeln inline und/oder als Zeilendateien. Regeln sehen normalisierte URL und Hostname. |
+| `urls.allowlist`, `urls.allowlist_files` | Listen | `[]` | URL-Ausnahmen; übersteuern immer eine passende Bad-Regel. |
+| `urls.action` | Auswahl | `warn` | Aktion bei abgelehnter URL. |
 | `warnings.enabled` | Boolean | `true` | Verwarnungen automatisch eskalieren. |
 | `warnings.to_kick` | Ganzzahl | `3` | Ab dieser Verwarnungszahl kicken. |
 | `warnings.to_ban` | Ganzzahl | `5` | Ab dieser Verwarnungszahl bannen; nicht kleiner als `to_kick`. |

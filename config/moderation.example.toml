@@ -36,6 +36,23 @@ action = "warn"
 enabled = false
 action = "warn"
 list = []
+# Je Zeile eine Python/regex-RegExp; # beginnt einen Kommentar. Die Dateien
+# werden bei Änderungen ohne Bot-Neustart neu geladen.
+files = ["data/Badwords.txt"]
+# Ausnahmen zu Badwords, ebenfalls inline oder als Regeldatei.
+allowlist = []
+allowlist_files = ["data/AllowedWords.txt"]
+
+# URL-Erkennung. "allowlist" verbietet alle Links, die nicht erlaubt sind;
+# "denylist" verbietet nur Treffer der Bad-URL-Regeln.
+[moderation.urls]
+enabled = false
+action = "warn"
+policy = "denylist"
+list = []
+files = ["data/BadURLs.txt"]
+allowlist = []
+allowlist_files = ["data/AllowedURLs.txt"]
 
 # Standardmäßiges Verwarnungssystem
 [moderation.warnings]

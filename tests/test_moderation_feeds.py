@@ -117,6 +117,55 @@ def test_moderation_messages_use_the_configured_language() -> None:
     )
 
 
+def test_badword_and_url_rule_files_reload_with_allowlist(tmp_path: Path) -> None:
+    badwords = tmp_path / "Badwords.txt"
+    bad_urls = tmp_path / "BadURLs.txt"
+    allowed_urls = tmp_path / "AllowedURLs.txt"
+    badwords.write_text("# comment\nspamword\n", encoding="utf-8")
+    bad_urls.write_text("(?:^|\\.)bad\\.example$\n", encoding="utf-8")
+    allowed_urls.write_text("^safe\\.bad\\.example$\n", encoding="utf-8")
+    manager = ModerationManager(
+        {
+            "badwords": {"enabled": True, "files": [str(badwords)]},
+            "urls": {
+                "enabled": True,
+                "policy": "denylist",
+                "files": [str(bad_urls)],
+                "allowlist_files": [str(allowed_urls)],
+            },
+        }
+    )
+    assert asyncio.run(manager.check_message("Alice", "#one", "spamword")) == (
+        "warn", "Badword detected",
+    )
+    assert asyncio.run(manager.check_message("Alice", "#one", "https://bad.example/a")) == (
+        "warn", "Blocked URL detected",
+    )
+    assert asyncio.run(manager.check_message("Alice", "#one", "https://safe.bad.example/a")) is None
+
+    badwords.write_text("changedword\n", encoding="utf-8")
+    assert asyncio.run(manager.check_message("Alice", "#one", "spamword")) is None
+    assert asyncio.run(manager.check_message("Alice", "#one", "changedword")) == (
+        "warn", "Badword detected",
+    )
+
+
+def test_url_allowlist_blocks_every_other_link() -> None:
+    manager = ModerationManager(
+        {
+            "urls": {
+                "enabled": True,
+                "policy": "allowlist",
+                "allowlist": [r"(?:^|\.)trusted\.example$"],
+            },
+        }
+    )
+    assert asyncio.run(manager.check_message("Alice", "#one", "www.trusted.example/path")) is None
+    assert asyncio.run(manager.check_message("Alice", "#one", "https://other.example/")) == (
+        "warn", "URL is not allowed",
+    )
+
+
 def test_manual_feed_limits_are_resolved_per_feed() -> None:
     config = FeedsConfig(max_items_per_manual=4)
     engine = FeedEngine(config, logging.getLogger("test.feeds"))

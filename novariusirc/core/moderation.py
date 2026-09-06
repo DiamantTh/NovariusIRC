@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -14,6 +13,7 @@ from novariusirc.irc.protocol import irc_casefold
 
 from .i18n import translate
 from .moderation_store import ModerationStore, ServerModerationStore
+from .rules import RegexRules, extract_urls
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +74,7 @@ class ModerationManager:
         self.actions: list[ModerationAction] = []
         self.banned_users: set[tuple[str, str]] = set()
         self.muted_users: dict[tuple[str, str], datetime] = {}
+        self._rule_sets: dict[tuple[str, tuple[str, ...], tuple[str, ...]], RegexRules] = {}
         self.store = (
             ServerModerationStore(storage_dsn) if storage_dsn else
             ModerationStore(storage_path) if storage_path else None
@@ -123,6 +124,14 @@ class ModerationManager:
 
     def _tr(self, message: str, **values: object) -> str:
         return translate(message, self.language, **values)
+
+    def _rules(self, name: str, section: dict[str, Any], allow: bool = False) -> RegexRules:
+        patterns = tuple(str(value) for value in section.get("allowlist" if allow else "list", []))
+        files = tuple(str(value) for value in section.get("allowlist_files" if allow else "files", []))
+        key = (name, patterns, files)
+        if key not in self._rule_sets:
+            self._rule_sets[key] = RegexRules(patterns, files, logger)
+        return self._rule_sets[key]
 
     def _status(self, nick: str, channel: str) -> UserStatus:
         channel_key = self.casefold(channel)
@@ -185,12 +194,20 @@ class ModerationManager:
 
         badwords = config.get("badwords", {})
         if badwords.get("enabled", False):
-            for expression in badwords.get("list", []):
-                try:
-                    if re.search(expression, message, flags=re.IGNORECASE):
-                        return self._configured_action(badwords), self._tr("Badword detected")
-                except re.error as exc:
-                    logger.warning("Invalid badword regex %r: %s", expression, exc)
+            bad_rules = self._rules("badwords", badwords)
+            allowed_rules = self._rules("badwords", badwords, allow=True)
+            if bad_rules.matches(message) and not allowed_rules.matches(message):
+                return self._configured_action(badwords), self._tr("Badword detected")
+
+        urls = config.get("urls", {})
+        if urls.get("enabled", False):
+            for url, hostname in extract_urls(message):
+                allowed = self._rules("urls", urls, allow=True).matches(url, hostname)
+                if urls.get("policy", "denylist") == "allowlist":
+                    if not allowed:
+                        return self._configured_action(urls), self._tr("URL is not allowed")
+                elif self._rules("urls", urls).matches(url, hostname) and not allowed:
+                    return self._configured_action(urls), self._tr("Blocked URL detected")
 
         caps = config.get("caps", {})
         letters = [character for character in message if character.isalpha()]

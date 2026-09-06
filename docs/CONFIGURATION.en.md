@@ -493,6 +493,7 @@ complete example.
 | `spam` | table | see below | Repeated-message detection. |
 | `caps` | table | see below | Excessive-uppercase detection. |
 | `badwords` | table | see below | Regular-expression content filter. |
+| `urls` | table | see below | URL allowlist or denylist filter. |
 | `warnings` | table | see below | Warning escalation thresholds. |
 | `channels` | table | `{}` | Recursive per-channel overrides. |
 
@@ -521,7 +522,15 @@ SHA-256, size, and note.
 | `caps.action` | choice | `warn` | Action when detected. |
 | `badwords.enabled` | Boolean | `false` | Match regular expressions against message text. |
 | `badwords.list` | list of text | `[]` | Case-insensitive Python regular expressions. |
+| `badwords.files` | list of paths | `[]` | Line-oriented badword regex files, reloaded after changes; blank lines and `#` comments are ignored. |
+| `badwords.allowlist` | list of text | `[]` | Regex exceptions for a badword match. |
+| `badwords.allowlist_files` | list of paths | `[]` | Line-oriented exception regex files. |
 | `badwords.action` | choice | `warn` | Action on a match. |
+| `urls.enabled` | Boolean | `false` | Inspect HTTP(S) and `www.` links. |
+| `urls.policy` | `denylist` or `allowlist` | `denylist` | Deny matching URLs, or deny every URL that does not match an allow rule. |
+| `urls.list`, `urls.files` | list | `[]` | Bad-URL regex rules, inline and/or line-oriented files. Rules see both normalised URL and hostname. |
+| `urls.allowlist`, `urls.allowlist_files` | list | `[]` | URL exceptions; always override a matching bad rule. |
+| `urls.action` | choice | `warn` | Action for a rejected URL. |
 | `warnings.enabled` | Boolean | `true` | Escalate accumulated warnings automatically. |
 | `warnings.to_kick` | integer | `3` | Kick at this warning count. |
 | `warnings.to_ban` | integer | `5` | Ban at this warning count; cannot be less than `to_kick`. |

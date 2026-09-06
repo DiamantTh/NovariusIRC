@@ -590,6 +590,21 @@ class ModerationBadwordsConfig(ConfigModel):
     enabled: bool = False
     action: Literal["warn", "mute", "kick", "ban"] = "warn"
     list: builtins.list[str] = Field(default_factory=list)
+    files: builtins.list[str] = Field(default_factory=builtins.list)
+    allowlist: builtins.list[str] = Field(default_factory=builtins.list)
+    allowlist_files: builtins.list[str] = Field(default_factory=builtins.list)
+
+
+class ModerationURLsConfig(ConfigModel):
+    """URL matching policy and independent deny/allow rule sources."""
+
+    enabled: bool = False
+    action: Literal["warn", "mute", "kick", "ban"] = "warn"
+    policy: Literal["denylist", "allowlist"] = "denylist"
+    list: builtins.list[str] = Field(default_factory=list)
+    files: builtins.list[str] = Field(default_factory=builtins.list)
+    allowlist: builtins.list[str] = Field(default_factory=builtins.list)
+    allowlist_files: builtins.list[str] = Field(default_factory=builtins.list)
 
 
 class ModerationWarningsConfig(ConfigModel):
@@ -616,6 +631,7 @@ class ModerationConfig(ConfigModel):
     spam: ModerationSpamConfig = Field(default_factory=ModerationSpamConfig)
     caps: ModerationCapsConfig = Field(default_factory=ModerationCapsConfig)
     badwords: ModerationBadwordsConfig = Field(default_factory=ModerationBadwordsConfig)
+    urls: ModerationURLsConfig = Field(default_factory=ModerationURLsConfig)
     warnings: ModerationWarningsConfig = Field(default_factory=ModerationWarningsConfig)
     channels: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
@@ -777,6 +793,9 @@ class Config(ConfigModel):
         self.backups.directory = resolve(self.backups.directory)
         self.control.socket_path = resolve(self.control.socket_path)
         self.moderation.log_file = resolve(self.moderation.log_file)
+        for rules in (self.moderation.badwords, self.moderation.urls):
+            rules.files = [resolve(path) for path in rules.files]
+            rules.allowlist_files = [resolve(path) for path in rules.allowlist_files]
         if not self.moderation.database_path:
             filename = f"{safe_filename_component(self.bot.name)}.moderation.sqlite3"
             self.moderation.database_path = str(Path(self.paths.data_root) / filename)
