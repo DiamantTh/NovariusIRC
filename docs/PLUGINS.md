@@ -177,6 +177,7 @@ Package plugins can select a persistent child process in `novarius_plugin.toml`:
 name = "weather"
 execution = "worker"
 messages = false
+hooks = ["on_account", "on_chghost"]
 
 [[commands]]
 name = "weather"
@@ -193,9 +194,12 @@ def handle(event, settings):
 ```
 
 Events contain operation, event, nick, channel, message, language, command and
-args. Only the plugin's own settings are passed. Its working directory is
+args, plus hostmask, account, tags, server_time and event metadata. Only the
+plugin's own settings are passed. Its working directory is
 `data/plugins/<name>/`; relative data writes persist there. `messages = true`
-also delivers unconsumed messages. Other hooks are not implemented yet.
+also delivers unconsumed messages. `hooks` accepts every documented core hook,
+including IRCv3 `on_account`, `on_away`, `on_chghost`, `on_invite` and
+`on_tagmsg`. On classic IRC servers, optional IRCv3 fields are empty.
 
 `/v1/status` lists each loaded external plugin with its execution mode. Worker
 entries additionally expose whether the child is running and its local PID.

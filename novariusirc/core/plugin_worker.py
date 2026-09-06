@@ -7,7 +7,22 @@ import json
 import os
 import signal
 import sys
+from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+
+def _safe_value(value: Any) -> Any:
+    """Keep worker event payloads JSON-only and bounded by the transport."""
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, list | tuple):
+        return [_safe_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _safe_value(item) for key, item in value.items()}
+    return str(value)
 
 
 class PluginWorker:
@@ -72,8 +87,11 @@ class PluginWorker:
     async def dispatch(self, ctx, command=None, args=None):
         replies = await self.request({
             "operation": "event", "event": ctx.event,
-            "nick": ctx.nick, "channel": ctx.channel, "message": ctx.message,
-            "language": ctx.language, "command": command, "args": args or [],
+            "nick": ctx.nick, "hostmask": ctx.hostmask, "channel": ctx.channel,
+            "message": ctx.message, "language": ctx.language, "command": command,
+            "args": args or [], "account": ctx.account, "tags": _safe_value(ctx.tags),
+            "server_time": ctx.server_time.isoformat() if ctx.server_time else None,
+            "metadata": _safe_value(ctx.metadata),
         })
         for reply in replies:
             await ctx.reply(reply)

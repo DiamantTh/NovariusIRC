@@ -234,6 +234,9 @@ class PluginLoader:
                     for entry in commands
                 ):
                     raise ValueError("worker [[commands]] entries require a name")
+                hooks = plugin.get("hooks", [])
+                if not isinstance(hooks, list) or any(hook not in HOOK_NAMES for hook in hooks):
+                    raise ValueError("[plugin].hooks contains an unknown IRC event")
             return metadata
         except (OSError, tomllib.TOMLDecodeError, ValueError) as exc:
             raise ValueError(f"Invalid plugin manifest {manifest}: {exc}") from exc
@@ -462,6 +465,14 @@ class PluginLoader:
             self._module_names[name] = ""
             if manifest["plugin"].get("messages", False):
                 self.hooks["on_message"].append(worker.on_message)
+            for hook_name in manifest["plugin"].get("hooks", []):
+                async def dispatch_hook(ctx, current_hook=hook_name):
+                    if ctx.event != current_hook.removeprefix("on_").upper():
+                        self.logger.warning("Plugin worker hook mismatch: %s", current_hook)
+                    await worker.dispatch(ctx)
+
+                dispatch_hook.__plugin_owner__ = worker
+                self.hooks[hook_name].append(dispatch_hook)
         except BaseException:
             self.commands.unregister_owner(owner)
             await worker.on_unload()
@@ -482,6 +493,7 @@ class PluginLoader:
                     handler
                     for handler in hook_list
                     if getattr(handler, "__self__", None) is not plugin
+                    and getattr(handler, "__plugin_owner__", None) is not plugin
                 ]
             self.commands.unregister_owner(self._owners.pop(plugin_name))
             sys.modules.pop(self._module_names.pop(plugin_name), None)

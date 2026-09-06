@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+from datetime import UTC, datetime
 
 import pytest
 
@@ -15,10 +16,11 @@ def test_worker_commands_are_isolated_bounded_and_unloaded(tmp_path, behavior):
     package.mkdir()
     (package / "novarius_plugin.toml").write_text(
         '[plugin]\nname="demo"\nexecution="worker"\n'
+        'hooks = ["on_account"]\n'
         '[[commands]]\nname="demo"\nroles=["admin"]\n'
     )
     bodies = {
-        "reply": 'return ["worker reply"]',
+        "reply": 'return [event["event"] + ":" + (event["account"] or "")] ',
         "hang": 'while True: pass',
         "oversize": 'return ["x" * 401]',
     }
@@ -54,7 +56,14 @@ def test_worker_commands_are_isolated_bounded_and_unloaded(tmp_path, behavior):
         ctx.roles = ["admin"]
         await registry.dispatch(ctx)
         if behavior == "reply":
-            assert replies[-1] == "worker reply"
+            assert replies[-1] == "PRIVMSG:"
+            account_context = CommandContext(
+                "nick", "nick!user@host", "#test", "", config, Client(),
+                logging.getLogger("test"), ["user"], tags={"account": "alice"},
+                account="alice", event="ACCOUNT", server_time=datetime.now(UTC),
+            )
+            await loader.trigger_hook("on_account", account_context)
+            assert replies[-1] == "ACCOUNT:alice"
         else:
             assert replies[-1] == "Command failed."
             assert process.returncode is not None
