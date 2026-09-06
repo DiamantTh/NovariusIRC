@@ -18,8 +18,8 @@ from novariusirc.core.config import (
     safe_filename_component,
 )
 from novariusirc.core.database import (
-    DatabaseBackendUnavailable,
     DatabaseError,
+    ServerDatabase,
     SQLiteDatabase,
     StoredFeedState,
     create_database,
@@ -279,10 +279,11 @@ def test_backup_uses_sqlite_snapshot_and_records_data_files(tmp_path: Path) -> N
     assert data_file.read_text(encoding="utf-8") == "keep this"
 
 
-def test_known_server_backend_fails_with_actionable_error() -> None:
+def test_known_server_backend_uses_the_generic_sqlalchemy_core() -> None:
     config = DatabaseConfig(enabled=True, backend="postgresql", dsn="postgresql://db")
-    with pytest.raises(DatabaseBackendUnavailable, match="known backend"):
-        create_database(config, "TestBot")
+    database = create_database(config, "TestBot")
+    assert isinstance(database, ServerDatabase)
+    assert database.backend_name == "postgresql"
 
 
 def test_check_config_reports_uninitialized_database(tmp_path: Path) -> None:

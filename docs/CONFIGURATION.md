@@ -367,10 +367,10 @@ Control-Socket, Moderationslog, Zertifikate und Feed-TLS-Dateien.
 <a id="database"></a>
 ## `[database]`
 
-Die Datenbankschicht ist optional. SQLite ist das erste vollständig nutzbare
-Backend. PostgreSQL, MariaDB, MySQL und Microsoft SQL Server sind bereits als
-eindeutige Backendnamen registriert, benötigen aber noch ihre Adapter und
-werden bis dahin mit einem klaren Fehler abgelehnt.
+Die Datenbankschicht ist optional. SQLite, PostgreSQL, MariaDB, MySQL und
+Microsoft SQL Server verwenden dieselben SQLAlchemy-Core-Tabellen,
+Alembic-Revisionen, Rollen und Feedzustände. Serverdatenbanken benötigen ihren
+jeweiligen Python-Treiber als optionales Extra.
 
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
@@ -394,6 +394,15 @@ Eine unbekannte bestehende SQLite-Datei wird nicht übernommen. Fehlt eine zuvor
 initialisierte Datei, bricht der Bot ab, statt unbemerkt eine leere Datenbank
 zu erzeugen. Die frühere SQLite-Metadatendatei wird beim expliziten
 Initialisieren übernommen und auf die erste Alembic-Revision gesetzt.
+
+Für Serverdatenbanken muss die leere Zieldatenbank bereits vom Datenbankserver
+bereitgestellt werden. Anschließend führt `database init` die gleiche
+Schema-Initialisierung aus. Installations-Extras sind
+`novariusirc[database-postgresql]`, `novariusirc[database-mysql]` und
+`novariusirc[database-mssql]`. MariaDB verwendet das MySQL-Extra. Der Bot
+speichert keine Server-Passwörter außerhalb der DSN/Secrets. Server-Backups und
+Restores verbleiben beim Datenbankserver; der SQLite-Archivbefehl verweigert
+sie bewusst.
 
 <a id="backups"></a>
 ## `[backups]`

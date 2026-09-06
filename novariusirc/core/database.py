@@ -43,10 +43,10 @@ class BackendSpec:
 
 BACKENDS = (
     BackendSpec("sqlite", ("sqlite3",), True, "SQLite 3"),
-    BackendSpec("postgresql", ("postgres", "pgsql"), False, "PostgreSQL"),
-    BackendSpec("mariadb", (), False, "MariaDB"),
-    BackendSpec("mysql", (), False, "MySQL"),
-    BackendSpec("mssql", ("sqlserver", "sql-server"), False, "Microsoft SQL Server"),
+    BackendSpec("postgresql", ("postgres", "pgsql"), True, "PostgreSQL"),
+    BackendSpec("mariadb", (), True, "MariaDB"),
+    BackendSpec("mysql", (), True, "MySQL"),
+    BackendSpec("mssql", ("sqlserver", "sql-server"), True, "Microsoft SQL Server"),
 )
 ROLE_NAMES = frozenset(("user", "admin", "owner"))
 BINDING_TYPES = frozenset(("hostmask", "account", "certfp"))
@@ -693,10 +693,166 @@ class SQLiteDatabase:
         )
 
 
+class ServerDatabase(SQLiteDatabase):
+    """SQLAlchemy server backend sharing NovariusIRC's portable core schema.
+
+    The database server owns its own backup and restore process. A server dump
+    cannot safely be represented as the SQLite file snapshot used by the local
+    backend, so the generic archive command rejects it explicitly.
+    """
+
+    backup_snapshot_name = "server-database.sql"
+
+    def __init__(self, config: DatabaseConfig, instance_name: str):
+        if not config.dsn:
+            raise DatabaseError(f"{config.backend} requires database.dsn")
+        self.config = config
+        self.instance_name = instance_name
+        self.dsn = config.dsn
+        self.backend_name = config.backend
+
+    def _engine(self, *, read_only: bool = False) -> Engine:
+        del read_only
+        try:
+            return create_engine(
+                self.dsn,
+                pool_pre_ping=True,
+                pool_recycle=1800,
+            )
+        except (ImportError, ModuleNotFoundError) as exc:
+            raise DatabaseBackendUnavailable(
+                f"{self.backend_name} driver is not installed for database.dsn"
+            ) from exc
+
+    def _is_known_database(self, connection: Connection) -> bool:
+        tables = set(inspect(connection).get_table_names())
+        return bool({"alembic_version", "instance_metadata"} & tables)
+
+    def _migration_required(self, connection: Connection) -> bool:
+        tables = set(inspect(connection).get_table_names())
+        if "alembic_version" not in tables:
+            return True
+        revision = connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one_or_none()
+        head = ScriptDirectory.from_config(
+            self._migration_config(connection)
+        ).get_current_head()
+        return revision != head
+
+    def _status(self, connection: Connection) -> DatabaseStatus:
+        tables = set(inspect(connection).get_table_names())
+        if "alembic_version" not in tables or "instance_metadata" not in tables:
+            raise DatabaseError("database has no current NovariusIRC schema")
+        revision = connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one_or_none()
+        head = ScriptDirectory.from_config(
+            self._migration_config(connection)
+        ).get_current_head()
+        if revision != head:
+            raise DatabaseError(
+                f"database schema {revision or 'none'} requires migration to {head}"
+            )
+        stored_name = connection.execute(
+            select(instance_metadata.c.value).where(instance_metadata.c.key == "bot_name")
+        ).scalar_one_or_none()
+        if stored_name != self.instance_name:
+            raise DatabaseError(
+                f"database belongs to bot {stored_name!r}, not {self.instance_name!r}"
+            )
+        version = getattr(connection.dialect, "server_version_info", None)
+        return DatabaseStatus(
+            self.backend_name,
+            str(revision),
+            "connection_ok",
+            "configured",
+            {
+                "dialect": connection.dialect.name,
+                "server_version": ".".join(map(str, version)) if version else "unknown",
+            },
+        )
+
+    def initialize(self, *, create: bool = False) -> DatabaseStatus:
+        engine = self._engine()
+        try:
+            with engine.connect() as connection:
+                tables = set(inspect(connection).get_table_names())
+                if tables and not self._is_known_database(connection):
+                    raise DatabaseError("refusing to initialize an unknown server database")
+                if not tables and not create:
+                    raise DatabaseError(
+                        "database schema does not exist; initialize it explicitly"
+                    )
+                self._run_migrations(connection)
+                connection.commit()
+                with connection.begin():
+                    stored_name = connection.execute(
+                        select(instance_metadata.c.value).where(
+                            instance_metadata.c.key == "bot_name"
+                        )
+                    ).scalar_one_or_none()
+                    if stored_name is None:
+                        connection.execute(
+                            instance_metadata.insert().values(
+                                key="bot_name", value=self.instance_name
+                            )
+                        )
+                    elif stored_name != self.instance_name:
+                        raise DatabaseError(
+                            f"database belongs to bot {stored_name!r}, not {self.instance_name!r}"
+                        )
+                return self._status(connection)
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"{self.backend_name} initialization failed: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def check(self) -> DatabaseStatus:
+        engine = self._engine()
+        try:
+            with engine.connect() as connection:
+                return self._status(connection)
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"{self.backend_name} validation failed: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def upgrade_safely(self) -> DatabaseUpgradeResult:
+        engine = self._engine()
+        try:
+            with engine.connect() as connection:
+                if not self._is_known_database(connection):
+                    raise DatabaseError("refusing to migrate an unknown server database")
+                self._run_migrations(connection)
+                connection.commit()
+                return DatabaseUpgradeResult(self._status(connection), None, None, None)
+        except SQLAlchemyError as exc:
+            raise DatabaseError(f"{self.backend_name} migration failed: {exc}") from exc
+        finally:
+            engine.dispose()
+
+    def create_backup_snapshot(self, destination: Path) -> None:
+        del destination
+        raise DatabaseError(
+            f"{self.backend_name} backups are managed by the database server; "
+            "do not use the SQLite archive command"
+        )
+
+    def validate_backup_snapshot(self, snapshot: Path) -> None:
+        del snapshot
+        raise DatabaseError(f"{self.backend_name} backup validation is server-managed")
+
+    def restore_backup_snapshot(self, snapshot: Path, *, replace: bool) -> None:
+        del snapshot, replace
+        raise DatabaseError(f"{self.backend_name} restore is server-managed")
+
+    def backup_excluded_data_paths(self) -> set[Path]:
+        return set()
+
+
 def create_database(config: DatabaseConfig, instance_name: str) -> DatabaseBackend:
     spec = backend_spec(config.backend)
     if spec.name == "sqlite":
         return SQLiteDatabase(config, instance_name)
-    raise DatabaseBackendUnavailable(
-        f"{spec.description} is a known backend but its SQLAlchemy adapter is not installed yet"
-    )
+    return ServerDatabase(config, instance_name)

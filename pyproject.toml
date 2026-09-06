@@ -23,6 +23,9 @@ dependencies = [
 journald = ["systemd-python>=235,<236"]
 uvloop = ["uvloop>=0.22.1,<0.23.0"]
 monitoring = ["psutil>=7.2,<8.0"]
+database-postgresql = ["psycopg[binary]>=3.2,<4.0"]
+database-mysql = ["PyMySQL>=1.1,<2.0"]
+database-mssql = ["pyodbc>=5.2,<6.0"]
 
 [project.scripts]
 novariusirc = "novariusirc.__main__:main"

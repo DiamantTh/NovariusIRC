@@ -359,10 +359,10 @@ control socket, moderation log, certificates, and feed TLS files.
 <a id="database"></a>
 ## `[database]`
 
-The database layer is optional. SQLite is the first fully operational backend.
-PostgreSQL, MariaDB, MySQL, and Microsoft SQL Server are already registered as
-unambiguous backend names, but still require their adapters and are rejected
-with an explicit error until those are available.
+The database layer is optional. SQLite, PostgreSQL, MariaDB, MySQL, and
+Microsoft SQL Server use the same SQLAlchemy Core tables, Alembic revisions,
+roles, and feed state. Server databases require their corresponding optional
+Python driver extra.
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
@@ -386,6 +386,14 @@ existing SQLite file is not adopted. If an initialized database disappears,
 the bot stops instead of silently creating an empty replacement. The earlier
 SQLite metadata file is accepted during explicit initialization and moved to
 the first Alembic revision.
+
+For server databases, the empty target database must already be created by the
+database server. `database init` then performs the same schema initialization.
+Install `novariusirc[database-postgresql]`, `novariusirc[database-mysql]`, or
+`novariusirc[database-mssql]`; MariaDB uses the MySQL extra. The bot does not
+store server passwords outside the DSN/secrets. Server backups and restores
+remain the database server's responsibility; the SQLite archive command
+intentionally rejects them.
 
 <a id="backups"></a>
 ## `[backups]`
