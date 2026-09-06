@@ -139,6 +139,27 @@ class ModerationManager:
         statuses = self.user_status.setdefault(channel_key, {})
         return statuses.setdefault(nick_key, UserStatus(nick=nick, channel=channel))
 
+    def _ban_mask(self, nick: str, hostmask: str | None, config: dict[str, Any]) -> str:
+        """Build a conventional IRC mask from the observed user hostmask."""
+        mode = config.get("ban_mask", "nick")
+        if not hostmask or "!" not in hostmask or "@" not in hostmask:
+            return f"{nick}!*@*"
+        observed_nick, _, user_host = hostmask.partition("!")
+        user, _, host = user_host.partition("@")
+        if not user or not host or any(char.isspace() for char in (user, host)):
+            return f"{nick}!*@*"
+        if mode == "nick_user_host":
+            return f"{observed_nick}!{user}@{host}"
+        if mode == "user_host":
+            return f"*!{user}@{host}"
+        if mode == "host":
+            return f"*!*@{host}"
+        if mode == "domain":
+            labels = host.split(".")
+            wildcard_host = f"*.{'.'.join(labels[1:])}" if len(labels) > 2 else host
+            return f"*!*@{wildcard_host}"
+        return f"{nick}!*@*"
+
     @staticmethod
     def _configured_action(section: dict[str, Any], default: str = "warn") -> str:
         action = str(section.get("action", default)).lower()
@@ -272,21 +293,25 @@ class ModerationManager:
                 channel=channel, reason=reason, moderator=recorded.moderator,
                 duration=duration, created_at=recorded.timestamp,
             )
-        logger.info("[%s] Applying %s to %s: %s", channel, action, nick, reason)
+        mask = self._ban_mask(nick, hostmask, config)
+        logger.info(
+            "[%s] Applying %s to %s: %s; warnings=%s; mask=%s",
+            channel, action, nick, reason, status.warnings, mask,
+        )
 
         if action == "warn":
             warning = self._tr("Warning {count}", count=status.warnings)
             return [f"NOTICE {nick} :{reason} ({warning})"]
         if action == "mute":
             self.muted_users[key] = _now() + timedelta(seconds=max(1, duration or 1))
-            return [f"MODE {channel} +q {nick}!*@*"]
+            return [f"MODE {channel} +q {mask}"]
         if action == "kick":
             return [f"KICK {channel} {nick} :{reason}"]
 
         self.banned_users.add(key)
         status.banned = True
         return [
-            f"MODE {channel} +b {nick}!*@*",
+            f"MODE {channel} +b {mask}",
             f"KICK {channel} {nick} :{reason}",
         ]
 

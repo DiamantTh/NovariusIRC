@@ -625,6 +625,7 @@ class ModerationConfig(ConfigModel):
     log_file: str = "logs/moderation/moderation.log"
     database_path: str | None = None
     database_dsn: str | None = None
+    ban_mask: Literal["nick", "nick_user_host", "user_host", "host", "domain"] = "nick"
     rate_limit: ModerationRateLimitConfig = Field(
         default_factory=ModerationRateLimitConfig
     )

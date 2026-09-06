@@ -61,6 +61,14 @@ def test_ban_is_channel_scoped_and_sets_mode_before_kick() -> None:
     assert asyncio.run(manager.check_message("Alice", "#two", "x")) is None
 
 
+def test_moderation_uses_configured_classic_hostmask() -> None:
+    manager = ModerationManager({"ban_mask": "user_host"})
+    commands = asyncio.run(
+        manager.apply_action("ban", "Alice", "#one", "reason", hostmask="Alice!user@host.example")
+    )
+    assert commands[0] == "MODE #one +b *!user@host.example"
+
+
 def test_moderation_actions_evidence_and_warnings_persist(tmp_path: Path) -> None:
     path = tmp_path / "moderation.sqlite3"
     manager = ModerationManager(storage_path=str(path))

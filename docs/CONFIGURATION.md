@@ -499,6 +499,7 @@ aus. Die vollständige Vorlage steht in
 | `log_file` | Pfad | `logs/moderation/moderation.log` | Eigenes rotierendes Entscheidungslog. |
 | `database_path` | Pfad oder leer | `<data_root>/<bot.name>.moderation.sqlite3` | Eigene SQLite-Datei für Maßnahmen und Evidence-Metadaten. |
 | `database_dsn` | DSN oder leer | leer | Optionale eigene SQLAlchemy-DSN für Moderation. Bei einer Nicht-SQLite-`[database]` wird deren Serverdatenbank automatisch verwendet. |
+| `ban_mask` | `nick`, `nick_user_host`, `user_host`, `host` oder `domain` | `nick` | Maske für `+q` und `+b`. Der vorsichtige Standard betrifft nur den Nick; breitere Formen verwenden die beobachtete IRC-Hostmask. |
 | `rate_limit` | Tabelle | siehe unten | Begrenzung der Nachrichtenrate. |
 | `spam` | Tabelle | siehe unten | Erkennung direkt wiederholter Nachrichten. |
 | `caps` | Tabelle | siehe unten | Erkennung übermäßiger Großschreibung. |

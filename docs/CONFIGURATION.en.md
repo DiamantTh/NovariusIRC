@@ -489,6 +489,7 @@ complete example.
 | `log_file` | path | `logs/moderation/moderation.log` | Dedicated rotating decision log. |
 | `database_path` | path or empty | `<data_root>/<bot.name>.moderation.sqlite3` | Separate SQLite file for actions and evidence metadata. |
 | `database_dsn` | DSN or empty | empty | Optional separate SQLAlchemy DSN for moderation. With a non-SQLite `[database]`, that configured server database is used automatically. |
+| `ban_mask` | `nick`, `nick_user_host`, `user_host`, `host`, or `domain` | `nick` | Mask used for `+q` and `+b`. The conservative default affects only the nick; broader forms use the observed IRC hostmask. |
 | `rate_limit` | table | see below | Message-rate limiting. |
 | `spam` | table | see below | Repeated-message detection. |
 | `caps` | table | see below | Excessive-uppercase detection. |
