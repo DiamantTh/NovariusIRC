@@ -105,6 +105,12 @@ admins = [
 # account = "owner-account"
 # certfp = "0123456789abcdef..."
 
+[test]
+# Ausschließlich für gezielte Tests: nach jedem erfolgreichen IRC-Connect eine
+# kurze, geheime-freie NOTICE an diese Nicks senden. Besser nur temporär über
+# NOVARIUSIRC_TEST_HELLO_NICKS setzen, etwa "DiamantTh,Thomas".
+# hello_nicks = []
+
 [logging]
 level = "INFO"
 log_dir = "logs"

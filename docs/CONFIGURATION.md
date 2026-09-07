@@ -11,6 +11,7 @@
 - [Authentifizierung](#auth)
 - [Rollen](#roles)
 - [Owner-Bootstrap](#owner-bootstrap)
+- [Testdiagnose](#testdiagnose)
 - [Logging](#logging)
 - [Befehle, Lifecycle und Control](#commands-lifecycle-control)
 - [Web-API](#web-api)
@@ -254,6 +255,23 @@ Für die containerfreundliche Einmal-Konfiguration überschreiben
 `NOVARIUSIRC_OWNER_HOSTMASK`, `NOVARIUSIRC_OWNER_ACCOUNT` und
 `NOVARIUSIRC_OWNER_CERTFP` die jeweiligen Werte. Mindestens eine Owner-Bindung
 ist erforderlich, bevor ein Datenbankbetrieb als startbereit gilt.
+
+<a id="testdiagnose"></a>
+## Testdiagnose
+
+Dieser Abschnitt ist ausschließlich für kontrollierte IRC-Tests gedacht. Nach
+jeder erfolgreichen IRC-Registrierung sendet der Bot eine kurze, geheimnisfreie
+NOTICE mit TLS-, SASL-, Datenbank-, API- und angeforderten Kanalstatus an die
+eingetragenen Nicks. Die Nachricht beweist die Registrierung; angeforderte
+Kanäle sind nicht als bestätigter Join bezeichnet.
+
+~~~toml
+[test]
+hello_nicks = ["DiamantTh", "DiamantThomy", "Thomas"]
+~~~
+
+Für Container und temporäre Tests ist
+NOVARIUSIRC_TEST_HELLO_NICKS=DiamantTh,DiamantThomy,Thomas vorzuziehen.
 
 <a id="logging"></a>
 ## `[logging]`

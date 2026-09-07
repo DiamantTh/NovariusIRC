@@ -1,6 +1,6 @@
 [project]
 name = "novariusirc"
-version = "0.1.6"
+version = "0.1.7"
 description = "Modular, multilingual IRC bot/daemon inspired by Eggdrop"
 authors = [
     { name = "Thomas Winkelmann (DiamantTh)", email = "thomas.winkelmann@wkmn-web.eu" },

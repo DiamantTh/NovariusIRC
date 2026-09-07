@@ -11,6 +11,7 @@
 - [Authentication](#auth)
 - [Roles](#roles)
 - [Owner bootstrap](#owner-bootstrap)
+- [Test diagnostics](#test-diagnostics)
 - [Logging](#logging)
 - [Commands, lifecycle, and control](#commands-lifecycle-control)
 - [Web API](#web-api)
@@ -248,6 +249,22 @@ For container-friendly first-time configuration,
 `NOVARIUSIRC_OWNER_HOSTMASK`, `NOVARIUSIRC_OWNER_ACCOUNT`, and
 `NOVARIUSIRC_OWNER_CERTFP` override the matching values. At least one owner
 binding is required before database operation is startup-ready.
+
+<a id="test-diagnostics"></a>
+## Test diagnostics
+
+This section is only for controlled IRC tests. After each successful IRC
+registration, the bot sends a short secret-free NOTICE with TLS, SASL,
+database, API, and requested-channel status to the listed nicks. It proves
+registration; requested channels are not presented as confirmed joins.
+
+~~~toml
+[test]
+hello_nicks = ["DiamantTh", "DiamantThomy", "Thomas"]
+~~~
+
+For containers and temporary tests prefer
+NOVARIUSIRC_TEST_HELLO_NICKS=DiamantTh,DiamantThomy,Thomas.
 
 <a id="logging"></a>
 ## `[logging]`

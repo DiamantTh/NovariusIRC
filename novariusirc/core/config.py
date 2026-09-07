@@ -58,6 +58,7 @@ ENV_WEB_API_PORT = "NOVARIUSIRC_WEB_API_PORT"
 ENV_OWNER_HOSTMASK = "NOVARIUSIRC_OWNER_HOSTMASK"
 ENV_OWNER_ACCOUNT = "NOVARIUSIRC_OWNER_ACCOUNT"
 ENV_OWNER_CERTFP = "NOVARIUSIRC_OWNER_CERTFP"
+ENV_TEST_HELLO_NICKS = "NOVARIUSIRC_TEST_HELLO_NICKS"
 
 
 def safe_filename_component(value: str) -> str:
@@ -400,6 +401,33 @@ class OwnerBootstrapConfig(ConfigModel):
         ]
 
 
+class TestConfig(ConfigModel):
+    """Explicitly opt-in diagnostics used while testing an IRC instance."""
+
+    hello_nicks: list[str] = Field(default_factory=list)
+
+    @field_validator("hello_nicks")
+    @classmethod
+    def validate_hello_nicks(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for nick in values:
+            nick = nick.strip()
+            if (
+                not nick
+                or nick.startswith(":")
+                or any(character.isspace() or character in "\r\n\0" for character in nick)
+            ):
+                raise ValueError("test hello nicks must be non-empty IRC nick parameters")
+            if nick.casefold() not in {item.casefold() for item in normalized}:
+                normalized.append(nick)
+        return normalized
+
+    def resolve_env(self) -> None:
+        value = os.getenv(ENV_TEST_HELLO_NICKS)
+        if value is not None:
+            self.hello_nicks = [nick for nick in value.split(",") if nick.strip()]
+
+
 class ChannelLoggingConfig(ConfigModel):
     channel: str
     enabled: bool = True
@@ -719,6 +747,7 @@ class Config(ConfigModel):
     auth: AuthConfig = Field(default_factory=AuthConfig)
     roles: RolesConfig = Field(default_factory=RolesConfig)
     owner_bootstrap: OwnerBootstrapConfig = Field(default_factory=OwnerBootstrapConfig)
+    test: TestConfig = Field(default_factory=TestConfig)
     commands: CommandsConfig = Field(default_factory=CommandsConfig)
     lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
     control: ControlConfig = Field(default_factory=ControlConfig)
@@ -886,6 +915,8 @@ class Config(ConfigModel):
         config.owner_bootstrap = OwnerBootstrapConfig.model_validate(
             config.owner_bootstrap.model_dump()
         )
+        config.test.resolve_env()
+        config.test = TestConfig.model_validate(config.test.model_dump())
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
             config.auth.sasl_username = config.network.nick
@@ -942,6 +973,8 @@ class Config(ConfigModel):
         config.owner_bootstrap = OwnerBootstrapConfig.model_validate(
             config.owner_bootstrap.model_dump()
         )
+        config.test.resolve_env()
+        config.test = TestConfig.model_validate(config.test.model_dump())
         config.auth.resolve_secrets()
         if config.auth.sasl_enabled and not config.auth.sasl_username:
             config.auth.sasl_username = config.network.nick

@@ -45,6 +45,7 @@ from novariusirc.version import SIMPLE_VERSION
 from .auth import AuthManager
 from .commands import CommandContext, CommandRegistry
 from .config import Config
+from .i18n import translate
 from .logging import (
     get_channel_logger,
     get_pm_logger,
@@ -1560,6 +1561,29 @@ class IRCClient:
             )
         if self.config.network.channels:
             await self.join_channels(self.config.network.channels)
+        await self._send_test_hello()
+
+    async def _send_test_hello(self) -> None:
+        """Send opt-in, non-secret readiness notices to configured test nicks."""
+        recipients = self.config.test.hello_nicks
+        if not recipients:
+            return
+
+        sasl = self.config.auth.sasl_mechanism if self.config.auth.sasl_enabled else "off"
+        database = self.config.database.backend if self.config.database.enabled else "off"
+        message = translate(
+            "Test hello: IRC registration ready; TLS={tls}; SASL={sasl}; "
+            "database={database}; monitoring API={api}; requested channels={channels}.",
+            language=self.config.bot.language,
+            tls="on" if self.config.network.tls else "off",
+            sasl=sasl,
+            database=database,
+            api="on" if self.config.web_api.enabled else "off",
+            channels=len(self.config.network.channels),
+        )
+        for nick in recipients:
+            await self.send_notice(nick, message)
+        self.logger.info("Sent test readiness notice to %d configured nick(s)", len(recipients))
 
     @staticmethod
     def _text_parameter(message: IRCMessage, index: int) -> str:

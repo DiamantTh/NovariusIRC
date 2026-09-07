@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: NovariusIRC 0.1.6\n"
+"Project-Id-Version: NovariusIRC 0.1.7\n"
 "Language: ja\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -238,3 +238,6 @@ msgstr "モデレーション設定 {scope}/{key} をリセットしました。
 
 msgid "Manage persistent moderation settings"
 msgstr "永続的なモデレーション設定を管理"
+
+msgid "Test hello: IRC registration ready; TLS={tls}; SASL={sasl}; database={database}; monitoring API={api}; requested channels={channels}."
+msgstr "テスト起動通知: IRC 登録完了; TLS={tls}; SASL={sasl}; データベース={database}; 監視 API={api}; 要求済みチャンネル={channels}。"

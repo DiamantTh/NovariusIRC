@@ -571,6 +571,16 @@ realname = "Bot"
     assert Config.load(config_file).network.server == "irc.example.test"
 
 
+def test_test_hello_nicks_can_be_set_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("NOVARIUSIRC_SERVER", "irc.example.test")
+    monkeypatch.setenv("NOVARIUSIRC_NICK", "Bot")
+    monkeypatch.setenv("NOVARIUSIRC_TEST_HELLO_NICKS", "DiamantTh, Thomas,DiamantTh")
+
+    config = Config.load_from_env()
+
+    assert config.test.hello_nicks == ["DiamantTh", "Thomas"]
+
+
 def test_missing_config_path_is_not_silently_treated_as_env(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="Configuration path not found"):
         Config.load(tmp_path / "missing.toml")

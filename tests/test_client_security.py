@@ -159,6 +159,26 @@ def test_notice_respects_wire_limit_without_splitting_utf8() -> None:
     payload[:-2].decode("utf-8")
 
 
+def test_test_hello_is_opt_in_and_secret_free() -> None:
+    instance = client()
+    instance.config.bot.language = "en"
+    instance.config.test.hello_nicks = ["DiamantTh", "Thomas"]
+    instance.config.network.tls = True
+    instance.config.auth.sasl_enabled = True
+    instance.config.auth.sasl_mechanism = "PLAIN"
+    instance.config.database.enabled = True
+    instance.config.web_api.enabled = True
+    instance.config.network.channels = ["#botcenter"]
+
+    asyncio.run(instance._send_test_hello())
+
+    payload = bytes(instance.writer.data).decode()  # type: ignore[union-attr]
+    assert "NOTICE DiamantTh :Test hello: IRC registration ready" in payload
+    assert "NOTICE Thomas :Test hello: IRC registration ready" in payload
+    assert "TLS=on; SASL=PLAIN; database=sqlite; monitoring API=on" in payload
+    assert "password" not in payload.lower()
+
+
 def test_user_notice_cannot_trigger_server_quote_pong() -> None:
     instance = client()
     asyncio.run(
