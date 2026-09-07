@@ -551,6 +551,26 @@ realname = "Bot"
     assert Path(config.control.socket_path) == tmp_path / "run" / "novariusirc.sock"
 
 
+def test_explicit_empty_include_list_disables_default_fragments(tmp_path: Path) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        """
+[includes]
+files = []
+
+[bot]
+
+[network]
+server = "irc.example.test"
+nick = "bot"
+user = "bot"
+realname = "Bot"
+""".strip(),
+        encoding="utf-8",
+    )
+    assert Config.load(config_file).network.server == "irc.example.test"
+
+
 def test_missing_config_path_is_not_silently_treated_as_env(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="Configuration path not found"):
         Config.load(tmp_path / "missing.toml")

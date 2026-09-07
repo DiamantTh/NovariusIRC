@@ -833,7 +833,7 @@ class Config(ConfigModel):
                     str(item) for item in files_value if isinstance(item, str)
                 )
 
-        if not include_files:
+        if not include_files and not explicitly_configured:
             include_files = list(DEFAULT_INCLUDE_FILES)
 
         deduped: list[str] = []
