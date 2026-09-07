@@ -77,6 +77,83 @@ class DailyLogHandler(logging.Handler):
                 continue
 
 
+class DailyCoreLogHandler(logging.Handler):
+    """Write the core log into daily files with bounded same-day rotation.
+
+    The active file is named ``novariusirc-YYYY-MM-DD.log``. When it reaches
+    the final limit it becomes ``novariusirc-YYYY-MM-DD.1.log`` (then ``.2``
+    if needed) and a fresh active daily file is opened. Warning thresholds do
+    not create copies; they make sustained unexpected verbosity visible before
+    the final rotation occurs.
+    """
+
+    warning_limits = (30 * 1024 * 1024, 45 * 1024 * 1024)
+    rotation_limit = 60 * 1024 * 1024
+
+    def __init__(self, directory: Path, *, timezone: str):
+        super().__init__()
+        self.directory = directory
+        self.timezone = ZoneInfo(timezone)
+        self._active_date = datetime.now(self.timezone).date()
+        self._warned_limits: set[int] = set()
+        self._path_for(self._active_date).parent.mkdir(parents=True, exist_ok=True)
+        self._path_for(self._active_date).touch(exist_ok=True)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            log_date = datetime.fromtimestamp(record.created, self.timezone).date()
+            if log_date != self._active_date:
+                self._active_date = log_date
+                self._warned_limits = set()
+
+            path = self._path_for(log_date)
+            self._rotate_if_full(path)
+            self._append(path, self.format(record))
+            self._write_threshold_warnings(path, record)
+            self._rotate_if_full(path)
+        except OSError:
+            self.handleError(record)
+
+    def _path_for(self, log_date: date) -> Path:
+        return self.directory / f"novariusirc-{log_date:%Y-%m-%d}.log"
+
+    @staticmethod
+    def _append(path: Path, message: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(message + "\n")
+
+    def _write_threshold_warnings(self, path: Path, record: logging.LogRecord) -> None:
+        current_size = path.stat().st_size
+        for limit in self.warning_limits:
+            if current_size < limit or limit in self._warned_limits:
+                continue
+            self._warned_limits.add(limit)
+            amount = limit // (1024 * 1024)
+            notice = logging.LogRecord(
+                "novariusirc.logging",
+                logging.WARNING,
+                __file__,
+                0,
+                "Core log reached %s MiB; final daily rotation is at 60 MiB",
+                (amount,),
+                None,
+            )
+            notice.created = record.created
+            self._append(path, self.format(notice))
+
+    def _rotate_if_full(self, path: Path) -> None:
+        if not path.exists() or path.stat().st_size < self.rotation_limit:
+            return
+        index = 1
+        while True:
+            archived = path.with_name(f"{path.stem}.{index}{path.suffix}")
+            if not archived.exists():
+                path.replace(archived)
+                return
+            index += 1
+
+
 class IRCFormatter(logging.Formatter):
     """Format IRC logs in the instance timezone rather than host-local time."""
 
@@ -107,13 +184,7 @@ def setup_logging(config: LoggingConfig, paths: PathsConfig) -> logging.Logger:
     stream.setFormatter(formatter)
     handlers.append(stream)
 
-    core_log_path = log_root / "core" / "novariusirc.log"
-    core_log_path.parent.mkdir(parents=True, exist_ok=True)
-    file_handler = RotatingFileHandler(
-        core_log_path,
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3,
-    )
+    file_handler = DailyCoreLogHandler(log_root / "core", timezone=config.timezone)
     file_handler.setFormatter(formatter)
     handlers.append(file_handler)
 

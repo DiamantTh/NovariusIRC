@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from novariusirc.core.config import LoggingConfig, PathsConfig
 from novariusirc.core.logging import (
+    DailyCoreLogHandler,
     channel_log_path,
     get_channel_logger,
     log_irc,
@@ -32,7 +35,25 @@ def test_log_paths_use_the_documented_layout(tmp_path: Path) -> None:
 
 def test_core_log_is_separate_from_irc_logs(tmp_path: Path) -> None:
     setup_logging(LoggingConfig(), PathsConfig(log_root=str(tmp_path)))
-    assert (tmp_path / "core" / "novariusirc.log").is_file()
+    today = datetime.now(ZoneInfo("Europe/Berlin")).strftime("%Y-%m-%d")
+    assert (tmp_path / "core" / f"novariusirc-{today}.log").is_file()
+
+
+def test_core_log_rotates_with_a_same_day_counter(tmp_path: Path) -> None:
+    handler = DailyCoreLogHandler(tmp_path, timezone="UTC")
+    handler.rotation_limit = 40
+    logger = logging.getLogger("test.core_rotation")
+    logger.handlers = [handler]
+    logger.propagate = False
+    logger.setLevel(logging.INFO)
+
+    logger.info("first rotation payload")
+    logger.info("second rotation payload")
+    logger.info("new active log")
+
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
+    assert (tmp_path / f"novariusirc-{today}.1.log").is_file()
+    assert (tmp_path / f"novariusirc-{today}.log").is_file()
 
 
 def test_moderation_log_has_a_dedicated_handler(tmp_path: Path) -> None:

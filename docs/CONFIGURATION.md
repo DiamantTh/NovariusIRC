@@ -261,7 +261,7 @@ ist erforderlich, bevor ein Datenbankbetrieb als startbereit gilt.
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
 | `level` | Text | `INFO` | Python-Loglevel, beim Laden in Großbuchstaben umgewandelt. |
-| `log_dir` | Pfad | `logs` | Kompatibler Logpfad. Ein abweichender Wert wird verwendet, solange `paths.log_root` beim Standard `./logs` bleibt. |
+| `log_dir` | Pfad | `logs` | Kompatibler Logpfad. Ein abweichender Wert wird verwendet, solange `paths.log_root` beim Standard `./logs` bleibt. Core-Logs liegen tagesbezogen als `core/novariusirc-YYYY-MM-DD.log`; bei mehrfacher Rotation am selben Tag als `.1`, `.2` usw. |
 | `timezone` | Text | `Europe/Berlin` | IANA-Zeitzone für lesbare IRC-Logs. |
 | `journald_enabled` | Boolean | `false` | Zusätzlich an systemd-journald senden, wenn die optionale Anbindung verfügbar ist. |
 | `channel_logging` | Tabellenliste | `[]` | Explizite Auswahl der Kanäle, deren Nachrichten protokolliert werden. |

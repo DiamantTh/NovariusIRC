@@ -255,7 +255,7 @@ binding is required before database operation is startup-ready.
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `level` | text | `INFO` | Python log level, converted to uppercase while loading. |
-| `log_dir` | path | `logs` | Compatibility log path. A non-default value is used while `paths.log_root` remains `./logs`. |
+| `log_dir` | path | `logs` | Compatibility log path. A non-default value is used while `paths.log_root` remains `./logs`. Core logs are daily `core/novariusirc-YYYY-MM-DD.log`; repeated same-day rotation uses `.1`, `.2`, and so on. |
 | `timezone` | text | `Europe/Berlin` | IANA timezone for human-readable IRC logs. |
 | `journald_enabled` | Boolean | `false` | Also send records to systemd-journald when the optional integration is available. |
 | `channel_logging` | list of tables | `[]` | Explicit selection of channels whose messages are logged. |
