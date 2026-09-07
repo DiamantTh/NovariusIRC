@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     create_engine,
     func,
     select,
@@ -67,6 +69,17 @@ Index(
     server_rules.c.channel,
     server_rules.c.enabled,
 )
+server_settings = Table(
+    "moderation_settings",
+    server_metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("scope", String(256), nullable=False),
+    Column("key", String(64), nullable=False),
+    Column("value", Text, nullable=False),
+    Column("updated_by", String(512), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    UniqueConstraint("scope", "key", name="uq_moderation_settings_scope_key"),
+)
 
 
 @dataclass(frozen=True)
@@ -79,6 +92,15 @@ class ModerationRule:
     enabled: bool
     created_by: str
     created_at: datetime
+
+
+@dataclass(frozen=True)
+class ModerationSetting:
+    scope: str
+    key: str
+    value: bool | int | str
+    updated_by: str
+    updated_at: datetime
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -130,6 +152,15 @@ class ModerationStore:
                 );
                 CREATE INDEX IF NOT EXISTS ix_moderation_rules_lookup
                     ON moderation_rules(category, disposition, channel, enabled);
+                CREATE TABLE IF NOT EXISTS moderation_settings (
+                    id INTEGER PRIMARY KEY,
+                    scope TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    updated_by TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(scope, key)
+                );
                 """
             )
 
@@ -259,6 +290,44 @@ class ModerationStore:
             )
             return result.rowcount == 1
 
+    def list_settings(self) -> list[ModerationSetting]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM moderation_settings ORDER BY scope, key"
+            ).fetchall()
+        return [
+            ModerationSetting(
+                scope=str(row["scope"]),
+                key=str(row["key"]),
+                value=json.loads(row["value"]),
+                updated_by=str(row["updated_by"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+            )
+            for row in rows
+        ]
+
+    def set_setting(
+        self, scope: str, key: str, value: bool | int | str, updated_by: str
+    ) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO moderation_settings
+                (scope, key, value, updated_by, updated_at) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(scope, key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_by = excluded.updated_by,
+                    updated_at = excluded.updated_at""",
+                (scope, key, json.dumps(value), updated_by, datetime.now(UTC).isoformat()),
+            )
+
+    def remove_setting(self, scope: str, key: str) -> bool:
+        with self._connect() as connection:
+            result = connection.execute(
+                "DELETE FROM moderation_settings WHERE scope = ? AND key = ?",
+                (scope, key),
+            )
+            return result.rowcount == 1
+
 
 class ServerModerationStore:
     """Portable SQLAlchemy moderation store for PostgreSQL, MariaDB, and peers."""
@@ -375,5 +444,58 @@ class ServerModerationStore:
         with self.engine.begin() as connection:
             result = connection.execute(
                 server_rules.delete().where(server_rules.c.id == rule_id)
+            )
+            return result.rowcount == 1
+
+    def list_settings(self) -> list[ModerationSetting]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                select(server_settings).order_by(
+                    server_settings.c.scope, server_settings.c.key
+                )
+            ).mappings()
+            return [
+                ModerationSetting(
+                    scope=str(row["scope"]),
+                    key=str(row["key"]),
+                    value=json.loads(row["value"]),
+                    updated_by=str(row["updated_by"]),
+                    updated_at=_as_utc(row["updated_at"]),
+                )
+                for row in rows
+            ]
+
+    def set_setting(
+        self, scope: str, key: str, value: bool | int | str, updated_by: str
+    ) -> None:
+        now = datetime.now(UTC)
+        with self.engine.begin() as connection:
+            setting_id = connection.execute(
+                select(server_settings.c.id).where(
+                    server_settings.c.scope == scope, server_settings.c.key == key
+                )
+            ).scalar_one_or_none()
+            values = {
+                "value": json.dumps(value),
+                "updated_by": updated_by,
+                "updated_at": now,
+            }
+            if setting_id is None:
+                connection.execute(
+                    server_settings.insert().values(scope=scope, key=key, **values)
+                )
+            else:
+                connection.execute(
+                    server_settings.update()
+                    .where(server_settings.c.id == setting_id)
+                    .values(**values)
+                )
+
+    def remove_setting(self, scope: str, key: str) -> bool:
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                server_settings.delete().where(
+                    server_settings.c.scope == scope, server_settings.c.key == key
+                )
             )
             return result.rowcount == 1

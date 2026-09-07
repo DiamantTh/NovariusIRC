@@ -555,6 +555,76 @@ def register_runtime_commands(
             owner="core",
         )
 
+        async def modset(ctx: CommandContext, args: list[str]) -> None:
+            usage = ctx.invocation(
+                "modset list [global|#channel] | set <global|#channel> "
+                "<setting> <value> | reset <global|#channel> <setting>"
+            )
+            if not args:
+                await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                return
+            operation = args[0].lower()
+            if operation == "list" and len(args) <= 2:
+                scope = args[1] if len(args) == 2 else None
+                settings = [
+                    setting
+                    for setting in moderation.list_settings()
+                    if scope is None
+                    or setting.scope == scope
+                    or setting.scope.casefold() == scope.casefold()
+                ]
+                if not settings:
+                    await ctx.reply(ctx.tr("No database moderation settings are configured."))
+                    return
+                for setting in settings:
+                    await ctx.reply(
+                        ctx.tr(
+                            "Moderation setting: scope={scope} {key}={value}",
+                            scope=setting.scope,
+                            key=setting.key,
+                            value=str(setting.value).lower(),
+                        )
+                    )
+                return
+            if operation == "set" and len(args) == 4:
+                creator = ctx.account or ctx.hostmask or ctx.nick
+                try:
+                    moderation.set_setting(
+                        args[1], args[2], args[3], updated_by=creator
+                    )
+                except (RuntimeError, ValueError) as exc:
+                    await ctx.reply(ctx.tr("Moderation setting failed: {error}", error=exc))
+                    return
+                await ctx.reply(
+                    ctx.tr(
+                        "Updated moderation setting {scope}/{key}.",
+                        scope=args[1],
+                        key=args[2],
+                    )
+                )
+                return
+            if operation == "reset" and len(args) == 3:
+                if not moderation.remove_setting(args[1], args[2].lower()):
+                    await ctx.reply(ctx.tr("Moderation setting was not found."))
+                    return
+                await ctx.reply(
+                    ctx.tr(
+                        "Reset moderation setting {scope}/{key}.",
+                        scope=args[1],
+                        key=args[2],
+                    )
+                )
+                return
+            await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+
+        commands.register(
+            "modset",
+            modset,
+            roles=("admin",),
+            help_text="Manage persistent moderation settings",
+            owner="core",
+        )
+
 
 async def async_main(args: CLIArguments) -> None:
     config = load_config(args.config)

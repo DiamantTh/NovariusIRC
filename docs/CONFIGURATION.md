@@ -522,6 +522,12 @@ Moderationsdatenbank verwalten. `word` und `url` sowie `allow` und `block`
 bleiben getrennt; Regeln können global oder auf einen Kanal begrenzt und ohne
 Neustart aktiviert, deaktiviert oder entfernt werden.
 
+`modset` speichert Laufzeit-Overrides ebenfalls in der Moderationsdatenbank.
+Unterstützt werden die globalen bzw. kanalbezogenen Aktiv-Schalter, Aktionen
+und Grenzwerte von `rate_limit`, `spam`, `caps`, `badwords`, `urls` und
+`warnings` sowie `urls.policy` und `ban_mask`. Die Reihenfolge ist:
+TOML-Standard, TOML-Kanalwert, globaler DB-Wert, kanalbezogener DB-Wert.
+
 <a id="moderation-checks"></a>
 ### Prüfungen und Verwarnungen
 

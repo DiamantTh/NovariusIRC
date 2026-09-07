@@ -515,6 +515,17 @@ def test_modrule_command_manages_database_rules(tmp_path: Path) -> None:
     )
     assert terminal.messages[-1] == "Added moderation rule #1."
     assert moderation.list_rules()[0].pattern == r"\bforbidden\b"
+    assert asyncio.run(
+        dispatch_terminal_command(
+            commands,
+            config,
+            logging.getLogger("test.modset"),
+            terminal,
+            "modset set #test urls.enabled on",
+        )
+    )
+    assert terminal.messages[-1] == "Updated moderation setting #test/urls.enabled."
+    assert moderation.list_settings()[0].value is True
 
 
 def test_config_paths_are_relative_to_the_config_file(tmp_path: Path) -> None:

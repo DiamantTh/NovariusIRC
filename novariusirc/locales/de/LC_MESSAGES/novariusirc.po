@@ -218,3 +218,24 @@ msgstr "Moderationsregel #{id} aktualisiert."
 
 msgid "Manage persistent moderation rules"
 msgstr "Persistente Moderationsregeln verwalten"
+
+msgid "No database moderation settings are configured."
+msgstr "Es sind keine Moderationseinstellungen in der Datenbank eingerichtet."
+
+msgid "Moderation setting: scope={scope} {key}={value}"
+msgstr "Moderationseinstellung: Bereich={scope} {key}={value}"
+
+msgid "Moderation setting failed: {error}"
+msgstr "Moderationseinstellung fehlgeschlagen: {error}"
+
+msgid "Updated moderation setting {scope}/{key}."
+msgstr "Moderationseinstellung {scope}/{key} aktualisiert."
+
+msgid "Moderation setting was not found."
+msgstr "Moderationseinstellung wurde nicht gefunden."
+
+msgid "Reset moderation setting {scope}/{key}."
+msgstr "Moderationseinstellung {scope}/{key} zurückgesetzt."
+
+msgid "Manage persistent moderation settings"
+msgstr "Persistente Moderationseinstellungen verwalten"

@@ -12,12 +12,46 @@ from typing import Any
 from novariusirc.irc.protocol import irc_casefold
 
 from .i18n import translate
-from .moderation_store import ModerationRule, ModerationStore, ServerModerationStore
+from .moderation_store import (
+    ModerationRule,
+    ModerationSetting,
+    ModerationStore,
+    ServerModerationStore,
+)
 from .rules import RegexRules, extract_urls, validate_pattern
 
 logger = logging.getLogger(__name__)
 
 VALID_ACTIONS = {"warn", "mute", "kick", "ban"}
+DB_BOOLEAN_SETTINGS = {
+    "enabled",
+    "rate_limit.enabled",
+    "spam.enabled",
+    "caps.enabled",
+    "badwords.enabled",
+    "urls.enabled",
+    "warnings.enabled",
+}
+DB_INTEGER_SETTINGS = {
+    "rate_limit.messages_per_minute",
+    "spam.threshold",
+    "spam.duration_seconds",
+    "caps.threshold_percent",
+    "warnings.to_kick",
+    "warnings.to_ban",
+}
+DB_ACTION_SETTINGS = {
+    "rate_limit.action",
+    "spam.action",
+    "caps.action",
+    "badwords.action",
+    "urls.action",
+}
+DB_CHOICE_SETTINGS = {
+    "urls.policy": {"allowlist", "denylist"},
+    "ban_mask": {"nick", "nick_user_host", "user_host", "host", "domain"},
+}
+DB_SETTINGS = DB_BOOLEAN_SETTINGS | DB_INTEGER_SETTINGS | DB_ACTION_SETTINGS | set(DB_CHOICE_SETTINGS)
 
 
 def _now() -> datetime:
@@ -82,6 +116,9 @@ class ModerationManager:
         self._stored_rules: list[ModerationRule] = (
             self.store.list_rules() if self.store else []
         )
+        self._stored_settings: list[ModerationSetting] = (
+            self.store.list_settings() if self.store else []
+        )
         self._restore_active_actions()
 
     def _restore_active_actions(self) -> None:
@@ -123,7 +160,83 @@ class ModerationManager:
         global_config = {
             key: value for key, value in self.config.items() if key != "channels"
         }
-        return _merge(global_config, override)
+        resolved = _merge(global_config, override)
+        applicable = [
+            setting
+            for setting in self._stored_settings
+            if setting.scope == "global"
+            or self.casefold(setting.scope) == self.casefold(channel)
+        ]
+        for setting in sorted(applicable, key=lambda item: item.scope != "global"):
+            self._apply_dotted_setting(resolved, setting.key, setting.value)
+        return resolved
+
+    @staticmethod
+    def _apply_dotted_setting(config: dict[str, Any], key: str, value: object) -> None:
+        path = key.split(".")
+        target = config
+        for part in path[:-1]:
+            target = target.setdefault(part, {})
+        target[path[-1]] = value
+
+    @staticmethod
+    def _normalise_setting(key: str, value: bool | int | str) -> bool | int | str:
+        if key not in DB_SETTINGS:
+            raise ValueError("setting is not database-overridable")
+        if key in DB_BOOLEAN_SETTINGS:
+            if isinstance(value, bool):
+                return value
+            lowered = str(value).strip().lower()
+            if lowered not in {"on", "off", "true", "false", "1", "0"}:
+                raise ValueError("boolean setting requires on or off")
+            return lowered in {"on", "true", "1"}
+        if key in DB_INTEGER_SETTINGS:
+            try:
+                parsed = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("integer setting requires a number") from exc
+            if parsed < 1 or (key == "caps.threshold_percent" and parsed > 100):
+                raise ValueError("integer setting is outside its allowed range")
+            if key == "spam.threshold" and parsed < 2:
+                raise ValueError("spam.threshold must be at least 2")
+            return parsed
+        lowered = str(value).strip().lower()
+        choices = VALID_ACTIONS if key in DB_ACTION_SETTINGS else DB_CHOICE_SETTINGS[key]
+        if lowered not in choices:
+            raise ValueError(f"setting requires one of: {', '.join(sorted(choices))}")
+        return lowered
+
+    def list_settings(self) -> list[ModerationSetting]:
+        return list(self._stored_settings)
+
+    def set_setting(
+        self,
+        scope: str,
+        key: str,
+        value: bool | int | str,
+        *,
+        updated_by: str,
+    ) -> None:
+        if not self.store:
+            raise RuntimeError("moderation storage is not configured")
+        scope = scope.strip()
+        key = key.strip().lower()
+        if scope != "global" and scope[:1] not in "#&+!":
+            raise ValueError("scope must be global or an IRC channel")
+        normalised = self._normalise_setting(key, value)
+        self.store.set_setting(scope, key, normalised, updated_by)
+        self._refresh_settings()
+
+    def remove_setting(self, scope: str, key: str) -> bool:
+        if not self.store:
+            return False
+        changed = self.store.remove_setting(scope, key)
+        if changed:
+            self._refresh_settings()
+        return changed
+
+    def _refresh_settings(self) -> None:
+        self._stored_settings = self.store.list_settings() if self.store else []
 
     def _tr(self, message: str, **values: object) -> str:
         return translate(message, self.language, **values)

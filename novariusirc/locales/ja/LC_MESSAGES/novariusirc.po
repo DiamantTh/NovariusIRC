@@ -217,3 +217,24 @@ msgstr "モデレーションルール #{id} を更新しました。"
 
 msgid "Manage persistent moderation rules"
 msgstr "永続的なモデレーションルールを管理"
+
+msgid "No database moderation settings are configured."
+msgstr "データベースにモデレーション設定はありません。"
+
+msgid "Moderation setting: scope={scope} {key}={value}"
+msgstr "モデレーション設定: 範囲={scope} {key}={value}"
+
+msgid "Moderation setting failed: {error}"
+msgstr "モデレーション設定に失敗しました: {error}"
+
+msgid "Updated moderation setting {scope}/{key}."
+msgstr "モデレーション設定 {scope}/{key} を更新しました。"
+
+msgid "Moderation setting was not found."
+msgstr "モデレーション設定は見つかりません。"
+
+msgid "Reset moderation setting {scope}/{key}."
+msgstr "モデレーション設定 {scope}/{key} をリセットしました。"
+
+msgid "Manage persistent moderation settings"
+msgstr "永続的なモデレーション設定を管理"

@@ -511,6 +511,12 @@ same moderation database. `word` and `url`, as well as `allow` and `block`,
 remain separate. Rules may be global or channel-scoped and can be enabled,
 disabled, or removed without restarting the bot.
 
+`modset` stores runtime overrides in the moderation database as well. It
+supports the global or channel-scoped enable switches, actions, and thresholds
+for `rate_limit`, `spam`, `caps`, `badwords`, `urls`, and `warnings`, plus
+`urls.policy` and `ban_mask`. Precedence is: TOML default, TOML channel value,
+global database value, channel database value.
+
 <a id="moderation-checks"></a>
 ### Checks and warnings
 
