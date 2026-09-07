@@ -14,6 +14,14 @@ MATCH_TIMEOUT_SECONDS = 0.05
 URL_PATTERN = regex.compile(r"(?i)(?:https?://|www\.)[^\s<>\"']+")
 
 
+def validate_pattern(pattern: str) -> None:
+    """Raise ``ValueError`` when a moderation pattern cannot be compiled."""
+    try:
+        regex.compile(pattern, regex.IGNORECASE)
+    except regex.error as exc:
+        raise ValueError(str(exc)) from exc
+
+
 class RegexRules:
     """Combine inline patterns with line-oriented files, reloading on change."""
 

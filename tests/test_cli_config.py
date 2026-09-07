@@ -23,6 +23,7 @@ from novariusirc.core.auth import AuthManager
 from novariusirc.core.commands import CommandRegistry
 from novariusirc.core.config import Config, DatabaseConfig, WebAPIConfig
 from novariusirc.core.database import SQLiteDatabase
+from novariusirc.core.moderation import ModerationManager
 from novariusirc.version import SIMPLE_VERSION, detailed_version
 
 
@@ -479,6 +480,41 @@ def test_runtime_command_registration_includes_core_status() -> None:
         ("uptime", ("user",), "core"),
         ("version", ("user",), "core"),
     ]
+
+
+def test_modrule_command_manages_database_rules(tmp_path: Path) -> None:
+    config = Config.model_validate(
+        {
+            "bot": {"language": "en"},
+            "network": {
+                "server": "irc.example.test",
+                "nick": "bot",
+                "user": "bot",
+                "realname": "Bot",
+            },
+        }
+    )
+    commands = CommandRegistry(prefix="!", rate_limit_seconds=0)
+    moderation = ModerationManager(storage_path=str(tmp_path / "moderation.sqlite3"))
+    register_runtime_commands(
+        commands,
+        SimpleNamespace(is_connected=False, network_name="TestNet"),  # type: ignore[arg-type]
+        SimpleNamespace(active_builtin_modules=()),  # type: ignore[arg-type]
+        SimpleNamespace(config=SimpleNamespace(enabled=False), is_running=False),  # type: ignore[arg-type]
+        moderation=moderation,
+    )
+    terminal = TerminalClient()
+    assert asyncio.run(
+        dispatch_terminal_command(
+            commands,
+            config,
+            logging.getLogger("test.modrule"),
+            terminal,
+            r"modrule add word block global \bforbidden\b",
+        )
+    )
+    assert terminal.messages[-1] == "Added moderation rule #1."
+    assert moderation.list_rules()[0].pattern == r"\bforbidden\b"
 
 
 def test_config_paths_are_relative_to_the_config_file(tmp_path: Path) -> None:

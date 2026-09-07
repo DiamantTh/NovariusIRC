@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -46,6 +48,41 @@ server_evidence = Table(
     Column("sha256", String(64)), Column("mime_type", String(128)), Column("size_bytes", Integer),
     Column("note", Text), Column("created_at", DateTime(timezone=True), nullable=False),
 )
+server_rules = Table(
+    "moderation_rules",
+    server_metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("category", String(16), nullable=False),
+    Column("disposition", String(16), nullable=False),
+    Column("channel", String(256)),
+    Column("pattern", Text, nullable=False),
+    Column("enabled", Boolean, nullable=False),
+    Column("created_by", String(512), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)
+Index(
+    "ix_moderation_rules_lookup",
+    server_rules.c.category,
+    server_rules.c.disposition,
+    server_rules.c.channel,
+    server_rules.c.enabled,
+)
+
+
+@dataclass(frozen=True)
+class ModerationRule:
+    id: int
+    category: str
+    disposition: str
+    channel: str | None
+    pattern: str
+    enabled: bool
+    created_by: str
+    created_at: datetime
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 class ModerationStore:
@@ -81,6 +118,18 @@ class ModerationStore:
                     note TEXT,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS moderation_rules (
+                    id INTEGER PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    disposition TEXT NOT NULL,
+                    channel TEXT,
+                    pattern TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_by TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_moderation_rules_lookup
+                    ON moderation_rules(category, disposition, channel, enabled);
                 """
             )
 
@@ -154,6 +203,62 @@ class ModerationStore:
             )
             return int(result.lastrowid)
 
+    def list_rules(self) -> list[ModerationRule]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM moderation_rules ORDER BY id"
+            ).fetchall()
+        return [
+            ModerationRule(
+                id=int(row["id"]),
+                category=str(row["category"]),
+                disposition=str(row["disposition"]),
+                channel=row["channel"],
+                pattern=str(row["pattern"]),
+                enabled=bool(row["enabled"]),
+                created_by=str(row["created_by"]),
+                created_at=datetime.fromisoformat(row["created_at"]),
+            )
+            for row in rows
+        ]
+
+    def add_rule(
+        self,
+        *,
+        category: str,
+        disposition: str,
+        channel: str | None,
+        pattern: str,
+        created_by: str,
+    ) -> ModerationRule:
+        created_at = datetime.now(UTC)
+        with self._connect() as connection:
+            result = connection.execute(
+                """INSERT INTO moderation_rules
+                (category, disposition, channel, pattern, enabled, created_by, created_at)
+                VALUES (?, ?, ?, ?, 1, ?, ?)""",
+                (category, disposition, channel, pattern, created_by, created_at.isoformat()),
+            )
+            rule_id = int(result.lastrowid)
+        return ModerationRule(
+            rule_id, category, disposition, channel, pattern, True, created_by, created_at
+        )
+
+    def set_rule_enabled(self, rule_id: int, enabled: bool) -> bool:
+        with self._connect() as connection:
+            result = connection.execute(
+                "UPDATE moderation_rules SET enabled = ? WHERE id = ?",
+                (int(enabled), rule_id),
+            )
+            return result.rowcount == 1
+
+    def remove_rule(self, rule_id: int) -> bool:
+        with self._connect() as connection:
+            result = connection.execute(
+                "DELETE FROM moderation_rules WHERE id = ?", (rule_id,)
+            )
+            return result.rowcount == 1
+
 
 class ServerModerationStore:
     """Portable SQLAlchemy moderation store for PostgreSQL, MariaDB, and peers."""
@@ -215,3 +320,60 @@ class ServerModerationStore:
         with self.engine.begin() as connection:
             result = connection.execute(server_evidence.insert().values(**values))
             return int(result.inserted_primary_key[0])
+
+    def list_rules(self) -> list[ModerationRule]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(
+                select(server_rules).order_by(server_rules.c.id)
+            ).mappings()
+            return [
+                ModerationRule(
+                    id=int(row["id"]),
+                    category=str(row["category"]),
+                    disposition=str(row["disposition"]),
+                    channel=row["channel"],
+                    pattern=str(row["pattern"]),
+                    enabled=bool(row["enabled"]),
+                    created_by=str(row["created_by"]),
+                    created_at=_as_utc(row["created_at"]),
+                )
+                for row in rows
+            ]
+
+    def add_rule(
+        self,
+        *,
+        category: str,
+        disposition: str,
+        channel: str | None,
+        pattern: str,
+        created_by: str,
+    ) -> ModerationRule:
+        created_at = datetime.now(UTC)
+        values = {
+            "category": category,
+            "disposition": disposition,
+            "channel": channel,
+            "pattern": pattern,
+            "enabled": True,
+            "created_by": created_by,
+            "created_at": created_at,
+        }
+        with self.engine.begin() as connection:
+            result = connection.execute(server_rules.insert().values(**values))
+            rule_id = int(result.inserted_primary_key[0])
+        return ModerationRule(id=rule_id, **values)
+
+    def set_rule_enabled(self, rule_id: int, enabled: bool) -> bool:
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                server_rules.update().where(server_rules.c.id == rule_id).values(enabled=enabled)
+            )
+            return result.rowcount == 1
+
+    def remove_rule(self, rule_id: int) -> bool:
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                server_rules.delete().where(server_rules.c.id == rule_id)
+            )
+            return result.rowcount == 1

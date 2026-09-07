@@ -12,8 +12,8 @@ from typing import Any
 from novariusirc.irc.protocol import irc_casefold
 
 from .i18n import translate
-from .moderation_store import ModerationStore, ServerModerationStore
-from .rules import RegexRules, extract_urls
+from .moderation_store import ModerationRule, ModerationStore, ServerModerationStore
+from .rules import RegexRules, extract_urls, validate_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,9 @@ class ModerationManager:
             ServerModerationStore(storage_dsn) if storage_dsn else
             ModerationStore(storage_path) if storage_path else None
         )
+        self._stored_rules: list[ModerationRule] = (
+            self.store.list_rules() if self.store else []
+        )
         self._restore_active_actions()
 
     def _restore_active_actions(self) -> None:
@@ -125,13 +128,94 @@ class ModerationManager:
     def _tr(self, message: str, **values: object) -> str:
         return translate(message, self.language, **values)
 
-    def _rules(self, name: str, section: dict[str, Any], allow: bool = False) -> RegexRules:
-        patterns = tuple(str(value) for value in section.get("allowlist" if allow else "list", []))
-        files = tuple(str(value) for value in section.get("allowlist_files" if allow else "files", []))
-        key = (name, patterns, files)
+    def _rules(
+        self,
+        category: str,
+        section: dict[str, Any],
+        channel: str,
+        allow: bool = False,
+    ) -> RegexRules:
+        disposition = "allow" if allow else "block"
+        inline = [
+            str(value) for value in section.get("allowlist" if allow else "list", [])
+        ]
+        inline.extend(
+            rule.pattern
+            for rule in self._stored_rules
+            if rule.enabled
+            and rule.category == category
+            and rule.disposition == disposition
+            and (rule.channel is None or self.casefold(rule.channel) == self.casefold(channel))
+        )
+        patterns = tuple(inline)
+        files = tuple(
+            str(value)
+            for value in section.get("allowlist_files" if allow else "files", [])
+        )
+        key = (f"{category}:{self.casefold(channel)}:{disposition}", patterns, files)
         if key not in self._rule_sets:
             self._rule_sets[key] = RegexRules(patterns, files, logger)
         return self._rule_sets[key]
+
+    def list_rules(self) -> list[ModerationRule]:
+        return list(self._stored_rules)
+
+    def add_rule(
+        self,
+        category: str,
+        disposition: str,
+        pattern: str,
+        *,
+        channel: str | None,
+        created_by: str,
+    ) -> ModerationRule:
+        if not self.store:
+            raise RuntimeError("moderation storage is not configured")
+        if category not in {"word", "url"}:
+            raise ValueError("category must be word or url")
+        if disposition not in {"allow", "block"}:
+            raise ValueError("disposition must be allow or block")
+        pattern = pattern.strip()
+        if not pattern:
+            raise ValueError("pattern must not be empty")
+        validate_pattern(pattern)
+        if any(
+            rule.category == category
+            and rule.disposition == disposition
+            and rule.channel == channel
+            and rule.pattern == pattern
+            for rule in self._stored_rules
+        ):
+            raise ValueError("rule already exists")
+        rule = self.store.add_rule(
+            category=category,
+            disposition=disposition,
+            channel=channel,
+            pattern=pattern,
+            created_by=created_by,
+        )
+        self._refresh_rules()
+        return rule
+
+    def set_rule_enabled(self, rule_id: int, enabled: bool) -> bool:
+        if not self.store:
+            return False
+        changed = self.store.set_rule_enabled(rule_id, enabled)
+        if changed:
+            self._refresh_rules()
+        return changed
+
+    def remove_rule(self, rule_id: int) -> bool:
+        if not self.store:
+            return False
+        changed = self.store.remove_rule(rule_id)
+        if changed:
+            self._refresh_rules()
+        return changed
+
+    def _refresh_rules(self) -> None:
+        self._stored_rules = self.store.list_rules() if self.store else []
+        self._rule_sets.clear()
 
     def _status(self, nick: str, channel: str) -> UserStatus:
         channel_key = self.casefold(channel)
@@ -215,19 +299,19 @@ class ModerationManager:
 
         badwords = config.get("badwords", {})
         if badwords.get("enabled", False):
-            bad_rules = self._rules("badwords", badwords)
-            allowed_rules = self._rules("badwords", badwords, allow=True)
+            bad_rules = self._rules("word", badwords, channel)
+            allowed_rules = self._rules("word", badwords, channel, allow=True)
             if bad_rules.matches(message) and not allowed_rules.matches(message):
                 return self._configured_action(badwords), self._tr("Badword detected")
 
         urls = config.get("urls", {})
         if urls.get("enabled", False):
             for url, hostname in extract_urls(message):
-                allowed = self._rules("urls", urls, allow=True).matches(url, hostname)
+                allowed = self._rules("url", urls, channel, allow=True).matches(url, hostname)
                 if urls.get("policy", "denylist") == "allowlist":
                     if not allowed:
                         return self._configured_action(urls), self._tr("URL is not allowed")
-                elif self._rules("urls", urls).matches(url, hostname) and not allowed:
+                elif self._rules("url", urls, channel).matches(url, hostname) and not allowed:
                     return self._configured_action(urls), self._tr("Blocked URL detected")
 
         caps = config.get("caps", {})

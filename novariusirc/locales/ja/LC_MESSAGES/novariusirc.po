@@ -196,3 +196,24 @@ msgstr "URL は許可されていません"
 
 msgid "Blocked URL detected"
 msgstr "ブロック対象の URL を検出しました"
+
+msgid "No database moderation rules are configured."
+msgstr "データベースにモデレーションルールは設定されていません。"
+
+msgid "Moderation rule #{id}: {state} {category}/{disposition} scope={scope} pattern={pattern}"
+msgstr "モデレーションルール #{id}: {state} {category}/{disposition} 範囲={scope} パターン={pattern}"
+
+msgid "Moderation rule failed: {error}"
+msgstr "モデレーションルールに失敗しました: {error}"
+
+msgid "Added moderation rule #{id}."
+msgstr "モデレーションルール #{id} を追加しました。"
+
+msgid "Moderation rule #{id} was not found."
+msgstr "モデレーションルール #{id} は見つかりません。"
+
+msgid "Updated moderation rule #{id}."
+msgstr "モデレーションルール #{id} を更新しました。"
+
+msgid "Manage persistent moderation rules"
+msgstr "永続的なモデレーションルールを管理"

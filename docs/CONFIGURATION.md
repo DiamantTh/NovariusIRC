@@ -517,6 +517,11 @@ Dauer. Aktive Mutes und Bans werden nach dem Neustart wiederhergestellt.
 Evidence bleibt als Datei; die Datenbank enthält nur Verweis, Typ, SHA-256,
 Größe und Notiz.
 
+Zusätzliche Wort-/URL-Regeln lassen sich mit `modrule` dauerhaft in derselben
+Moderationsdatenbank verwalten. `word` und `url` sowie `allow` und `block`
+bleiben getrennt; Regeln können global oder auf einen Kanal begrenzt und ohne
+Neustart aktiviert, deaktiviert oder entfernt werden.
+
 <a id="moderation-checks"></a>
 ### Prüfungen und Verwarnungen
 

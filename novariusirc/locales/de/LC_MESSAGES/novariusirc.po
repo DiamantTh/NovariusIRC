@@ -197,3 +197,24 @@ msgstr "URL ist nicht erlaubt"
 
 msgid "Blocked URL detected"
 msgstr "Gesperrte URL erkannt"
+
+msgid "No database moderation rules are configured."
+msgstr "Es sind keine Moderationsregeln in der Datenbank eingerichtet."
+
+msgid "Moderation rule #{id}: {state} {category}/{disposition} scope={scope} pattern={pattern}"
+msgstr "Moderationsregel #{id}: {state} {category}/{disposition} Bereich={scope} Muster={pattern}"
+
+msgid "Moderation rule failed: {error}"
+msgstr "Moderationsregel fehlgeschlagen: {error}"
+
+msgid "Added moderation rule #{id}."
+msgstr "Moderationsregel #{id} hinzugefügt."
+
+msgid "Moderation rule #{id} was not found."
+msgstr "Moderationsregel #{id} wurde nicht gefunden."
+
+msgid "Updated moderation rule #{id}."
+msgstr "Moderationsregel #{id} aktualisiert."
+
+msgid "Manage persistent moderation rules"
+msgstr "Persistente Moderationsregeln verwalten"

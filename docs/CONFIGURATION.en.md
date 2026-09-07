@@ -506,6 +506,11 @@ reason, moderator, time, and duration. Active mutes and bans are restored after
 restart. Evidence remains a file; the database stores only its reference, type,
 SHA-256, size, and note.
 
+Additional word/URL rules can be managed persistently with `modrule` in the
+same moderation database. `word` and `url`, as well as `allow` and `block`,
+remain separate. Rules may be global or channel-scoped and can be enabled,
+disabled, or removed without restarting the bot.
+
 <a id="moderation-checks"></a>
 ### Checks and warnings
 

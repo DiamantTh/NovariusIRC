@@ -414,6 +414,7 @@ def register_runtime_commands(
     modules: PluginManager,
     feeds: FeedEngine,
     start_time: float | None = None,
+    moderation: ModerationManager | None = None,
 ) -> None:
     """Register commands whose data exists only after core services are built."""
     runtime_started = time.monotonic() if start_time is None else start_time
@@ -470,6 +471,89 @@ def register_runtime_commands(
     commands.register(
         "botinfo", botinfo, help_text="Show bot identity and features", owner="core"
     )
+
+    if moderation is not None and moderation.store is not None:
+
+        async def modrule(ctx: CommandContext, args: list[str]) -> None:
+            usage = ctx.invocation(
+                "modrule list [word|url] | add <word|url> <allow|block> "
+                "<global|#channel> <regex> | enable|disable|remove <id>"
+            )
+            if not args:
+                await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                return
+            operation = args[0].lower()
+            if operation == "list" and len(args) <= 2:
+                category = args[1].lower() if len(args) == 2 else None
+                if category not in {None, "word", "url"}:
+                    await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                    return
+                rules = [
+                    rule for rule in moderation.list_rules()
+                    if category is None or rule.category == category
+                ]
+                if not rules:
+                    await ctx.reply(ctx.tr("No database moderation rules are configured."))
+                    return
+                for rule in rules:
+                    await ctx.reply(
+                        ctx.tr(
+                            "Moderation rule #{id}: {state} {category}/{disposition} "
+                            "scope={scope} pattern={pattern}",
+                            id=rule.id,
+                            state=ctx.tr("enabled" if rule.enabled else "disabled"),
+                            category=rule.category,
+                            disposition=rule.disposition,
+                            scope=rule.channel or "global",
+                            pattern=rule.pattern,
+                        )
+                    )
+                return
+            if operation == "add" and len(args) >= 5:
+                category, disposition, scope = (value.lower() for value in args[1:4])
+                channel = None if scope == "global" else args[3]
+                if channel is not None and channel[:1] not in "#&+!":
+                    await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                    return
+                creator = ctx.account or ctx.hostmask or ctx.nick
+                try:
+                    rule = moderation.add_rule(
+                        category,
+                        disposition,
+                        " ".join(args[4:]),
+                        channel=channel,
+                        created_by=creator,
+                    )
+                except (RuntimeError, ValueError) as exc:
+                    await ctx.reply(ctx.tr("Moderation rule failed: {error}", error=exc))
+                    return
+                await ctx.reply(ctx.tr("Added moderation rule #{id}.", id=rule.id))
+                return
+            if operation in {"enable", "disable", "remove"} and len(args) == 2:
+                try:
+                    rule_id = int(args[1])
+                except ValueError:
+                    await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+                    return
+                changed = (
+                    moderation.remove_rule(rule_id)
+                    if operation == "remove"
+                    else moderation.set_rule_enabled(rule_id, operation == "enable")
+                )
+                if not changed:
+                    await ctx.reply(ctx.tr("Moderation rule #{id} was not found.", id=rule_id))
+                    return
+                await ctx.reply(ctx.tr("Updated moderation rule #{id}.", id=rule_id))
+                return
+            await ctx.reply(ctx.tr("Usage: {command}", command=usage))
+
+        commands.register(
+            "modrule",
+            modrule,
+            roles=("admin",),
+            help_text="Manage persistent moderation rules",
+            owner="core",
+        )
 
 
 async def async_main(args: CLIArguments) -> None:
@@ -622,7 +706,9 @@ async def async_main(args: CLIArguments) -> None:
 
     client = IRCClient(config, commands, auth, plugins, moderation, logger)
     plugins.set_client(client)
-    register_runtime_commands(commands, client, plugins, feeds, start_time)
+    register_runtime_commands(
+        commands, client, plugins, feeds, start_time, moderation=moderation
+    )
     web_api = WebAPIServer(
         config.web_api,
         client,

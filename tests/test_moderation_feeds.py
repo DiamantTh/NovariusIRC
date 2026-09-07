@@ -107,7 +107,11 @@ def test_moderation_can_use_a_server_style_sqlalchemy_dsn(tmp_path: Path) -> Non
     assert manager.add_evidence(
         action.id, kind="log", path="evidence/ban.txt", sha256="b" * 64
     ) == 1
+    stored_rule = manager.add_rule(
+        "url", "allow", r"trusted\.example$", channel=None, created_by="owner"
+    )
     restored = ModerationManager(storage_dsn=dsn)
+    assert restored.list_rules() == [stored_rule]
     assert asyncio.run(restored.check_message("Alice", "#one", "again")) == (
         "ban",
         "User is banned",
@@ -172,6 +176,30 @@ def test_url_allowlist_blocks_every_other_link() -> None:
     assert asyncio.run(manager.check_message("Alice", "#one", "https://other.example/")) == (
         "warn", "URL is not allowed",
     )
+
+
+def test_database_rules_are_persistent_scoped_and_toggleable(tmp_path: Path) -> None:
+    path = tmp_path / "moderation.sqlite3"
+    manager = ModerationManager(
+        {"badwords": {"enabled": True}}, storage_path=str(path)
+    )
+    rule = manager.add_rule(
+        "word", "block", r"\bforbidden\b", channel="#one", created_by="admin!u@host"
+    )
+    assert asyncio.run(manager.check_message("Alice", "#one", "forbidden")) == (
+        "warn", "Badword detected",
+    )
+    assert asyncio.run(manager.check_message("Alice", "#two", "forbidden")) is None
+
+    restored = ModerationManager(
+        {"badwords": {"enabled": True}}, storage_path=str(path)
+    )
+    assert restored.list_rules() == [rule]
+    assert restored.set_rule_enabled(rule.id, False)
+    assert asyncio.run(restored.check_message("Alice", "#one", "forbidden")) is None
+    assert restored.set_rule_enabled(rule.id, True)
+    assert restored.remove_rule(rule.id)
+    assert restored.list_rules() == []
 
 
 def test_manual_feed_limits_are_resolved_per_feed() -> None:
