@@ -1,130 +1,135 @@
-# Feature inventory
+# Funktionsübersicht
 
-**Languages:** Deutsch · [English](FEATURES.en.md)
+**Sprachen:** Deutsch · [English](FEATURES.en.md)
 
-This index reflects the implementation in the current source tree. It is an
-inventory of working code, not a promise that every optional feature is enabled
-in a default instance. The configuration reference documents feature switches
-and settings; the protocol, plugin, and operations guides describe behavior and
-limits.
+Diese Übersicht beschreibt den Code im aktuellen Quellstand. Optionale
+Funktionen sind nicht zwangsläufig in einer Standardinstanz aktiviert. Die
+Konfigurationsreferenz erklärt Schalter und Einstellungen; Protokoll-, Plugin-
+und Betriebsdokumentation beschreiben Verhalten und Grenzen.
 
-## IRC protocol and connection
+## IRC-Protokoll und Verbindung
 
-- One IRC network per process; run separate instances for multiple networks.
-- Async connection lifecycle with TLS, reconnect backoff, timeouts, graceful
-  shutdown, bounded incoming lines, and rate-limited outgoing messages.
-- IRCv3 CAP 302 negotiation, offered-capability checks, dynamic CAP NEW/DEL,
-  message tags, batches, server time, and structured standard replies.
-- SASL PLAIN and EXTERNAL, plus TLS client certificates and NickServ
-  identification.
-- ISUPPORT-driven casemapping, channel/user state, membership prefixes,
-  channel modes, WHO/WHOX, and channel length limits.
-- IRCv3 is optional for ordinary IRC operation; account tags, away state, and
-  other extensions remain optional when a server does not provide them.
-- CTCP PING, VERSION, and CLIENTINFO; VERSION reports the package identity.
+- Ein IRC-Netz pro Prozess; mehrere Netze werden mit getrennten Instanzen
+  betrieben.
+- Asynchroner Verbindungsablauf mit TLS, Reconnect-Backoff, Zeitlimits,
+  sauberem Shutdown, begrenzten Eingabezeilen und ausgangsseitiger
+  Sendebegrenzung.
+- IRCv3-CAP-302-Aushandlung, Prüfung angebotener Capabilities, dynamisches
+  CAP NEW/DEL, Message-Tags, Batches, Serverzeit und strukturierte Standard-
+  Replies.
+- SASL PLAIN und EXTERNAL, TLS-Clientzertifikate sowie NickServ-Identifizierung.
+- ISUPPORT-gestützte Casemapping-, Kanal-, Benutzer-, Präfix-, Modus- und
+  WHO/WHOX-Verarbeitung.
+- IRCv3 ist für den normalen IRC-Betrieb optional. Account-Tags, Away-Status
+  und weitere Erweiterungsdaten werden nur verwendet, wenn der Server sie
+  bereitstellt.
+- CTCP PING, VERSION und CLIENTINFO. VERSION meldet die Paketidentität.
 
-Details: [IRC protocol support](IRC_PROTOCOL.md).
+Details: [IRC-Protokollunterstützung](IRC_PROTOCOL.md).
 
-## Bot commands, identity, and access
+## Bot-Befehle, Identitäten und Rechte
 
-- Shared case-insensitive command registry for core, built-in modules, and
-  external plugins; duplicate names and aliases are rejected.
-- Query commands use the configured prefix. In channels, address the bot nick
-  first; the prefix is optional after that address.
-- Built-in commands include `help`, `ping`, `uptime`, `version`,
-  `status`, and `botinfo`.
-- Role checks support user, admin, and owner levels. Identities can be bound by
-  hostmask, IRCv3 account tag, or CertFP; database-backed bindings are managed
-  with the owner-only `role` command.
-- Startup test notices are opt-in through `NOVARIUSIRC_TEST_HELLO_NICKS` and
-  report non-secret connection/configuration facts to explicitly listed nicks.
+- Gemeinsame, nicht zwischen Groß- und Kleinschreibung unterscheidende
+  Befehlsregistry für Core, eingebaute Module und externe Plugins. Doppelte
+  Namen und Aliase werden abgelehnt.
+- Query-Befehle nutzen den konfigurierten Präfix. Im Kanal muss zuerst der
+  Botnick angesprochen werden; danach ist der Präfix optional.
+- Eingebaute Befehle: help, ping, uptime, version, status und botinfo.
+- Rollen user, admin und owner. Identitäten können per Hostmask,
+  IRCv3-Account-Tag oder CertFP gebunden werden. DB-Bindungen verwaltet der
+  Owner mit dem Befehl role.
+- Optionale Testmeldungen nach erfolgreicher Registrierung werden nur an
+  explizit angegebene Nicks gesendet. Die Meldung enthält keine Geheimnisse.
 
-## Configuration and localization
+## Konfiguration und Übersetzungen
 
-- Strict TOML configuration, explicit relative/absolute includes, supported
-  environment overrides, config validation, and config status without an IRC
-  connection.
-- English, German, and Japanese language catalogs with environment-based
-  language detection when no language is configured.
-- Environment-only startup is available for container-oriented deployments.
+- Strikte TOML-Konfiguration, Includes mit relativen oder absoluten Pfaden,
+  ENV-Overrides, Validierung und Config-Status ohne IRC-Verbindung.
+- Englische, deutsche und japanische Übersetzungskataloge. Fehlt eine
+  Spracheinstellung, wird die Umgebung ausgewertet.
+- Start ausschließlich über Environment-Variablen für passende Container-
+  Setups.
 
-Details: [configuration reference (DE)](CONFIGURATION.md) ·
-[configuration reference (EN)](CONFIGURATION.en.md).
+Details: [Konfiguration (DE)](CONFIGURATION.md) ·
+[Konfiguration (EN)](CONFIGURATION.en.md).
 
-## Persistent data, backups, and monitoring
+## Persistenz, Backups und Monitoring
 
-- SQLAlchemy Core storage for SQLite, PostgreSQL, MariaDB, MySQL, and Microsoft
-  SQL Server backends. Server backends require their database driver and
-  configured DSN.
-- Explicit database init/check/upgrade commands; SQLite uses WAL, full
-  synchronous writes, foreign keys, and integrity checks.
-- Persistent role bindings and feed state; moderation state uses a separate
-  SQLite database by default and dedicated tables on configured SQL backends.
-- Verified offline SQLite/data backups with SHA-256 manifests, optional bzip3
-  compression, listing, and explicit restore.
-- Read-only Tornado monitoring API with health/readiness and versioned status
-  data; optional psutil metrics. No write API or web panel.
-- CLI, terminal console, and local Unix control socket; the socket uses local
-  filesystem permissions and does not open a TCP control port.
+- SQLAlchemy-Core-Backends für SQLite, PostgreSQL, MariaDB, MySQL und Microsoft
+  SQL Server. Serverdatenbanken benötigen Treiber und DSN.
+- Explizite Datenbankbefehle für Init, Check und Upgrade. SQLite nutzt WAL,
+  vollständige Synchronisierung, Foreign Keys und Integritätsprüfungen.
+- Rollen- und Feedzustand werden persistent gespeichert. Moderation nutzt
+  standardmäßig eine eigene SQLite-Datei oder separate Tabellen im
+  konfigurierten SQL-Backend.
+- Geprüfte Offline-Backups für SQLite und Zusatzdateien mit SHA-256-Manifest,
+  optionaler bzip3-Kompression und expliziter Wiederherstellung.
+- Read-only-Tornado-Monitoring-API mit Health, Readiness und versionierten
+  Statusdaten; optionale Prozessmetriken über psutil. Keine Schreib-API und
+  kein Webpanel.
+- CLI, Terminalkonsole und lokaler Unix-Control-Socket. Der Socket nutzt
+  Dateisystemrechte und öffnet keinen TCP-Control-Port.
 
-Details: [operations](OPERATIONS.md) ·
-[database and API configuration](CONFIGURATION.md).
+Details: [Betrieb](OPERATIONS.md) ·
+[Datenbank- und API-Konfiguration](CONFIGURATION.md).
 
-## Built-in module: RSS/Atom
+## Eingebautes RSS-/Atom-Modul
 
-- Optional `rss_announcer` module with bounded polling and HTTP response size,
-  timeout, TLS, and User-Agent settings.
-- ETag/Last-Modified handling, persistent seen-item state, per-feed and
-  per-channel intervals, templates, and manual/automatic item limits.
-- `feed` command for listing feeds and requesting bounded manual refreshes.
+- Optionales rss_announcer-Modul mit begrenztem Polling, HTTP-Antwortgröße,
+  Zeitlimit, TLS- und User-Agent-Einstellungen.
+- ETag-/Last-Modified-Behandlung, persistenter Status gelesener Feed-Einträge,
+  Intervalle pro Feed und Kanal, Vorlagen und Meldungsgrenzen.
+- feed-Befehl zum Auflisten und begrenzten manuellen Abrufen.
 
-Details: [feed configuration](CONFIGURATION.md#feeds) ·
-[example](../config/feeds.example.toml).
+Details: [Feed-Konfiguration](CONFIGURATION.md#feeds) ·
+[Beispiel](../config/feeds.example.toml).
 
-## Core moderation
+## Moderations-Core
 
-- Core service with rate-limit, repeated-message, caps, word-rule, and URL-rule
-  checks; each check is independently configurable.
-- Allow/block patterns can come from config, reloadable rule files, and
-  persistent database rules. Runtime settings can be overridden per channel.
-- Warning escalation and kick/ban/mute handling, configurable target masks,
-  decision logs, and persistent action/evidence metadata.
-- No automated address/phone detection or RDAP/WHOIS lookup is currently
-  listed as implemented.
+- Core-Dienst mit einzeln konfigurierbarer Nachrichtenrate, Wiederholungs-,
+  Caps-, Wort- und URL-Prüfung.
+- Allow-/Block-Regeln aus Konfiguration, nachladbaren Dateien und Datenbank.
+  Laufzeiteinstellungen können je Kanal überschrieben werden.
+- Verwarnungseskalation, Kick/Ban/Mute-Aktionen, konfigurierbare Zielmasken,
+  Entscheidungslogs und persistente Maßnahmen-/Evidence-Metadaten.
+- Automatische Erkennung von Anschriften oder Telefonnummern sowie
+  RDAP-/WHOIS-Abfragen sind derzeit nicht implementiert.
 
-Details: [moderation configuration](CONFIGURATION.md#moderation) ·
-[example](../config/moderation.example.toml).
+Details: [Moderationskonfiguration](CONFIGURATION.md#moderation) ·
+[Beispiel](../config/moderation.example.toml).
 
-## External plugin workers
+## Externe Plugin-Worker
 
-- External plugins are explicitly allow-listed. Package plugins declare
-  metadata, dependencies, commands, and hook subscriptions.
-- Optional child-process workers use bounded JSON IPC, payload/reply limits,
-  timeouts, role checks in the core, plugin-specific data directories, and
-  process termination on failure or unload.
-- A child process is not an operating-system sandbox: it still has the bot
-  user's filesystem and network permissions unless the deployment adds its own
-  isolation.
+- Externe Plugins werden nur über eine explizite Allowlist geladen.
+  Paketplugins definieren Metadaten, Abhängigkeiten, Befehle und Hooks.
+- Optionale Kindprozesse nutzen begrenztes JSON-IPC, Payload- und Antwortlimits,
+  Zeitlimits, Rechteprüfung im Core, Plugin-Datenordner und Beendigung bei
+  Fehlern oder Entladen.
+- Ein Kindprozess ist keine Betriebssystem-Sandbox. Ohne zusätzliche
+  Isolation hat er weiterhin die Datei- und Netzwerkrechte des Botbenutzers.
 
-Details: [plugin guide](PLUGINS.md).
+Details: [Plugin-Dokumentation](PLUGINS.md).
 
-## Logging and build information
+## Logs und Buildinformationen
 
-- Structured stdout and rotating, date-named core logs; channel, private-message,
-  raw-protocol, and moderation logs are separate configurable streams.
-- Optional journald output; log retention and destinations are configurable.
-- `-v`, `-V`, and `--version` report package/build/runtime details;
-  `botinfo` is the IRC command for extended diagnostics.
+- Strukturierte Ausgabe auf stdout und rotierende, datumsbasierte Core-Logs.
+  Kanal-, Query-, Raw-Protokoll- und Moderationslogs sind getrennte Ausgaben.
+- Optionale journald-Ausgabe und konfigurierbare Ziele.
+- -v, -V und --version zeigen Paket-, Build- und Laufzeitdetails. Der
+  IRC-Befehl botinfo zeigt erweiterte Diagnoseinformationen.
 
-See [operations](OPERATIONS.md) and [build information](IRC_PROTOCOL.md).
+Siehe [Betrieb](OPERATIONS.md) und [Protokoll](IRC_PROTOCOL.md).
 
-## Deliberate limits
+## Bewusste Grenzen
 
-- No web control panel, writable HTTP API, or public API authentication flow.
-- IRC moderation depends on channel privileges and server-supported modes.
-- Plugin workers provide process separation, not a complete security sandbox.
-- Draft IRCv3 capabilities can be requested explicitly, but doing so does not
-  imply that higher-level draft semantics are implemented.
+- Kein Webpanel, keine schreibende HTTP-API und kein öffentlicher
+  API-Authentifizierungsablauf.
+- IRC-Moderation benötigt entsprechende Kanalrechte und unterstützte Server-
+  Modi.
+- Plugin-Worker bieten Prozessisolierung, aber keine vollständige
+  Betriebssystem-Sandbox.
+- Das Anfordern einer IRCv3-Draft-Capability bedeutet nicht, dass deren
+  übergeordnete Semantik implementiert ist.
 
-For operational readiness and remaining work, see
-[startup readiness](STARTUP_READINESS.md).
+Betriebsstatus und verbleibende Arbeiten stehen in der
+[Startbereitschaft](STARTUP_READINESS.md).

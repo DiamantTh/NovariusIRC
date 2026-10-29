@@ -145,8 +145,8 @@ The current in-process model has these limits:
 
 ## Storage and files
 
-Separate executable plugin code from mutable plugin data. A recommended
-instance layout is:
+Separate executable plugin code from mutable plugin data. Each loaded plugin
+receives a plugin-specific working directory under the instance data root:
 
 ```text
 plugins/
@@ -157,16 +157,15 @@ plugins/
       cache.json
 ```
 
-The current `plugins.directory` is the code directory. Mutable state should
-use a plugin-specific directory below the instance data root, for example
-`data/plugins/weather/`; it must never be written beside code merely because
-the code directory is convenient. Small structured state can later use the
-shared SQL storage under a plugin-specific namespace. Large caches, downloads,
-or evidence remain files with metadata in SQL where appropriate.
+The configured `plugins.directory` is the code directory. Both in-process
+plugins and workers are assigned `data/plugins/<name>/` as their working
+directory. This provides a location for plugin-owned files; it does not provide
+a transactional storage API, namespace in the core database, or filesystem
+isolation. Plugin code running in-process can still access files allowed to the
+bot's Unix user.
 
-The core does not yet expose a stable plugin-storage API. Until it does, a
-plugin's storage format is private to that plugin and must be documented by
-the plugin author.
+Each plugin owns and documents its data format. Back up this directory as part
+of the instance data; the core does not inspect or migrate plugin data.
 
 ## Worker execution
 
@@ -223,12 +222,14 @@ IRC core  <->  authenticated local IPC  <->  plugin worker  <->  plugin data
 
 The core retains IRC connectivity, roles, database migrations, control, and
 policy decisions. A worker receives only permitted events and can request a
-limited reply or its own storage operation. A crash, timeout, or restart then
-affects that plugin rather than the IRC connection.
+limited reply. Its own storage is ordinary filesystem access relative to its
+working directory, not a core-mediated storage operation. A crash or timeout
+is isolated from the IRC reader, but can still fail that plugin's event.
 
 A separate Python process alone is fault isolation, not a security sandbox.
 For normal local operation it runs under the bot user. Container deployments
 can optionally add a separate Unix UID, a writable plugin-data mount, read-only
 code and no Docker socket. The current worker still has the bot user's file and
-network permissions. Further event types and capability controls remain future
-work; external plugins remain a trusted-operator feature.
+network permissions. Event subscriptions are configurable for the hooks listed
+above; this does not constrain filesystem or network system calls. External
+plugins remain a trusted-operator feature.

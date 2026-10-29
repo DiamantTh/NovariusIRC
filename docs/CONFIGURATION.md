@@ -279,7 +279,7 @@ NOVARIUSIRC_TEST_HELLO_NICKS=DiamantTh,DiamantThomy,Thomas vorzuziehen.
 | Name | Typ | Standard | Beschreibung |
 | --- | --- | --- | --- |
 | `level` | Text | `INFO` | Python-Loglevel, beim Laden in Großbuchstaben umgewandelt. |
-| `log_dir` | Pfad | `logs` | Kompatibler Logpfad. Ein abweichender Wert wird verwendet, solange `paths.log_root` beim Standard `./logs` bleibt. Core-Logs liegen tagesbezogen als `core/novariusirc-YYYY-MM-DD.log`; bei mehrfacher Rotation am selben Tag als `.1`, `.2` usw. |
+| `log_dir` | Pfad | `logs` | Kompatibler Logpfad. Ein abweichender Wert wird verwendet, solange `paths.log_root` beim Standard `./logs` bleibt. Core-Logs liegen tagesbezogen als `core/novariusirc-YYYY-MM-DD.log`; Warnungen bei 30/45 MiB, Rotation bei 60 MiB mit `.1`, `.2` usw. am selben Tag. |
 | `timezone` | Text | `Europe/Berlin` | IANA-Zeitzone für lesbare IRC-Logs. |
 | `journald_enabled` | Boolean | `false` | Zusätzlich an systemd-journald senden, wenn die optionale Anbindung verfügbar ist. |
 | `channel_logging` | Tabellenliste | `[]` | Explizite Auswahl der Kanäle, deren Nachrichten protokolliert werden. |
@@ -449,7 +449,7 @@ novariusirc database backups --config ./config
 
 Für `compression = "bzip3"` muss `bzip3` im Ausführungspfad installiert sein.
 Eine Wiederherstellung ist nur offline möglich und verlangt ausdrücklich
-`--replace-database`; `--restore-data` kopiert zusätzlich archivierte
+`--replace`; `--data` kopiert zusätzlich archivierte
 Zusatzdateien zurück:
 
 ```console

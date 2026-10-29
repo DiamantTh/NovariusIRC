@@ -169,6 +169,11 @@ novariusirc database restore ./backups/BOT_YYYYMMDDTHHMMSSZ.tar \
 novariusirc database check --config ./config
 ```
 
-`--restore-data` kopiert archivierte Zusatzdateien zurück, löscht aber keine
+`--data` kopiert archivierte Zusatzdateien zurück, löscht aber keine
 neueren, nicht archivierten Dateien. Deshalb sollte das Datenverzeichnis vor
 einem vollständigen Desaster-Recovery zusätzlich weggesichert werden.
+
+Serverdatenbanken werden vom Bot nicht als SQL-Dump gesichert. Dafür sind die
+Backup- und Restore-Werkzeuge des jeweiligen Datenbankservers zu verwenden;
+Novarius-Backups enthalten nur die vom Bot unterstützte SQLite-Sicherung und
+Zusatzdateien.
