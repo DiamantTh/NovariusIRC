@@ -651,6 +651,7 @@ sein, da die Grundstruktur vor den Overrides validiert wird.
 | `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | Einmalige Owner-Hostmask. |
 | `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | Einmaliger Owner-IRC-Kontoname. |
 | `NOVARIUSIRC_OWNER_CERTFP` | `owner_bootstrap.certfp` | Einmaliger Owner-CertFP. |
+| `NOVARIUSIRC_TEST_HELLO_NICKS` | `test.hello_nicks` | Optionale kommagetrennte Nicks für eine geheimnisfreie Test-NOTICE nach erfolgreicher IRC-Registrierung. |
 
 ENV-only benötigt mindestens `NOVARIUSIRC_SERVER` und `NOVARIUSIRC_NICK`:
 

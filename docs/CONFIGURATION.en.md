@@ -638,6 +638,7 @@ the base structure is validated before overrides are applied.
 | `NOVARIUSIRC_OWNER_HOSTMASK` | `owner_bootstrap.hostmask` | One-time owner hostmask. |
 | `NOVARIUSIRC_OWNER_ACCOUNT` | `owner_bootstrap.account` | One-time owner IRC account name. |
 | `NOVARIUSIRC_OWNER_CERTFP` | `owner_bootstrap.certfp` | One-time owner CertFP. |
+| `NOVARIUSIRC_TEST_HELLO_NICKS` | `test.hello_nicks` | Optional comma-separated nicks for a secret-free test NOTICE after successful IRC registration. |
 
 Environment-only startup requires at least `NOVARIUSIRC_SERVER` and
 `NOVARIUSIRC_NICK`:

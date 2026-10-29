@@ -3,7 +3,12 @@
 NovariusIRC is a modular, multilingual IRC bot/daemon in the classic Eggdrop style. One process connects to exactly one IRC network; multi-network setups run multiple instances (or containers). The project targets Python 3.12+, ships a Poetry configuration, and exposes a CLI entry point `novariusirc`.
 
 ## Status
-This repository contains the first MVP skeleton: async IRC core with reconnect logic, config loading and validation, structured logging, i18n hooks, a shared command registry with role checks, a feed engine, core moderation, and RSS announcements. CPU-heavy jobs can use the standard-library `ProcessPoolExecutor` worker pool.
+NovariusIRC has a working asynchronous IRC core, built-in command and role
+system, persistent storage, read-only monitoring API, moderation service, RSS/
+Atom module, and isolated plugin workers. See the
+[feature inventory](docs/FEATURES.md) for implemented behavior and its
+documentation, and [startup readiness](docs/STARTUP_READINESS.md) for current
+operational status and remaining release work.
 
 ## Quickstart
 1. Recommended installation path:
@@ -38,9 +43,9 @@ create log directories, start feeds, or open a network connection:
 poetry run novariusirc config check --config ./config
 ```
 
-The optional database layer currently provides the complete SQLite lifecycle.
-After enabling `[database]`, initialize it explicitly; normal startup never
-silently recreates a missing database:
+The optional database layer supports SQLite and SQLAlchemy server backends.
+Initialize an enabled database explicitly; normal startup never silently
+recreates a missing database:
 
 ```bash
 poetry run novariusirc database init --config ./config
@@ -129,6 +134,7 @@ project deliberately does not use Forgejo runners or push/PR jobs.
 - `config/*.example.toml`: starter configuration, secrets template, and optional feature snippets
 - `docs/CONFIGURATION.md` / `docs/CONFIGURATION.en.md`: complete German and English configuration reference
 - `docs/OPERATIONS.md`: local operation, systemd, container, backup, and restore guide
+- `docs/FEATURES.md`: current feature inventory linked to implementation guides
 - `LICENSE`: GNU AGPLv3 license text
 - `VALUES.md`: non-binding project values and public-code position
 - `docs/LICENSING.md`: license history and reason for the change
