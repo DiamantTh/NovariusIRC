@@ -5,10 +5,27 @@ NovariusIRC is a modular, multilingual IRC bot/daemon in the classic Eggdrop sty
 ## Status
 NovariusIRC has a working asynchronous IRC core, built-in command and role
 system, persistent storage, read-only monitoring API, moderation service, RSS/
-Atom module, and isolated plugin workers. See the
-[feature inventory](docs/FEATURES.md) for implemented behavior and its
-documentation, and [startup readiness](docs/STARTUP_READINESS.md) for current
-operational status and remaining release work.
+Atom module, and optional plugin workers. See [Capabilities and documentation](#capabilities-and-documentation)
+for a short overview and the relevant guides.
+
+## Capabilities and documentation
+
+- **IRC:** Async transport, TLS, SASL, IRCv3 negotiation, protocol state, and
+  CTCP support. The [protocol guide](docs/IRC_PROTOCOL.md) lists implemented
+  extensions and limits.
+- **Bot:** Built-in commands, hostmask/account/CertFP role bindings, German,
+  English, and Japanese messages, RSS/Atom feeds, and core moderation. Automatic
+  IP/domain RDAP lookup and address/phone-number detection are not implemented.
+- **Control and monitoring:** CLI, terminal console, Unix socket, and an
+  optional read-only HTTP API.
+- **Storage:** SQLite by default, optional SQL server backends, explicit
+  database upgrades, and verified offline backups.
+- **Plugins:** Optional package plugins and worker processes. See the
+  [plugin guide](docs/PLUGINS.md) for their API and trust boundaries.
+- **Configuration:** Full references in [Deutsch](docs/CONFIGURATION.md) and
+  [English](docs/CONFIGURATION.en.md).
+- **Operation:** [Installation, service/container setup, backups, and restore](docs/OPERATIONS.md).
+- **License history:** [Why the project uses AGPL](docs/LICENSING.md).
 
 ## Quickstart
 1. Recommended installation path:
@@ -132,13 +149,8 @@ project deliberately does not use Forgejo runners or push/PR jobs.
 - `novariusirc/modules`: built-in modules (currently `rss_announcer`)
 - `novariusirc/__main__.py`: CLI entry point
 - `config/*.example.toml`: starter configuration, secrets template, and optional feature snippets
-- `docs/CONFIGURATION.md` / `docs/CONFIGURATION.en.md`: complete German and English configuration reference
-- `docs/OPERATIONS.md`: local operation, systemd, container, backup, and restore guide
-- `docs/FEATURES.md`: current feature inventory linked to implementation guides
 - `LICENSE`: GNU AGPLv3 license text
 - `VALUES.md`: non-binding project values and public-code position
-- `docs/LICENSING.md`: license history and reason for the change
-- `docs/PLUGINS.md`: external plugin loading, lifecycle, commands, and safety
 
 ## Notes
 - Structured STDOUT logging plus rotating files under `logs/`; optional journald if installed.

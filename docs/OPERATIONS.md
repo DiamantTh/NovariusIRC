@@ -15,8 +15,9 @@ poetry check
 poetry build
 ```
 
-NovariusIRC requires Python 3.14 or newer. The installer checks both the
-system interpreter and an existing virtual environment before installing.
+NovariusIRC benötigt Python 3.14 oder neuer. Der Installer prüft den
+System-Interpreter und ein vorhandenes virtuelles Environment vor der
+Installation.
 
 Der Container wird bewusst lokal gebaut; das Projekt nutzt keine Forgejo-Runner:
 
@@ -181,3 +182,25 @@ Serverdatenbanken werden vom Bot nicht als SQL-Dump gesichert. Dafür sind die
 Backup- und Restore-Werkzeuge des jeweiligen Datenbankservers zu verwenden;
 Novarius-Backups enthalten nur die vom Bot unterstützte SQLite-Sicherung und
 Zusatzdateien.
+
+## Vor dem Produktivbetrieb prüfen
+
+Der Quellcode enthält die beschriebenen Funktionen; diese Punkte hängen
+zusätzlich von Netzwerk, Server, Treibern und Sicherungsziel der jeweiligen
+Installation ab:
+
+- Verbindung, SASL/Services, Reconnect und Kanalrechte im Zielnetz praktisch
+  prüfen. Ein erfolgreicher lokaler Test ersetzt keinen längeren Netzwerktest.
+- Ein Backup außerhalb des Instanzdatenträgers ablegen und die Wiederherstellung
+  praktisch erproben.
+- Serverdatenbank-Backend, Treiber und DSN in der konkreten Umgebung prüfen.
+- TLS-Vertrauenskette sowie Schreibrechte für Daten-, Log-, Socket- und
+  Backup-Verzeichnisse kontrollieren.
+- Container- und Python-Pakete müssen separat gebaut und veröffentlicht werden;
+  ein lokaler Build veröffentlicht nichts.
+
+Der Bot bietet derzeit keine Weboberfläche oder schreibende HTTP-API.
+Plugin-Worker sind Prozessgrenzen, keine vollständige Betriebssystem-Sandbox.
+IRCv3-Draft-Capabilities sind optional und ihre Aushandlung implementiert nicht
+automatisch die Semantik der jeweiligen Erweiterung. Details stehen in der
+[Protokollübersicht](IRC_PROTOCOL.md) und der [Plugin-Dokumentation](PLUGINS.md).
