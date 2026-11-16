@@ -1,6 +1,6 @@
 # NovariusIRC
 
-NovariusIRC is a modular, multilingual IRC bot/daemon in the classic Eggdrop style. One process connects to exactly one IRC network; multi-network setups run multiple instances (or containers). The project targets Python 3.12+, ships a Poetry configuration, and exposes a CLI entry point `novariusirc`.
+NovariusIRC is a modular, multilingual IRC bot/daemon in the classic Eggdrop style. One process connects to exactly one IRC network; multi-network setups run multiple instances (or containers). The project targets Python 3.14+, ships a Poetry configuration, and exposes a CLI entry point `novariusirc`.
 
 ## Status
 NovariusIRC has a working asynchronous IRC core, built-in command and role

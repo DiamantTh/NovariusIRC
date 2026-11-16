@@ -7,12 +7,16 @@ Konfigurations-, Daten-, Log- und Backup-Verzeichnis.
 ## Lokale Prüfung vor dem Start
 
 ```console
+python3 --version
 poetry install
 poetry run pytest -q
 poetry run ruff check novariusirc tests
 poetry check
 poetry build
 ```
+
+NovariusIRC requires Python 3.14 or newer. The installer checks both the
+system interpreter and an existing virtual environment before installing.
 
 Der Container wird bewusst lokal gebaut; das Projekt nutzt keine Forgejo-Runner:
 

@@ -4,6 +4,20 @@
 
 set -euo pipefail
 
+PYTHON_BIN=""
+for candidate in python3.14 python3; do
+    if command -v "$candidate" >/dev/null 2>&1 && \
+        "$candidate" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 14) else 1)'; then
+        PYTHON_BIN="$candidate"
+        break
+    fi
+done
+
+if [ -z "$PYTHON_BIN" ]; then
+    echo "NovariusIRC requires Python 3.14 or newer (python3.14 or python3)." >&2
+    exit 1
+fi
+
 # Konfiguration
 INSTALL_PREFIX="${NOVARIUSIRC_INSTALL_PREFIX:-$HOME/NovariusIRC}"
 VENV_DIR="$INSTALL_PREFIX/venv"
@@ -23,9 +37,15 @@ mkdir -p "$INSTANCES_DIR"
 # Virtual Environment erstellen (wenn nicht vorhanden)
 if [ ! -d "$VENV_DIR" ]; then
     echo "🐍 Erstelle Virtual Environment..."
-    python3 -m venv "$VENV_DIR"
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
 else
     echo "♻️  Nutze existierendes Virtual Environment..."
+fi
+
+if ! "$VENV_DIR/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 14) else 1)'; then
+    echo "The existing virtual environment at $VENV_DIR uses Python older than 3.14." >&2
+    echo "Recreate that environment with Python 3.14+ before installing; it was left untouched." >&2
+    exit 1
 fi
 
 # Build in a disposable staging directory. Installation must never leave wheel,
@@ -45,7 +65,7 @@ tar \
     -cf - -C "$SOURCE_DIR" . | tar -xf - -C "$BUILD_SOURCE"
 (
     cd "$BUILD_SOURCE"
-    python3 scripts/generate_build_info.py
+    "$PYTHON_BIN" scripts/generate_build_info.py
     poetry build -f wheel
 )
 

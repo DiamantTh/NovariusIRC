@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ARG NOVARIUSIRC_BUILD_COMMIT=""
 ARG SOURCE_DATE_EPOCH=""
@@ -31,7 +31,7 @@ COPY scripts ./scripts
 RUN python scripts/generate_build_info.py --commit "$NOVARIUSIRC_BUILD_COMMIT" && \
     /app/venv/bin/pip install --no-cache-dir --no-deps .
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
