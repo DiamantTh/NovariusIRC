@@ -133,8 +133,10 @@ podman run --rm --name example-novariusirc \
   novariusirc:local
 ```
 
-Das mitgelieferte Runtime-Image enthält bzip3. Bei einem eigenen Image muss
-`compression = "none"` gewählt werden, falls bzip3 dort fehlt.
+Das mitgelieferte Runtime-Image enthält bzip3. `compression = "zstd"` nutzt das
+optionale Python-3.14-Modul und braucht kein externes Programm. Bei einem
+eigenen Python-Build ohne `compression.zstd` muss `none` oder installiertes
+bzip3 gewählt werden.
 
 Container-Umgebungsvariablen sind für Laufzeitwerte und Secrets vorgesehen und
 werden bei jedem Start eingelesen. Sie werden nicht in die Datenbank

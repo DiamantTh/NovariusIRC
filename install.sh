@@ -74,6 +74,7 @@ WHEEL=$(ls -t "$BUILD_SOURCE"/dist/*.whl | head -n1)
 echo "📥 Installiere $WHEEL..."
 
 # Installation mit pip im venv
+"$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip
 "$VENV_DIR/bin/pip" install --quiet --upgrade --force-reinstall "$WHEEL"
 
 # Example-Instanz erstellen (wenn noch nicht vorhanden)

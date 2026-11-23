@@ -435,8 +435,8 @@ Live-Datenbank, ihre WAL-/SHM-Begleitdateien oder das Backup-Verzeichnis selbst.
 | --- | --- | --- | --- |
 | `enabled` | Boolean | `false` | Erlaubt das Erzeugen von Backups. |
 | `directory` | Pfad | `./backups` | Zielverzeichnis; relativ zu `config.toml`. |
-| `compression` | Auswahl | `none` | `none` lässt ein portables `.tar`; `bzip3` komprimiert erst ab der Schwelle. |
-| `compression_min_bytes` | Ganzzahl | `8388608` | Mindestgröße des TAR vor optionaler bzip3-Kompression. `0` komprimiert immer. |
+| `compression` | Auswahl | `none` | `none` lässt ein portables `.tar`; `bzip3` oder `zstd` komprimieren ab der Schwelle. |
+| `compression_min_bytes` | Ganzzahl | `8388608` | Mindestgröße des Archivs vor optionaler Kompression. `0` komprimiert immer. |
 | `include_data` | Boolean | `true` | Reguläre Zusatzdateien aus `paths.data_root` aufnehmen. |
 
 Die Namen verwenden nur den stabilen Botnamen und UTC, etwa
@@ -448,6 +448,8 @@ novariusirc database backups --config ./config
 ```
 
 Für `compression = "bzip3"` muss `bzip3` im Ausführungspfad installiert sein.
+`zstd` verwendet das optionale Python-3.14-Modul `compression.zstd` und schreibt
+das komprimierte TAR direkt, ohne temporäres unkomprimiertes TAR.
 Eine Wiederherstellung ist nur offline möglich und verlangt ausdrücklich
 `--replace`; `--data` kopiert zusätzlich archivierte
 Zusatzdateien zurück:

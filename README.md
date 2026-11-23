@@ -19,7 +19,8 @@ for a short overview and the relevant guides.
 - **Control and monitoring:** CLI, terminal console, Unix socket, and an
   optional read-only HTTP API.
 - **Storage:** SQLite by default, optional SQL server backends, explicit
-  database upgrades, and verified offline backups.
+  database upgrades, and verified offline backups with optional bzip3 or
+  Python 3.14's built-in Zstandard support.
 - **Plugins:** Optional package plugins and worker processes. See the
   [plugin guide](docs/PLUGINS.md) for their API and trust boundaries.
 - **Configuration:** Full references in [Deutsch](docs/CONFIGURATION.md) and

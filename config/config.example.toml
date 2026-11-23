@@ -187,7 +187,7 @@ busy_timeout_seconds = 5
 # Nur manuell über `novariusirc database backup`. Namen: <Botname>_<UTC>.tar[.bz3].
 enabled = false
 directory = "./backups"
-# "none" oder "bzip3" (bzip3 muss im Container/System installiert sein)
+# "none", "bzip3" (externes Programm) oder "zstd" (Python 3.14-Modul)
 compression = "none"
 compression_min_bytes = 8388608
 include_data = true

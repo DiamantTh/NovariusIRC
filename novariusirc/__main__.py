@@ -165,6 +165,13 @@ def check_config(config: Config) -> list[str]:
         "bzip3"
     ):
         errors.append("bzip3 is required for backups.compression = 'bzip3'")
+    if config.backups.enabled and config.backups.compression == "zstd":
+        try:
+            from compression import zstd  # noqa: F401
+        except ImportError:
+            errors.append(
+                "Python compression.zstd is required for backups.compression = 'zstd'"
+            )
 
     for name in config.modules.enabled:
         try:
@@ -317,7 +324,7 @@ def register_builtin_commands(
                     ctx.tr(
                         "Backup created: {path}; compression={compression}",
                         path=result.path,
-                        compression="bzip3" if result.compressed else "none",
+                        compression=result.compression,
                     )
                 )
                 return
@@ -656,7 +663,7 @@ async def async_main(args: CLIArguments) -> None:
                 raise RuntimeError(f"Backup failed: {exc}") from exc
             print(
                 f"Backup created: {result.path}; "
-                f"compression={'bzip3' if result.compressed else 'none'}"
+                f"compression={result.compression}"
             )
             return
         if args.restore_database:

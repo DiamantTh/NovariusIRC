@@ -25,6 +25,7 @@ class BackupResult:
     path: Path
     created_at: datetime
     compressed: bool
+    compression: str = "none"
 
 
 class BackupManager:
@@ -50,6 +51,16 @@ class BackupManager:
             for block in iter(lambda: file.read(1024 * 1024), b""):
                 digest.update(block)
         return digest.hexdigest()
+
+    @staticmethod
+    def _require_zstd():
+        try:
+            from compression import zstd
+        except ImportError as exc:
+            raise BackupError(
+                "this Python build does not include compression.zstd"
+            ) from exc
+        return zstd
 
     def _copy_data(self, destination: Path) -> list[Path]:
         copied: list[Path] = []
@@ -108,8 +119,17 @@ class BackupManager:
             (staging / "manifest.json").write_text(
                 json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
-            tar_path = self.directory / f"{name}.tar"
-            with tarfile.open(tar_path, "x") as archive:
+            use_zstd = (
+                self.config.compression == "zstd"
+                and sum(file.stat().st_size for file in files)
+                + (staging / "manifest.json").stat().st_size
+                >= self.config.compression_min_bytes
+            )
+            if use_zstd:
+                self._require_zstd()
+            tar_path = self.directory / f"{name}.tar{'.zst' if use_zstd else ''}"
+            archive_mode = "x:zst" if use_zstd else "x"
+            with tarfile.open(tar_path, archive_mode) as archive:
                 archive.add(staging / "manifest.json", arcname="manifest.json")
                 for file in files:
                     archive.add(file, arcname=str(file.relative_to(staging)))
@@ -132,14 +152,18 @@ class BackupManager:
                 except subprocess.CalledProcessError as exc:
                     raise BackupError(f"bzip3 failed: {exc.stderr.strip()}") from exc
                 tar_path.unlink()
-                return BackupResult(compressed, created_at, True)
-            return BackupResult(tar_path, created_at, False)
+                return BackupResult(compressed, created_at, True, "bzip3")
+            return BackupResult(tar_path, created_at, use_zstd, "zstd" if use_zstd else "none")
 
     def list(self) -> list[Path]:
         if not self.directory.is_dir():
             return []
         return sorted(
-            [*self.directory.glob(f"{self.instance_name}_*.tar"), *self.directory.glob(f"{self.instance_name}_*.tar.bz3")],
+            [
+                *self.directory.glob(f"{self.instance_name}_*.tar"),
+                *self.directory.glob(f"{self.instance_name}_*.tar.bz3"),
+                *self.directory.glob(f"{self.instance_name}_*.tar.zst"),
+            ],
             reverse=True,
         )
 
@@ -151,6 +175,7 @@ class BackupManager:
         with tempfile.TemporaryDirectory(prefix=".restore-", dir=self.directory) as raw:
             staging = Path(raw)
             tar_path = archive_path
+            archive_errors = (tarfile.TarError, OSError)
             if archive_path.suffix == ".bz3":
                 tar_path = staging / "archive.tar"
                 try:
@@ -166,6 +191,9 @@ class BackupManager:
                     raise BackupError("bzip3 is not installed") from exc
                 except subprocess.CalledProcessError as exc:
                     raise BackupError(f"bzip3 failed: {exc.stderr.strip()}") from exc
+            elif archive_path.suffix == ".zst":
+                zstd = self._require_zstd()
+                archive_errors += (zstd.ZstdError,)
             try:
                 with tarfile.open(tar_path) as archive:
                     members = archive.getmembers()
@@ -176,7 +204,7 @@ class BackupManager:
                     ):
                         raise BackupError("backup archive contains unsafe paths")
                     archive.extractall(staging / "contents", filter="data")
-            except (tarfile.TarError, OSError) as exc:
+            except archive_errors as exc:
                 raise BackupError(f"cannot read backup archive: {exc}") from exc
             contents = staging / "contents"
             try:

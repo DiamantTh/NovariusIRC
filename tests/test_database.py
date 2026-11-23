@@ -279,6 +279,35 @@ def test_backup_uses_sqlite_snapshot_and_records_data_files(tmp_path: Path) -> N
     assert data_file.read_text(encoding="utf-8") == "keep this"
 
 
+def test_zstd_backup_uses_stdlib_tar_compression_and_restores(tmp_path: Path) -> None:
+    database = SQLiteDatabase(DatabaseConfig(path=str(tmp_path / "data" / "bot.sqlite3")), "TestBot")
+    database.initialize(create=True)
+    manager = BackupManager(
+        BackupConfig(
+            enabled=True,
+            directory=str(tmp_path / "backups"),
+            compression="zstd",
+            compression_min_bytes=0,
+        ),
+        database,
+        "TestBot",
+        tmp_path / "data",
+    )
+
+    result = manager.create()
+
+    assert result.path.name.endswith(".tar.zst")
+    assert result.compressed
+    assert result.compression == "zstd"
+    assert manager.list() == [result.path]
+    with tarfile.open(result.path) as archive:
+        assert archive.extractfile("database.sqlite3") is not None
+
+    database.bootstrap_owner_bindings([("hostmask", "owner!*@trusted.example")])
+    manager.restore(result.path, replace=True, restore_data=False)
+    assert database.list_role_bindings() == []
+
+
 def test_known_server_backend_uses_the_generic_sqlalchemy_core() -> None:
     config = DatabaseConfig(enabled=True, backend="postgresql", dsn="postgresql://db")
     database = create_database(config, "TestBot")

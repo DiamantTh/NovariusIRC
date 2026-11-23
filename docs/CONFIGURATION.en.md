@@ -425,8 +425,8 @@ hash and size of every included file.
 | --- | --- | --- | --- |
 | `enabled` | Boolean | `false` | Permit creating backups. |
 | `directory` | path | `./backups` | Destination directory, relative to `config.toml`. |
-| `compression` | choice | `none` | `none` keeps a portable `.tar`; `bzip3` compresses only above the threshold. |
-| `compression_min_bytes` | integer | `8388608` | Minimum TAR size for optional bzip3 compression. `0` always compresses. |
+| `compression` | choice | `none` | `none` keeps a portable `.tar`; `bzip3` or `zstd` compress above the threshold. |
+| `compression_min_bytes` | integer | `8388608` | Minimum archive size before optional compression. `0` always compresses. |
 | `include_data` | Boolean | `true` | Include regular extra files from `paths.data_root`. |
 
 Names use only the stable bot name and UTC, for example
@@ -438,6 +438,8 @@ novariusirc database backups --config ./config
 ```
 
 For `compression = "bzip3"`, `bzip3` must be installed in the execution path.
+`zstd` uses Python 3.14's optional `compression.zstd` module and writes the
+compressed TAR directly without a temporary uncompressed TAR.
 Restoring is offline-only and explicitly requires `--replace`;
 `--data` also copies archived auxiliary files back:
 

@@ -718,7 +718,7 @@ class DatabaseConfig(ConfigModel):
 class BackupConfig(ConfigModel):
     enabled: bool = False
     directory: str = "./backups"
-    compression: Literal["none", "bzip3"] = "none"
+    compression: Literal["none", "bzip3", "zstd"] = "none"
     compression_min_bytes: int = Field(default=8 * 1024 * 1024, ge=0)
     include_data: bool = True
 
